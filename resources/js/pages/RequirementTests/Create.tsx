@@ -54,7 +54,11 @@ function autoInputClass(isAuto: boolean) {
 
 export default function Create({ requirement, defaultDate }: Props) {
 
-  const resolvedDate = defaultDate ?? format(new Date(), 'yyyy-MM-dd')
+const savedDate = typeof window !== 'undefined'
+  ? localStorage.getItem('selectedComplianceDate')
+  : null
+
+const resolvedDate = savedDate ?? defaultDate ?? format(new Date(), 'yyyy-MM-dd')
   const isBackfill   = defaultDate !== undefined && defaultDate !== format(new Date(), 'yyyy-MM-dd')
 
   const { data, setData, post, processing, errors, setError, clearErrors, recentlySuccessful } = useForm({
@@ -68,13 +72,24 @@ export default function Create({ requirement, defaultDate }: Props) {
     evidence:       '',
     requirement_id: requirement.id,
     test_date:      resolvedDate,
+    tested_at: resolvedDate,
     comment:        '',
     failure_reason: '',
   })
 
   // Tracks which fields were auto-filled
   const [autoFields, setAutoFields] = useState<Set<string>>(new Set())
+useEffect(() => {
+  const savedDate = localStorage.getItem('selectedComplianceDate');
 
+  if (savedDate) {
+    setData(prev => ({
+      ...prev,
+      test_date: savedDate,
+      tested_at: format(new Date(), 'yyyy-MM-dd'),
+    }));
+  }
+}, []);
   useEffect(() => {
     fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
       .then(r => r.json())
@@ -115,8 +130,9 @@ export default function Create({ requirement, defaultDate }: Props) {
     return isValid
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /* const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
     if (!validateForm()) return
     post(route('requirements.test.store', requirement.id), {
       preserveScroll: true,
@@ -125,7 +141,27 @@ export default function Create({ requirement, defaultDate }: Props) {
       },
     })
   }
+ */
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!validateForm()) return;
 
+  const savedDate = localStorage.getItem('selectedComplianceDate');
+
+  const testDate = savedDate || data.test_date;
+  const testedAt = format(new Date(), 'yyyy-MM-dd');
+
+  router.post(route('requirements.test.store', requirement.id), {
+    ...data,
+    test_date: testDate,
+    tested_at: testedAt,
+  }, {
+    onSuccess: () => {
+      localStorage.removeItem('selectedComplianceDate');
+      router.visit(route('req-testing.index') + `?date=${testDate}`);
+    },
+  });
+};
   const displayDate = (() => {
     try { return format(parseISO(resolvedDate), 'MMM dd, yyyy') }
     catch { return format(new Date(), 'MMM dd, yyyy') }

@@ -18,6 +18,7 @@ return new class extends Migration {
             $table->enum('efficacy', ['effective', 'partially_effective', 'ineffective'])->nullable();
             $table->date('effective_date')->nullable();
             $table->date('test_date')->nullable();
+            $table->date('tested_at')->nullable();
             $table->text('failure_reason')->nullable();
 
             // Relations

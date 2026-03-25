@@ -378,6 +378,7 @@ class RequirementController extends Controller
 
     public function getRequirementsForTesting(Request $request)
     {
+        
         $user = Auth::user();
         $currentOrgId = $user->current_organization_id;
 

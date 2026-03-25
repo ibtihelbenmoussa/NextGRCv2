@@ -59,8 +59,8 @@ class RequirementTestController extends Controller
         $tests = $query->paginate(15)->withQueryString();
 
         return Inertia::render('RequirementTests/Index', [
-            'tests'     => $tests,
-            'filters'   => $request->only(['date', 'search', 'status']),
+            'tests' => $tests,
+            'filters' => $request->only(['date', 'search', 'status']),
             'canCreate' => Auth::user()->can('create', RequirementTest::class),
         ]);
     }
@@ -86,23 +86,26 @@ class RequirementTestController extends Controller
 
         $validated = $request->validate([
             'requirement_id' => ['required', 'exists:requirements,id'],
-            'test_date'      => ['required', 'date'],
-            'status'         => ['required', 'in:compliant,non_compliant,partial,na'],
-            'comment'        => ['nullable', 'string', 'max:2000'],
-            'evidence'       => ['nullable', 'array'],
-            'evidence.*'     => ['nullable', 'string', 'max:2048'],
+            'test_date' => ['required', 'date'],
+            'tested_at' => ['required', 'date'],
+            'status' => ['required', 'in:compliant,non_compliant,partial,na'],
+            'comment' => ['nullable', 'string', 'max:2000'],
+            'evidence' => ['nullable', 'array'],
+            'evidence.*' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $requirement = Requirement::findOrFail($validated['requirement_id']);
 
         RequirementTest::create([
             'requirement_id' => $validated['requirement_id'],
-            'framework_id'   => $requirement->framework_id,
-            'user_id'        => Auth::id(),
-            'test_date'      => $validated['test_date'],
-            'status'         => $validated['status'],
-            'comment'        => $validated['comment'] ?? null,
-            'evidence'       => $validated['evidence'] ?? null,
+            'framework_id' => $requirement->framework_id,
+            'user_id' => Auth::id(),
+            'test_date' => $validated['test_date'],
+            'tested_at' => $validated['tested_at'],
+
+            'status' => $validated['status'],
+            'comment' => $validated['comment'] ?? null,
+            'evidence' => $validated['evidence'] ?? null,
         ]);
 
         return redirect()
@@ -110,29 +113,29 @@ class RequirementTestController extends Controller
             ->with('success', 'Test created successfully.');
     }
 
-public function show(RequirementTest $requirementTest)
-{
-    $requirement = $requirementTest->requirement;
+    public function show(RequirementTest $requirementTest)
+    {
+        $requirement = $requirementTest->requirement;
 
-    if (!$requirement) {
-        abort(404, 'Requirement not found for this test.');
+        if (!$requirement) {
+            abort(404, 'Requirement not found for this test.');
+        }
+
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
+
+        if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
+            abort(403, 'Unauthorized');
+        }
+
+        $requirement->framework_name = $requirement->framework?->name;
+        $requirement->process_name = $requirement->process?->name;
+        $requirement->load('tags');
+
+        return Inertia::render('RequirementTests/Show', [
+            'requirement' => $requirement,
+        ]);
     }
-
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
-
-    if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
-        abort(403, 'Unauthorized');
-    }
-
-    $requirement->framework_name = $requirement->framework?->name;
-    $requirement->process_name = $requirement->process?->name;
-    $requirement->load('tags');
-
-    return Inertia::render('RequirementTests/Show', [
-        'requirement' => $requirement,
-    ]);
-}
     public function edit(RequirementTest $requirementTest)
     {
         $this->authorize('update', $requirementTest);
@@ -145,7 +148,7 @@ public function show(RequirementTest $requirementTest)
             ->get();
 
         return Inertia::render('RequirementTests/Edit', [
-            'test'         => $requirementTest,
+            'test' => $requirementTest,
             'requirements' => $requirements,
         ]);
     }
@@ -155,10 +158,12 @@ public function show(RequirementTest $requirementTest)
         $this->authorize('update', $requirementTest);
 
         $validated = $request->validate([
-            'test_date'  => ['required', 'date'],
-            'status'     => ['required', 'in:compliant,non_compliant,partial,na'],
-            'comment'    => ['nullable', 'string', 'max:2000'],
-            'evidence'   => ['nullable', 'array'],
+            'test_date' => ['required', 'date'],
+            'tested_at' => ['required', 'date'],
+
+            'status' => ['required', 'in:compliant,non_compliant,partial,na'],
+            'comment' => ['nullable', 'string', 'max:2000'],
+            'evidence' => ['nullable', 'array'],
             'evidence.*' => ['nullable', 'string', 'max:2048'],
         ]);
 
@@ -180,7 +185,7 @@ public function show(RequirementTest $requirementTest)
             ->with('success', 'Test deleted successfully.');
     }
 
- 
+
     public function createForRequirement(Requirement $requirement)
     {
         $this->authorize('create', RequirementTest::class);
@@ -192,55 +197,61 @@ public function show(RequirementTest $requirementTest)
         ]);
     }
 
-   
+
     public function storeForRequirement(Request $request, Requirement $requirement)
-{
-    $data = $request->validate([
-        'test_code' => 'required|string|max:50|unique:requirement_tests,test_code',
-        'name'      => 'required|string',
-        'objective' => 'required|string',
-        'procedure' => 'required|string',
-        'status'    => 'required|string',
-        'result'    => 'required|string',
-        'efficacy'  => 'required|string',
-        'test_date' => 'nullable|date',
-        'evidence'  => 'nullable|string',
-        'comment'   => 'nullable|string|max:2000',
-    ]);
+    {
+        $data = $request->validate([
+            'test_code' => 'required|string|max:50|unique:requirement_tests,test_code',
+            'name' => 'required|string',
+            'objective' => 'required|string',
+            'procedure' => 'required|string',
+            'status' => 'required|string',
+            'result' => 'required|string',
+            'efficacy' => 'required|string',
+            'test_date' => 'nullable|date',
+            'tested_at' => 'nullable|date',
 
-    $data['user_id']      = auth()->id();
-    $data['framework_id'] = $requirement->framework_id;
-    $data['test_date']    = $data['test_date'] ?? now()->toDateString();
+            'evidence' => 'nullable|string',
+            'comment' => 'nullable|string|max:2000',
+        ]);
 
-    // ✅ Auto-validate : si le requirement a auto_validate = true,
-    //    le test est directement accepté, sinon il reste en attente
-    $data['validation_status'] = $requirement->auto_validate ? 'accepted' : 'pending';
+        $data['user_id'] = auth()->id();
+        $data['framework_id'] = $requirement->framework_id;
+        $data['test_date'] = $data['test_date'] ?? now()->toDateString();
+                $data['tested_at'] = $data['tested_at'] ?? now()->toDateString();
 
-    $test = $requirement->tests()->create($data);
 
-    // ✅ Si auto-validé, mettre à jour la deadline du requirement
-    if ($requirement->auto_validate) {
-        $newDeadline = match (strtolower($requirement->frequency ?? '')) {
-            'daily'            => now()->addDay(),
-            'weekly'           => now()->addWeek(),
-            'monthly'          => now()->addMonth(),
-            'quarterly'        => now()->addMonths(3),
-            'yearly', 'annual' => now()->addYear(),
-            default            => null,
-        };
+        // ✅ Auto-validate : si le requirement a auto_validate = true,
+        //    le test est directement accepté, sinon il reste en attente
+        $data['validation_status'] = $requirement->auto_validate ? 'accepted' : 'pending';
 
-        if ($newDeadline) {
-            $requirement->update(['deadline' => $newDeadline]);
+        $test = $requirement->tests()->create($data);
+
+        // ✅ Si auto-validé, mettre à jour la deadline du requirement
+        if ($requirement->auto_validate) {
+            $newDeadline = match (strtolower($requirement->frequency ?? '')) {
+                'daily' => now()->addDay(),
+                'weekly' => now()->addWeek(),
+                'monthly' => now()->addMonth(),
+                'quarterly' => now()->addMonths(3),
+                'yearly', 'annual' => now()->addYear(),
+                default => null,
+            };
+
+            if ($newDeadline) {
+                $requirement->update(['deadline' => $newDeadline]);
+            }
         }
+
+        return redirect('/req-testing')
+            ->with(
+                'success',
+                $requirement->auto_validate
+                ? 'Test créé et accepté automatiquement !'
+                : 'Test créé avec succès !'
+            );
     }
 
-    return redirect('/req-testing')
-        ->with('success', $requirement->auto_validate
-            ? 'Test créé et accepté automatiquement !'
-            : 'Test créé avec succès !'
-        );
-}
-    
     public function accept(RequirementTest $requirementTest)
     {
         $requirementTest->update([
@@ -252,12 +263,12 @@ public function show(RequirementTest $requirementTest)
 
         if ($requirement) {
             $newDeadline = match (strtolower($requirement->frequency ?? '')) {
-                'daily'            => now()->addDay(),
-                'weekly'           => now()->addWeek(),
-                'monthly'          => now()->addMonth(),
-                'quarterly'        => now()->addMonths(3),
+                'daily' => now()->addDay(),
+                'weekly' => now()->addWeek(),
+                'monthly' => now()->addMonth(),
+                'quarterly' => now()->addMonths(3),
                 'yearly', 'annual' => now()->addYear(),
-                default            => null,
+                default => null,
             };
 
             if ($newDeadline) {
@@ -268,7 +279,7 @@ public function show(RequirementTest $requirementTest)
         return back()->with('success', 'Test accepted. Deadline updated.');
     }
 
-    
+
     public function reject(Request $request, RequirementTest $requirementTest)
     {
         $request->validate([
@@ -276,14 +287,14 @@ public function show(RequirementTest $requirementTest)
         ]);
 
         $requirementTest->update([
-            'validation_status'  => 'rejected',
+            'validation_status' => 'rejected',
             'validation_comment' => $request->comment,
         ]);
 
         return back()->with('success', 'Test rejected.');
     }
 
-    
+
     public function validation()
     {
         $tests = RequirementTest::query()
@@ -295,7 +306,7 @@ public function show(RequirementTest $requirementTest)
             'tests' => $tests,
         ]);
     }
-   public function export(Request $request)
+    public function export(Request $request)
     {
         $user = Auth::user();
         $currentOrgId = $user->current_organization_id;
@@ -318,10 +329,10 @@ public function show(RequirementTest $requirementTest)
             'user:id,name',
             'framework:id,code,name',
         ])
-        ->whereHas('requirement', function($q) use ($currentOrgId) {
-            $q->where('organization_id', $currentOrgId)
-              ->where('is_deleted', 0);
-        });
+            ->whereHas('requirement', function ($q) use ($currentOrgId) {
+                $q->where('organization_id', $currentOrgId)
+                    ->where('is_deleted', 0);
+            });
 
         // Filtrer par date si fournie
         if ($request->filled('date')) {
@@ -330,10 +341,10 @@ public function show(RequirementTest $requirementTest)
 
         // Filtrer par recherche sur code ou titre
         if ($search = trim($request->query('search', ''))) {
-            $query->whereHas('requirement', function($q) use ($search) {
-                $q->where(function($q2) use ($search) {
+            $query->whereHas('requirement', function ($q) use ($search) {
+                $q->where(function ($q2) use ($search) {
                     $q2->where('code', 'like', "%{$search}%")
-                       ->orWhere('title', 'like', "%{$search}%");
+                        ->orWhere('title', 'like', "%{$search}%");
                 });
             });
         }
