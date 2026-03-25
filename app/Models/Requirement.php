@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 
 
 class Requirement extends Model
@@ -55,4 +57,15 @@ class Requirement extends Model
     {
         return $this->hasMany(PredefinedTestRequirment::class);
     }
+
+    public function reservations(): HasMany
+{
+    return $this->hasMany(RequirementTestReservation::class);
+}
+
+public function activeReservation(?string $date = null): HasOne
+{
+    return $this->hasOne(RequirementTestReservation::class)
+                ->where('date', $date ?? today()->toDateString());
+}
 }

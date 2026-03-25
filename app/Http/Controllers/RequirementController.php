@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Requirement;
 use App\Models\RequirementTest;
+use App\Models\RequirementTestReservation;
 use App\Models\Framework;
 use App\Models\Process;
 use App\Models\Tag;
@@ -16,8 +17,6 @@ use Carbon\Carbon;
 
 class RequirementController extends Controller
 {
-
-
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -120,6 +119,7 @@ class RequirementController extends Controller
             ],
         ]);
     }
+
     public function create()
     {
         return Inertia::render('Requirements/Create', [
@@ -313,68 +313,28 @@ class RequirementController extends Controller
             ->where('is_deleted', 0)
             ->where(function ($q) use ($date) {
                 $q
-                    ->whereHas(
-                        'tests',
-                        fn($sub) =>
-                        $sub->whereDate('test_date', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'one_time')
-                            ->whereDate('deadline', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'daily')
-                            ->whereDate('deadline', '<=', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'weekly')
-                            ->whereRaw('DAYOFWEEK(deadline) = ?', [$date->dayOfWeek + 1])
-                            ->whereDate('deadline', '<=', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'monthly')
-                            ->whereRaw('DAY(deadline) = ?', [$date->day])
-                            ->whereDate('deadline', '<=', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'quarterly')
-                            ->whereRaw('DAY(deadline) = ?', [$date->day])
-                            ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$date->month])
-                            ->whereDate('deadline', '<=', $date)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'yearly')
-                            ->whereRaw('DAY(deadline) = ?', [$date->day])
-                            ->whereRaw('MONTH(deadline) = ?', [$date->month])
-                            ->whereDate('deadline', '<=', $date)
-                    )
+                    ->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('deadline', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('deadline', '<=', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'weekly')
+                        ->whereRaw('DAYOFWEEK(deadline) = ?', [$date->dayOfWeek + 1])
+                        ->whereDate('deadline', '<=', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'monthly')
+                        ->whereRaw('DAY(deadline) = ?', [$date->day])
+                        ->whereDate('deadline', '<=', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'quarterly')
+                        ->whereRaw('DAY(deadline) = ?', [$date->day])
+                        ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$date->month])
+                        ->whereDate('deadline', '<=', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'yearly')
+                        ->whereRaw('DAY(deadline) = ?', [$date->day])
+                        ->whereRaw('MONTH(deadline) = ?', [$date->month])
+                        ->whereDate('deadline', '<=', $date))
                     ->orWhere('frequency', 'continuous');
             })
             ->pluck('id');
     }
 
-    /**
-     * Calcule tous les KPIs pour une date donnée en une seule passe.
-     *
-     * On récupère les IDs une seule fois, puis on fait 3 COUNT ciblés
-     * sur requirement_tests. Pas de N+1, pas de duplication.
-     *
-     * @return array{
-     *   reqIds: \Illuminate\Support\Collection,
-     *   total: int,
-     *   completed: int,
-     *   pending: int,
-     *   missed: int,
-     *   due: int,
-     *   completionRate: int,
-     * }
-     */
     private function computeKpisForDate(int $orgId, Carbon $date): array
     {
         $reqIds = $this->getRequirementIdsForDate($orgId, $date);
@@ -390,37 +350,28 @@ class RequirementController extends Controller
             : [];
 
         $completed = (int) ($testCounts['accepted'] ?? 0);
-        $pending = (int) ($testCounts['pending'] ?? 0);
-
+        $pending   = (int) ($testCounts['pending'] ?? 0);
 
         $missed = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
             ->where('frequency', '!=', 'one_time')
             ->whereDate('deadline', '<', $date)
-            ->whereDoesntHave(
-                'tests',
-                fn($q) =>
-                $q->whereDate('test_date', $date)
-            )
+            ->whereDoesntHave('tests', fn($q) => $q->whereDate('test_date', $date))
             ->count();
 
         $due = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
             ->whereDate('deadline', $date)
-            ->whereDoesntHave(
-                'tests',
-                fn($q) =>
-                $q->whereDate('test_date', $date)
-            )
+            ->whereDoesntHave('tests', fn($q) => $q->whereDate('test_date', $date))
             ->count();
 
         return [
-            'reqIds' => $reqIds,
-            'total' => $total,
-            'completed' => $completed,
-            'pending' => $pending,
-            'missed' => $missed,
-            'due' => $due,
+            'reqIds'         => $reqIds,
+            'total'          => $total,
+            'completed'      => $completed,
+            'pending'        => $pending,
+            'missed'         => $missed,
+            'due'            => $due,
             'completionRate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
         ];
     }
@@ -443,8 +394,7 @@ class RequirementController extends Controller
 
         $perPage = (int) $request->input('per_page', 15);
         $perPage = in_array($perPage, [10, 15, 20, 30, 50]) ? $perPage : 15;
-        $search = trim($request->query('search', ''));
-
+        $search  = trim($request->query('search', ''));
 
         $query = Requirement::query()
             ->where('organization_id', $currentOrgId)
@@ -469,47 +419,23 @@ class RequirementController extends Controller
             ])
             ->where(function ($q) use ($targetDate) {
                 $q
-                    ->whereHas(
-                        'tests',
-                        fn($sub) =>
-                        $sub->whereDate('test_date', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'one_time')
-                            ->whereDate('deadline', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'daily')
-                            ->whereDate('deadline', '<=', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'weekly')
-                            ->whereRaw('DAYOFWEEK(deadline) = ?', [$targetDate->dayOfWeek + 1])
-                            ->whereDate('deadline', '<=', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'monthly')
-                            ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                            ->whereDate('deadline', '<=', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'quarterly')
-                            ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                            ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$targetDate->month])
-                            ->whereDate('deadline', '<=', $targetDate)
-                    )
-                    ->orWhere(
-                        fn($q2) =>
-                        $q2->where('frequency', 'yearly')
-                            ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                            ->whereRaw('MONTH(deadline) = ?', [$targetDate->month])
-                            ->whereDate('deadline', '<=', $targetDate)
-                    )
+                    ->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('deadline', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('deadline', '<=', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'weekly')
+                        ->whereRaw('DAYOFWEEK(deadline) = ?', [$targetDate->dayOfWeek + 1])
+                        ->whereDate('deadline', '<=', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'monthly')
+                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
+                        ->whereDate('deadline', '<=', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'quarterly')
+                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
+                        ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$targetDate->month])
+                        ->whereDate('deadline', '<=', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'yearly')
+                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
+                        ->whereRaw('MONTH(deadline) = ?', [$targetDate->month])
+                        ->whereDate('deadline', '<=', $targetDate))
                     ->orWhere('frequency', 'continuous');
             });
 
@@ -521,10 +447,10 @@ class RequirementController extends Controller
         }
 
         if ($request->filled('sort')) {
-            $sort = $request->sort;
+            $sort      = $request->sort;
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-            $column = ltrim($sort, '-');
-            $allowed = ['code', 'title', 'frequency', 'deadline'];
+            $column    = ltrim($sort, '-');
+            $allowed   = ['code', 'title', 'frequency', 'deadline'];
             $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
         } else {
             $query->orderBy('code');
@@ -532,29 +458,42 @@ class RequirementController extends Controller
 
         $requirements = $query->paginate($perPage)->withQueryString();
 
-        $requirements->through(function (Requirement $req) {
+        // ─── Réservations pour cette date ───────────────────────────────────
+        $reservations = RequirementTestReservation::where('date', $targetDate->toDateString())
+            ->with('user:id,name')
+            ->get()
+            ->keyBy('requirement_id');
+        // ────────────────────────────────────────────────────────────────────
+
+        $requirements->through(function (Requirement $req) use ($reservations) {
             $latestTest = $req->tests->first();
-            $req->latest_test_status = $latestTest?->validation_status ?? null;
+            $req->latest_test_status  = $latestTest?->validation_status ?? null;
             $req->latest_test_comment = $latestTest?->validation_comment ?? null;
-            $req->latest_test_id = $latestTest?->id ?? null;
+            $req->latest_test_id      = $latestTest?->id ?? null;
+
+            // ← réservation
+            $res = $reservations->get($req->id);
+            $req->reservation_user_id   = $res?->user_id ?? null;
+            $req->reservation_user_name = $res?->user?->name ?? null;
+
             return $req;
         });
-
 
         $kpis = $this->computeKpisForDate($currentOrgId, $targetDate);
 
         return Inertia::render('RequirementTests/Index', [
-            'requirements' => $requirements,
-            'date' => $targetDate->format('Y-m-d'),
-            'isToday' => $targetDate->isToday(),
-            'filters' => $request->only(['search', 'date']),
-            'missedToday' => $kpis['missed'],
-            'dueToday' => $kpis['due'],
-            'kpi' => [
-                'total' => $kpis['total'],
-                'completed' => $kpis['completed'],
-                'pending' => $kpis['pending'],
-                'overdue' => $kpis['missed'],
+            'requirements'  => $requirements,
+            'date'          => $targetDate->format('Y-m-d'),
+            'isToday'       => $targetDate->isToday(),
+            'filters'       => $request->only(['search', 'date']),
+            'missedToday'   => $kpis['missed'],
+            'dueToday'      => $kpis['due'],
+            'currentUserId' => Auth::id(),  // ← nouveau
+            'kpi'           => [
+                'total'          => $kpis['total'],
+                'completed'      => $kpis['completed'],
+                'pending'        => $kpis['pending'],
+                'overdue'        => $kpis['missed'],
                 'completionRate' => $kpis['completionRate'],
             ],
         ]);

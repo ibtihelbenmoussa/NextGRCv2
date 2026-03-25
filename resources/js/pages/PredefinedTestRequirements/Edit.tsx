@@ -180,34 +180,7 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
               )}
             </div>
 
-            {selectedRequirement && (
-              <div
-                className={cn(
-                  'p-4 rounded-lg border text-sm',
-                  selectedRequirement.auto_validate
-                    ? 'bg-blue-950/40 border-blue-800 text-blue-200'
-                    : 'bg-slate-950/40 border-slate-800 text-slate-300'
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <Info className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                  <div>
-                    {selectedRequirement.auto_validate ? (
-                      <>
-                        <p className="font-medium text-blue-300">Auto-validation is enabled</p>
-                        <p className="mt-1 opacity-90">
-                          Tests created/edited here will be automatically accepted.
-                        </p>
-                      </>
-                    ) : (
-                      <p className="opacity-90">
-                        Tests will remain in "pending" status until manual validation.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+       
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

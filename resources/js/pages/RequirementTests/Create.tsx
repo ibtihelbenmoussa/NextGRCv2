@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format, parseISO } from 'date-fns'
-import { CalendarIcon, ChevronLeft, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react'
+import { CalendarIcon, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,17 +19,41 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 interface Framework  { id: number; code: string; name: string }
 interface Requirement { id: number; code: string; title: string; framework?: Framework | null }
 
-// ✅ Ajout de defaultDate dans Props
 interface Props {
   requirement: Requirement
-  defaultDate?: string  // format 'yyyy-MM-dd', passé depuis le controller
+  defaultDate?: string
+}
+
+// ─── AutoChip — chip ✦ auto inline dans le label ──────────────────────────────
+
+function AutoChip({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ml-1.5 select-none"
+      style={{
+        background: 'linear-gradient(135deg, #EAF3DE, #C0DD97)',
+        color: '#27500A',
+        border: '0.5px solid #97C459',
+        letterSpacing: '0.02em',
+      }}
+    >
+      ✦ auto
+    </span>
+  )
+}
+
+// ─── autoClass — bordure verte si auto-rempli ─────────────────────────────────
+
+function autoInputClass(isAuto: boolean) {
+  if (!isAuto) return ''
+  return 'border-[#97C459] focus-visible:ring-[#97C459]/30 bg-[#EAF3DE]/10'
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Create({ requirement, defaultDate }: Props) {
 
-  // ✅ test_date initialisé avec defaultDate si présent, sinon aujourd'hui
   const resolvedDate = defaultDate ?? format(new Date(), 'yyyy-MM-dd')
   const isBackfill   = defaultDate !== undefined && defaultDate !== format(new Date(), 'yyyy-MM-dd')
 
@@ -43,30 +67,35 @@ export default function Create({ requirement, defaultDate }: Props) {
     efficacy:       'effective',
     evidence:       '',
     requirement_id: requirement.id,
-    test_date:      resolvedDate,  // ✅ date correcte
+    test_date:      resolvedDate,
     comment:        '',
     failure_reason: '',
   })
 
-  const [autoFilled, setAutoFilled] = useState(false)
+  // Tracks which fields were auto-filled
+  const [autoFields, setAutoFields] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
       .then(r => r.json())
       .then(predefined => {
         if (predefined && predefined.id) {
-          setData(prev => ({
-            ...prev,
-            test_code: predefined.test_code ?? '',
-            name:      predefined.test_name  ?? '',
-            objective: predefined.objective  ?? '',
-            procedure: predefined.procedure  ?? '',
-          }))
-          setAutoFilled(true)
+          const filled = new Set<string>()
+          const updates: Partial<typeof data> = {}
+
+          if (predefined.test_code) { updates.test_code = predefined.test_code; filled.add('test_code') }
+          if (predefined.test_name) { updates.name      = predefined.test_name;  filled.add('name')      }
+          if (predefined.objective) { updates.objective  = predefined.objective;  filled.add('objective') }
+          if (predefined.procedure) { updates.procedure  = predefined.procedure;  filled.add('procedure') }
+
+          setData(prev => ({ ...prev, ...updates }))
+          setAutoFields(filled)
         }
       })
       .catch(() => {})
   }, [requirement.id])
+
+  const isAuto = (field: string) => autoFields.has(field)
 
   const validateForm = () => {
     let isValid = true
@@ -92,27 +121,14 @@ export default function Create({ requirement, defaultDate }: Props) {
     post(route('requirements.test.store', requirement.id), {
       preserveScroll: true,
       onSuccess: () => {
-        // ✅ Retourner à la date du test, pas forcément aujourd'hui
         window.location.href = route('req-testing.index') + `?date=${data.test_date}`
       },
     })
   }
 
-  const autoClass = (field: keyof typeof data) =>
-    autoFilled && data[field] ? 'border-primary/40 bg-primary/5' : ''
-
-  const AutoBadge = ({ field }: { field: keyof typeof data }) =>
-    autoFilled && data[field]
-      ? <Badge variant="outline" className="text-xs px-1.5 py-0 text-primary border-primary/30 ml-1">auto</Badge>
-      : null
-
-  // ✅ Formater la date à afficher (defaultDate ou aujourd'hui)
   const displayDate = (() => {
-    try {
-      return format(parseISO(resolvedDate), 'MMM dd, yyyy')
-    } catch {
-      return format(new Date(), 'MMM dd, yyyy')
-    }
+    try { return format(parseISO(resolvedDate), 'MMM dd, yyyy') }
+    catch { return format(new Date(), 'MMM dd, yyyy') }
   })()
 
   return (
@@ -124,7 +140,7 @@ export default function Create({ requirement, defaultDate }: Props) {
 
       <div className="space-y-12 p-6 lg:p-10">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 pb-6 border-b">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">New Compliance Test</h1>
@@ -151,86 +167,55 @@ export default function Create({ requirement, defaultDate }: Props) {
           </Button>
         </div>
 
-        {/* ✅ Banner si date passée */}
-{/*         {isBackfill && (
-          <Alert className="bg-amber-500/10 border-amber-500/30">
-            <CalendarIcon className="h-4 w-4 text-amber-400" />
-            <AlertTitle className="text-amber-400">
-              Creating test for a past date
-            </AlertTitle>
-            <AlertDescription className="text-amber-400/80">
-              This test will be recorded for{' '}
-              <span className="font-semibold">{displayDate}</span>, not today.
-              It will appear as <span className="font-semibold">Pending</span> for that date.
-            </AlertDescription>
-          </Alert>
-        )} */}
-
-        {/* Success */}
+        {/* ── Success ── */}
         {recentlySuccessful && (
           <Alert className="bg-emerald-950/50 border-emerald-800 text-emerald-100">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
             <AlertTitle className="text-emerald-300">Test created successfully!</AlertTitle>
-            <AlertDescription className="mt-2">
-              You will be redirected automatically.
-            </AlertDescription>
+            <AlertDescription className="mt-2">You will be redirected automatically.</AlertDescription>
           </Alert>
         )}
 
-        {/* Auto-fill notice */}
-        {autoFilled && (
-          <Alert className="bg-primary/5 border-primary/20">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <AlertTitle className="text-primary">Form auto-filled from predefined test</AlertTitle>
-            <AlertDescription className="text-muted-foreground">
-              Fields marked{' '}
-              <Badge variant="outline" className="text-xs px-1.5 py-0 text-primary border-primary/30 mx-1">
-                auto
-              </Badge>{' '}
-              were pre-filled. You can still edit them before submitting.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Form */}
+        {/* ── Form ── */}
         <Card className="border-none shadow-2xl bg-gradient-to-b from-card to-card/90 backdrop-blur-sm">
           <CardContent className="pt-10 pb-14 px-6 md:px-12 lg:px-16">
             <form onSubmit={handleSubmit} className="space-y-16">
 
               {/* Basic Information */}
               <div className="space-y-10">
-                <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">
-                  Basic Information
-                </h2>
+                <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Basic Information</h2>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                  {/* Test Code */}
                   <div className="space-y-2">
-                    <Label htmlFor="test_code" className="text-sm font-medium flex items-center gap-1.5">
-                      Test Code <span className="text-red-500">*</span>
-                      <AutoBadge field="test_code" />
+                    <Label htmlFor="test_code" className="text-sm font-medium flex items-center">
+                      Test Code <span className="text-red-500 ml-1">*</span>
+                      <AutoChip show={isAuto('test_code')} />
                     </Label>
                     <Input
                       id="test_code"
                       placeholder="TEST-2025-001"
                       value={data.test_code}
                       onChange={e => { setData('test_code', e.target.value.trim().toUpperCase()); if (errors.test_code) clearErrors('test_code') }}
-                      className={cn('h-11 text-base', autoClass('test_code'), errors.test_code && 'border-red-500')}
+                      className={cn('h-11 text-base transition-all', autoInputClass(isAuto('test_code')), errors.test_code && 'border-red-500')}
                       maxLength={50}
                     />
                     {errors.test_code && <p className="text-red-600 text-sm mt-1.5">{errors.test_code}</p>}
                   </div>
 
+                  {/* Name */}
                   <div className="space-y-2">
-                    <Label htmlFor="name" className="text-sm font-medium flex items-center gap-1.5">
-                      Name / Summary <span className="text-red-500">*</span>
-                      <AutoBadge field="name" />
+                    <Label htmlFor="name" className="text-sm font-medium flex items-center">
+                      Name / Summary <span className="text-red-500 ml-1">*</span>
+                      <AutoChip show={isAuto('name')} />
                     </Label>
                     <Input
                       id="name"
                       placeholder="Quarterly access rights review"
                       value={data.name}
                       onChange={e => { setData('name', e.target.value); if (errors.name) clearErrors('name') }}
-                      className={cn('h-11 text-base', autoClass('name'), errors.name && 'border-red-500')}
+                      className={cn('h-11 text-base transition-all', autoInputClass(isAuto('name')), errors.name && 'border-red-500')}
                     />
                     {errors.name && <p className="text-red-600 text-sm mt-1.5">{errors.name}</p>}
                   </div>
@@ -239,45 +224,45 @@ export default function Create({ requirement, defaultDate }: Props) {
 
               {/* Test Details */}
               <div className="space-y-10">
-                <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">
-                  Test Details
-                </h2>
+                <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Test Details</h2>
 
                 <div className="space-y-6">
+
+                  {/* Objective */}
                   <div className="space-y-3">
-                    <Label htmlFor="objective" className="text-sm font-medium flex items-center gap-1.5">
-                      Objective <span className="text-red-500">*</span>
-                      <AutoBadge field="objective" />
+                    <Label htmlFor="objective" className="text-sm font-medium flex items-center">
+                      Objective <span className="text-red-500 ml-1">*</span>
+                      <AutoChip show={isAuto('objective')} />
                     </Label>
                     <Textarea
                       id="objective"
                       placeholder="Define what this test aims to verify..."
                       value={data.objective}
                       onChange={e => { setData('objective', e.target.value); if (errors.objective) clearErrors('objective') }}
-                      className={cn('min-h-[120px] resize-y', autoClass('objective'), errors.objective && 'border-red-500')}
+                      className={cn('min-h-[120px] resize-y transition-all', autoInputClass(isAuto('objective')), errors.objective && 'border-red-500')}
                     />
                     {errors.objective && <p className="text-red-600 text-sm mt-1.5">{errors.objective}</p>}
                   </div>
 
+                  {/* Procedure */}
                   <div className="space-y-3">
-                    <Label htmlFor="procedure" className="text-sm font-medium flex items-center gap-1.5">
-                      Procedure / Steps <span className="text-red-500">*</span>
-                      <AutoBadge field="procedure" />
+                    <Label htmlFor="procedure" className="text-sm font-medium flex items-center">
+                      Procedure / Steps <span className="text-red-500 ml-1">*</span>
+                      <AutoChip show={isAuto('procedure')} />
                     </Label>
                     <Textarea
                       id="procedure"
                       placeholder="Step-by-step instructions to perform the test..."
                       value={data.procedure}
                       onChange={e => { setData('procedure', e.target.value); if (errors.procedure) clearErrors('procedure') }}
-                      className={cn('min-h-[160px] resize-y', autoClass('procedure'), errors.procedure && 'border-red-500')}
+                      className={cn('min-h-[160px] resize-y transition-all', autoInputClass(isAuto('procedure')), errors.procedure && 'border-red-500')}
                     />
                     {errors.procedure && <p className="text-red-600 text-sm mt-1.5">{errors.procedure}</p>}
                   </div>
 
+                  {/* Evidence */}
                   <div className="space-y-3">
-                    <Label htmlFor="evidence" className="text-sm font-medium">
-                      Evidence / Proof
-                    </Label>
+                    <Label htmlFor="evidence" className="text-sm font-medium">Evidence / Proof</Label>
                     <Textarea
                       id="evidence"
                       placeholder="Screenshots, logs, documents, links... (one per line if multiple)"
@@ -287,10 +272,9 @@ export default function Create({ requirement, defaultDate }: Props) {
                     />
                   </div>
 
+                  {/* Comment */}
                   <div className="space-y-3">
-                    <Label htmlFor="comment" className="text-sm font-medium">
-                      Comment
-                    </Label>
+                    <Label htmlFor="comment" className="text-sm font-medium">Comment</Label>
                     <Textarea
                       id="comment"
                       placeholder="Additional notes or observations about this test..."
@@ -300,11 +284,9 @@ export default function Create({ requirement, defaultDate }: Props) {
                     />
                   </div>
 
-                  {/* ✅ Test Date — affiche la vraie date (passée ou aujourd'hui) */}
+                  {/* Test Date — read-only */}
                   <div className="space-y-3">
-                    <Label className="text-sm font-medium flex items-center gap-1.5">
-                      Test Date
-                    </Label>
+                    <Label className="text-sm font-medium flex items-center gap-1.5">Test Date</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -330,10 +312,10 @@ export default function Create({ requirement, defaultDate }: Props) {
                     </p>
                   </div>
 
+                  {/* Result */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-1.5">
-                      Result <span className="text-red-500">*</span>
-                      <AutoBadge field="result" />
+                    <Label className="text-sm font-medium flex items-center">
+                      Result <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Select
                       value={data.result}
@@ -343,7 +325,7 @@ export default function Create({ requirement, defaultDate }: Props) {
                         if (errors.failure_reason) clearErrors('failure_reason')
                       }}
                     >
-                      <SelectTrigger className={cn('h-11', autoClass('result'), errors.result && 'border-red-500')}>
+                      <SelectTrigger className={cn('h-11', errors.result && 'border-red-500')}>
                         <SelectValue placeholder="Select result" />
                       </SelectTrigger>
                       <SelectContent>
@@ -354,6 +336,7 @@ export default function Create({ requirement, defaultDate }: Props) {
                     {errors.result && <p className="text-red-600 text-sm mt-1.5">{errors.result}</p>}
                   </div>
 
+                  {/* Failure reason */}
                   {data.result === 'non_compliant' && (
                     <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-5">
                       <Label htmlFor="failure_reason" className="text-sm font-medium flex items-center gap-2 text-red-500">

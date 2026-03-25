@@ -22,7 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -109,18 +108,78 @@ interface RequirementsIndexProps {
 type GroupBy = 'status' | 'priority'
 type ViewMode = 'table' | 'kanban'
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
+// ─── Style A : Soft filled pill avec dot ─────────────────────────────────────
+// Light : fond teinté clair  + texte dark du même ramp
+// Dark  : fond dark du ramp  + texte light du ramp   → auto via media query
 
-const statusColors: Record<string, { bg: string; border: string; text: string }> = {
-  active:   { bg: 'bg-emerald-950/40', border: 'border-emerald-700', text: 'text-emerald-400' },
-  draft:    { bg: 'bg-amber-950/40',   border: 'border-amber-700',   text: 'text-amber-400'   },
-  archived: { bg: 'bg-slate-950/50',   border: 'border-slate-700',   text: 'text-slate-400'   },
+const statusStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
+  active: {
+    pill:         'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
+    dot:          'bg-[#3B6D11]               dark:bg-[#97C459]',
+    kanbanBg:     'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
+    kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
+    kanbanText:   'text-[#27500A]             dark:text-[#C0DD97]',
+  },
+  draft: {
+    pill:         'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
+    dot:          'bg-[#854F0B]               dark:bg-[#EF9F27]',
+    kanbanBg:     'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
+    kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
+    kanbanText:   'text-[#412402]             dark:text-[#FAC775]',
+  },
+  archived: {
+    pill:         'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
+    dot:          'bg-[#888780]               dark:bg-[#B4B2A9]',
+    kanbanBg:     'bg-[#F1EFE8]/60            dark:bg-[#444441]/40',
+    kanbanBorder: 'border-[#B4B2A9]           dark:border-[#5F5E5A]',
+    kanbanText:   'text-[#444441]             dark:text-[#D3D1C7]',
+  },
 }
 
-const priorityColors: Record<string, { bg: string; border: string; text: string }> = {
-  high:   { bg: 'bg-red-950/40',     border: 'border-red-700',     text: 'text-red-400'     },
-  medium: { bg: 'bg-amber-950/40',   border: 'border-amber-700',   text: 'text-amber-400'   },
-  low:    { bg: 'bg-emerald-950/40', border: 'border-emerald-700', text: 'text-emerald-400' },
+const priorityStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
+  high: {
+    pill:         'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
+    dot:          'bg-[#A32D2D]               dark:bg-[#E24B4A]',
+    kanbanBg:     'bg-[#FCEBEB]/60            dark:bg-[#501313]/40',
+    kanbanBorder: 'border-[#E24B4A]           dark:border-[#A32D2D]',
+    kanbanText:   'text-[#501313]             dark:text-[#F7C1C1]',
+  },
+  medium: {
+    pill:         'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
+    dot:          'bg-[#854F0B]               dark:bg-[#EF9F27]',
+    kanbanBg:     'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
+    kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
+    kanbanText:   'text-[#412402]             dark:text-[#FAC775]',
+  },
+  low: {
+    pill:         'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
+    dot:          'bg-[#3B6D11]               dark:bg-[#97C459]',
+    kanbanBg:     'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
+    kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
+    kanbanText:   'text-[#27500A]             dark:text-[#C0DD97]',
+  },
+}
+
+const fallbackStyle = {
+  pill:         'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
+  dot:          'bg-[#888780]',
+  kanbanBg:     'bg-muted/40',
+  kanbanBorder: 'border-muted',
+  kanbanText:   'text-muted-foreground',
+}
+
+// ─── StatusPill — badge Style A ───────────────────────────────────────────────
+
+function StatusPill({ value, styleMap }: { value: string; styleMap: typeof statusStyles }) {
+  const key = value?.toLowerCase() ?? ''
+  const s   = styleMap[key] ?? fallbackStyle
+  const label = key.charAt(0).toUpperCase() + key.slice(1)
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full', s.pill)}>
+      <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', s.dot)} />
+      {label || '—'}
+    </span>
+  )
 }
 
 // ─── Animated counter hook ────────────────────────────────────────────────────
@@ -166,7 +225,6 @@ function KpiCard({
   const [barWidth, setBarWidth] = useState(0)
   const animatedValue           = useCountUp(mounted ? numericValue : 0, 900)
 
-  // Tilt
   const cardRef                   = useRef<HTMLDivElement>(null)
   const [tilt, setTilt]           = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
@@ -191,10 +249,7 @@ function KpiCard({
     })
   }
 
-  const handleMouseLeave = () => {
-    setTilt({ x: 0, y: 0 })
-    setIsHovered(false)
-  }
+  const handleMouseLeave = () => { setTilt({ x: 0, y: 0 }); setIsHovered(false) }
 
   const transformValue = isHovered
     ? `perspective(600px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(1.04) translateY(-3px)`
@@ -218,63 +273,33 @@ function KpiCard({
       }}
       className="bg-muted/40 rounded-lg p-4 flex flex-col gap-1.5 cursor-default relative overflow-hidden"
     >
-      {/* Moving glow */}
       {isHovered && (
         <div
           className="pointer-events-none absolute inset-0 rounded-lg"
-          style={{
-            background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${fillColor}18 0%, transparent 65%)`,
-          }}
+          style={{ background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${fillColor}18 0%, transparent 65%)` }}
         />
       )}
-
-      {/* Top border glow */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-lg transition-opacity duration-300"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${fillColor}80, transparent)`,
-          opacity: isHovered ? 1 : 0,
-        }}
+        style={{ background: `linear-gradient(90deg, transparent, ${fillColor}80, transparent)`, opacity: isHovered ? 1 : 0 }}
       />
-
-      {/* Label + icon */}
       <div className="flex items-center justify-between relative z-10">
         <span className="text-xs text-muted-foreground font-mono tracking-wide uppercase">{label}</span>
-        <span
-          className={cn(
-            'transition-all duration-300',
-            isHovered ? 'text-foreground/80 scale-110' : 'text-muted-foreground/60',
-          )}
-        >
+        <span className={cn('transition-all duration-300', isHovered ? 'text-foreground/80 scale-110' : 'text-muted-foreground/60')}>
           {icon}
         </span>
       </div>
-
-      {/* Animated number */}
-      <div
-        className={cn(
-          'text-2xl font-semibold leading-none tabular-nums relative z-10 transition-transform duration-200',
-          valueColor,
-          isHovered && 'scale-105 origin-left',
-        )}
-      >
+      <div className={cn('text-2xl font-semibold leading-none tabular-nums relative z-10 transition-transform duration-200', valueColor, isHovered && 'scale-105 origin-left')}>
         {typeof value === 'number' ? animatedValue : value}
       </div>
-
-      {/* Sub text */}
       {sub && (
         <div
-          className={cn(
-            'text-xs font-mono relative z-10 transition-opacity duration-500',
-            mounted ? 'opacity-100' : 'opacity-0',
-          )}
+          className={cn('text-xs font-mono relative z-10 transition-opacity duration-500', mounted ? 'opacity-100' : 'opacity-0')}
           style={{ color: fillColor, transitionDelay: `${delay + 350}ms` }}
         >
           {sub}
         </div>
       )}
-
-      {/* Progress bar */}
       <div className="h-0.5 rounded-full bg-border mt-1 overflow-hidden relative z-10">
         <div
           className="h-0.5 rounded-full"
@@ -295,11 +320,11 @@ function KpiCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RequirementsIndex({ requirements }: RequirementsIndexProps) {
-  const [deleteDialogOpen, setDeleteDialogOpen]       = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen]     = useState(false)
   const [requirementToDelete, setRequirementToDelete] = useState<Requirement | null>(null)
-  const [exportLoading, setExportLoading]             = useState(false)
-  const [viewMode, setViewMode]                       = useState<ViewMode>('table')
-  const [groupBy, setGroupBy]                         = useState<GroupBy>('status')
+  const [exportLoading, setExportLoading]           = useState(false)
+  const [viewMode, setViewMode]                     = useState<ViewMode>('table')
+  const [groupBy, setGroupBy]                       = useState<GroupBy>('status')
 
   // ── Stats ────────────────────────────────────────────────────
   const statusStats = useMemo(() => {
@@ -309,8 +334,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
     const draft    = data.filter(r => r.status?.toLowerCase() === 'draft').length
     const archived = data.filter(r => r.status?.toLowerCase() === 'archived').length
     return {
-      total: data.length,
-      active, draft, archived,
+      total: data.length, active, draft, archived,
       activeRate:   Math.round((active   / total) * 100),
       draftRate:    Math.round((draft    / total) * 100),
       archivedRate: Math.round((archived / total) * 100),
@@ -324,99 +348,26 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
     const medium = data.filter(r => r.priority?.toLowerCase() === 'medium').length
     const low    = data.filter(r => r.priority?.toLowerCase() === 'low').length
     return {
-      total: data.length,
-      high, medium, low,
+      total: data.length, high, medium, low,
       highRate:   Math.round((high   / total) * 100),
       mediumRate: Math.round((medium / total) * 100),
       lowRate:    Math.round((low    / total) * 100),
     }
   }, [requirements.data])
 
-  // ── KPI cards config — switches with groupBy ─────────────────
+  // ── KPI cards ────────────────────────────────────────────────
   const kpiCards = groupBy === 'status'
     ? [
-        {
-          label:       'Total',
-          value:       statusStats.total,
-          sub:         'requirements on page',
-          fillPercent: 100,
-          fillColor:   '#378add',
-          icon:        <CircleDot className="h-4 w-4" />,
-          valueColor:  'text-foreground',
-          delay:       0,
-        },
-        {
-          label:       'Active',
-          value:       statusStats.active,
-          sub:         `${statusStats.activeRate}% `,
-          fillPercent: statusStats.activeRate,
-          fillColor:   '#639922',
-          icon:        <CheckCircle2 className="h-4 w-4" />,
-          valueColor:  statusStats.active > 0 ? 'text-emerald-500' : 'text-foreground',
-          delay:       80,
-        },
-        {
-          label:       'Draft',
-          value:       statusStats.draft,
-          sub:         `${statusStats.draftRate}% `,
-          fillPercent: statusStats.draftRate,
-          fillColor:   '#ba7517',
-          icon:        <FileText className="h-4 w-4" />,
-          valueColor:  statusStats.draft > 0 ? 'text-amber-500' : 'text-foreground',
-          delay:       160,
-        },
-        {
-          label:       'Archived',
-          value:       statusStats.archived,
-          sub:         `${statusStats.archivedRate}% `,
-          fillPercent: statusStats.archivedRate,
-          fillColor:   '#6b7280',
-          icon:        <Archive className="h-4 w-4" />,
-          valueColor:  statusStats.archived > 0 ? 'text-slate-400' : 'text-foreground',
-          delay:       240,
-        },
+        { label: 'Total',    value: statusStats.total,    sub: 'requirements on page', fillPercent: 100,                     fillColor: '#378add', icon: <CircleDot    className="h-4 w-4" />, valueColor: 'text-foreground',                                                 delay: 0   },
+        { label: 'Active',   value: statusStats.active,   sub: `${statusStats.activeRate}%`,   fillPercent: statusStats.activeRate,   fillColor: '#639922', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: statusStats.active   > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 80  },
+        { label: 'Draft',    value: statusStats.draft,    sub: `${statusStats.draftRate}%`,    fillPercent: statusStats.draftRate,    fillColor: '#ba7517', icon: <FileText     className="h-4 w-4" />, valueColor: statusStats.draft    > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
+        { label: 'Archived', value: statusStats.archived, sub: `${statusStats.archivedRate}%`, fillPercent: statusStats.archivedRate, fillColor: '#6b7280', icon: <Archive      className="h-4 w-4" />, valueColor: statusStats.archived > 0 ? 'text-[#5F5E5A] dark:text-[#B4B2A9]' : 'text-foreground', delay: 240 },
       ]
     : [
-        {
-          label:       'Total',
-          value:       priorityStats.total,
-          sub:         'requirements on page',
-          fillPercent: 100,
-          fillColor:   '#378add',
-          icon:        <CircleDot className="h-4 w-4" />,
-          valueColor:  'text-foreground',
-          delay:       0,
-        },
-        {
-          label:       'High',
-          value:       priorityStats.high,
-          sub:         `${priorityStats.highRate}% `,
-          fillPercent: priorityStats.highRate,
-          fillColor:   '#e24b4a',
-          icon:        <AlertTriangle className="h-4 w-4" />,
-          valueColor:  priorityStats.high > 0 ? 'text-red-500' : 'text-foreground',
-          delay:       80,
-        },
-        {
-          label:       'Medium',
-          value:       priorityStats.medium,
-          sub:         `${priorityStats.mediumRate}% of page`,
-          fillPercent: priorityStats.mediumRate,
-          fillColor:   '#ba7517',
-          icon:        <AlertTriangle className="h-4 w-4" />,
-          valueColor:  priorityStats.medium > 0 ? 'text-amber-500' : 'text-foreground',
-          delay:       160,
-        },
-        {
-          label:       'Low',
-          value:       priorityStats.low,
-          sub:         `${priorityStats.lowRate}% `,
-          fillPercent: priorityStats.lowRate,
-          fillColor:   '#639922',
-          icon:        <CheckCircle2 className="h-4 w-4" />,
-          valueColor:  priorityStats.low > 0 ? 'text-emerald-500' : 'text-foreground',
-          delay:       240,
-        },
+        { label: 'Total',  value: priorityStats.total,  sub: 'requirements on page', fillPercent: 100,                       fillColor: '#378add', icon: <CircleDot    className="h-4 w-4" />, valueColor: 'text-foreground',                                                   delay: 0   },
+        { label: 'High',   value: priorityStats.high,   sub: `${priorityStats.highRate}%`,   fillPercent: priorityStats.highRate,   fillColor: '#e24b4a', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.high   > 0 ? 'text-[#A32D2D] dark:text-[#F09595]' : 'text-foreground', delay: 80  },
+        { label: 'Medium', value: priorityStats.medium, sub: `${priorityStats.mediumRate}%`, fillPercent: priorityStats.mediumRate, fillColor: '#ba7517', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.medium > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
+        { label: 'Low',    value: priorityStats.low,    sub: `${priorityStats.lowRate}%`,    fillPercent: priorityStats.lowRate,    fillColor: '#639922', icon: <CheckCircle2  className="h-4 w-4" />, valueColor: priorityStats.low    > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 240 },
       ]
 
   // ── Export ───────────────────────────────────────────────────
@@ -425,22 +376,18 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
     try {
       const params   = new URLSearchParams(window.location.search)
       const response = await fetch(`/requirements/export?${params.toString()}`, {
-        method: 'GET',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' },
       })
       if (!response.ok) throw new Error('Export failed')
       const blob = await response.blob()
       const url  = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href     = url
+      link.href = url
       link.download = `requirements-${new Date().toISOString().split('T')[0]}.xlsx`
       link.click()
       window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Export error:', error)
-    } finally {
-      setExportLoading(false)
-    }
+    } catch (error) { console.error('Export error:', error) }
+    finally { setExportLoading(false) }
   }
 
   // ── Kanban grouping ──────────────────────────────────────────
@@ -483,7 +430,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Code" />
         </div>
       ),
-      cell: ({ row }) => <div className="font-mono font-medium">{row.getValue('code')}</div>,
+      cell: ({ row }) => <div className="font-mono font-medium text-xs">{row.getValue('code')}</div>,
     },
     {
       accessorKey: 'title',
@@ -508,9 +455,9 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
         </div>
       ),
       cell: ({ row }) => (
-        <Badge variant="outline" className="capitalize">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[#E6F1FB] text-[#0C447C] dark:bg-[#0C447C] dark:text-[#B5D4F4]">
           {(row.getValue('type') as string) || '—'}
-        </Badge>
+        </span>
       ),
     },
     {
@@ -521,15 +468,9 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Status" />
         </div>
       ),
-      cell: ({ row }) => {
-        const status = (row.getValue('status') as string)?.toLowerCase() || 'other'
-        const { bg, border, text } = statusColors[status] || statusColors.archived
-        return (
-          <Badge variant="outline" className={cn('capitalize', bg, border, text)}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </Badge>
-        )
-      },
+      cell: ({ row }) => (
+        <StatusPill value={row.getValue('status')} styleMap={statusStyles} />
+      ),
     },
     {
       accessorKey: 'priority',
@@ -539,15 +480,9 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Priority" />
         </div>
       ),
-      cell: ({ row }) => {
-        const priority = (row.getValue('priority') as string)?.toLowerCase() || 'other'
-        const { bg, border, text } = priorityColors[priority] || priorityColors.low
-        return (
-          <Badge variant="outline" className={cn('capitalize', bg, border, text)}>
-            {priority.charAt(0).toUpperCase() + priority.slice(1)}
-          </Badge>
-        )
-      },
+      cell: ({ row }) => (
+        <StatusPill value={row.getValue('priority')} styleMap={priorityStyles} />
+      ),
     },
     {
       accessorKey: 'frequency',
@@ -557,9 +492,15 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Frequency" />
         </div>
       ),
-      cell: ({ row }) => (
-        <Badge variant="outline">{(row.getValue('frequency') as string) ?? '—'}</Badge>
-      ),
+      cell: ({ row }) => {
+        const freq = row.getValue('frequency') as string | null
+        if (!freq) return <span className="text-muted-foreground text-xs">—</span>
+        return (
+          <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+            {freq}
+          </span>
+        )
+      },
     },
     {
       accessorKey: 'framework.code',
@@ -571,7 +512,9 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
       ),
       cell: ({ row }) => {
         const fw = row.original.framework
-        return fw ? `${fw.code} — ${fw.name}` : '—'
+        return fw
+          ? <span className="text-xs text-muted-foreground">{fw.code} — {fw.name}</span>
+          : <span className="text-muted-foreground text-xs">—</span>
       },
     },
     {
@@ -584,14 +527,21 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
       ),
       cell: ({ row }) => {
         const tags = row.original.tags ?? []
-        if (tags.length === 0) return <span className="text-muted-foreground text-xs">—</span>
+        if (!tags.length) return <span className="text-muted-foreground text-xs">—</span>
         return (
           <div className="flex flex-wrap gap-1">
-            {tags.slice(0, 3).map((tag) => (
-              <Badge key={tag.id} variant="secondary" className="text-xs">{tag.name}</Badge>
+            {tags.slice(0, 3).map(tag => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489] dark:bg-[#3C3489] dark:text-[#CECBF6]"
+              >
+                {tag.name}
+              </span>
             ))}
             {tags.length > 3 && (
-              <Badge variant="secondary" className="text-xs">+{tags.length - 3}</Badge>
+              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                +{tags.length - 3}
+              </span>
             )}
           </div>
         )
@@ -620,10 +570,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:bg-destructive/10"
-                onClick={() => {
-                  setRequirementToDelete(requirement)
-                  setDeleteDialogOpen(true)
-                }}
+                onClick={() => { setRequirementToDelete(requirement); setDeleteDialogOpen(true) }}
               >
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </DropdownMenuItem>
@@ -637,10 +584,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
   const handleDeleteConfirm = () => {
     if (requirementToDelete) {
       router.delete(`/requirements/${requirementToDelete.id}`, {
-        onSuccess: () => {
-          setDeleteDialogOpen(false)
-          setRequirementToDelete(null)
-        },
+        onSuccess: () => { setDeleteDialogOpen(false); setRequirementToDelete(null) },
       })
     }
   }
@@ -649,10 +593,8 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
     const { source, destination, draggableId } = result
     if (!destination) return
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
-    const requirementId = Number(draggableId)
-    const newValue      = destination.droppableId
-    const field         = groupBy === 'status' ? 'status' : 'priority'
-    router.put(`/requirements/${requirementId}`, { [field]: newValue }, {
+    const field = groupBy === 'status' ? 'status' : 'priority'
+    router.put(`/requirements/${Number(draggableId)}`, { [field]: destination.droppableId }, {
       preserveState: true, preserveScroll: true,
       onError: (errors) => console.error('Update failed', errors),
     })
@@ -662,50 +604,37 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
     <AppLayout>
       <Head title="Requirements" />
 
-      <div className="container mx-auto space-y-6 py-6 px-4 md:px-6 lg:px-8">
+      <div className="space-y-6 py-6 px-4">
 
-        {/* ── Header ───────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Requirements</h1>
-            <p className="text-muted-foreground mt-1.5">
-              Track and manage your compliance requirements
-            </p>
+            <p className="text-muted-foreground mt-1.5">Track and manage your compliance requirements</p>
           </div>
-
           <div className="flex flex-wrap items-center gap-3">
             <Button asChild>
               <Link href="/requirements/create">
-                <Plus className="mr-2 h-4 w-4" />
-                New Requirement
+                <Plus className="mr-2 h-4 w-4" /> New Requirement
               </Link>
             </Button>
-
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="hidden sm:block">
               <TabsList className="grid w-44 grid-cols-2">
-                <TabsTrigger value="table">
-                  <TableIcon className="mr-2 h-4 w-4" />
-                  Table
-                </TabsTrigger>
-                <TabsTrigger value="kanban">
-                  <LayoutGrid className="mr-2 h-4 w-4" />
-                  Board
-                </TabsTrigger>
+                <TabsTrigger value="table"><TableIcon className="mr-2 h-4 w-4" />Table</TabsTrigger>
+                <TabsTrigger value="kanban"><LayoutGrid className="mr-2 h-4 w-4" />Board</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </div>
 
-        {/* ── KPI Cards ───────────────────────────────── */}
+        {/* ── KPI Cards ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ perspective: '1200px' }}>
-          {kpiCards.map((card) => (
-            <KpiCard key={card.label} {...card} />
-          ))}
+          {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
         </div>
 
         <Separator className="my-6" />
 
-        {/* ── Table / Kanban ───────────────────────────── */}
+        {/* ── Table / Kanban ── */}
         {viewMode === 'table' ? (
           <ServerDataTable
             columns={columns}
@@ -716,12 +645,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
             filters={
               <>
                 <DataTableFacetedFilter filterKey="status" title="Status" options={statusOptions} />
-                <DataTableSelectFilter
-                  filterKey="priority"
-                  title="Priority"
-                  placeholder="All priorities"
-                  options={priorityOptions}
-                />
+                <DataTableSelectFilter filterKey="priority" title="Priority" placeholder="All priorities" options={priorityOptions} />
               </>
             }
             initialState={{ columnPinning: { right: ['actions'] } }}
@@ -732,7 +656,6 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
               <h2 className="text-lg font-semibold tracking-tight">
                 {groupBy === 'status' ? 'Status Board' : 'Priority Board'}
               </h2>
-
               <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
                 <SelectTrigger className="w-48">
                   <ListFilter className="mr-2 h-4 w-4" />
@@ -748,30 +671,28 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="overflow-x-auto pb-6 scrollbar-thin">
                 <div className="grid grid-flow-col auto-cols-[minmax(320px,1fr)] gap-5 lg:gap-6">
-                  {groupOrder.map((key) => {
+                  {groupOrder.map(key => {
                     const items = groupedData[key] || []
-                    const color =
-                      groupBy === 'status'
-                        ? statusColors[key]   || statusColors.archived
-                        : priorityColors[key] || priorityColors.low
+                    const s = groupBy === 'status'
+                      ? (statusStyles[key] ?? fallbackStyle)
+                      : (priorityStyles[key] ?? fallbackStyle)
 
                     return (
                       <Droppable droppableId={key} key={key}>
                         {(provided, snapshot) => (
                           <div
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
+                            ref={provided.innerRef} {...provided.droppableProps}
                             className={cn(
                               'flex flex-col min-w-[320px] rounded-xl border bg-gradient-to-b from-card/80 to-card/40 shadow-sm transition-all duration-200',
                               snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl'
                             )}
                           >
-                            <div className={cn(
-                              'px-5 py-4 rounded-t-xl border-b font-medium text-lg flex items-center justify-between',
-                              color.bg, color.border, 'border-b-2'
-                            )}>
-                              <span>{getGroupTitle(key)}</span>
-                              <Badge variant="outline" className="bg-background/70">{items.length}</Badge>
+                            {/* Column header */}
+                            <div className={cn('px-5 py-4 rounded-t-xl border-b-2 font-medium text-lg flex items-center justify-between', s.kanbanBg, s.kanbanBorder)}>
+                              <span className={s.kanbanText}>{getGroupTitle(key)}</span>
+                              <span className={cn('inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border', s.kanbanBorder, s.kanbanText, 'bg-background/70')}>
+                                {items.length}
+                              </span>
                             </div>
 
                             <div className="p-4 flex-1 space-y-4 min-h-[500px]">
@@ -784,8 +705,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
                                   <Draggable key={req.id} draggableId={String(req.id)} index={idx}>
                                     {(dragProvided, dragSnapshot) => (
                                       <Card
-                                        ref={dragProvided.innerRef}
-                                        {...dragProvided.draggableProps}
+                                        ref={dragProvided.innerRef} {...dragProvided.draggableProps}
                                         className={cn(
                                           'transition-all duration-200 cursor-grab active:cursor-grabbing',
                                           dragSnapshot.isDragging
@@ -809,34 +729,29 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
                                           </div>
 
                                           <div className="flex flex-wrap gap-2 pt-2">
-                                            <Badge variant="outline" className="text-xs">{req.type || '—'}</Badge>
-                                            <Badge
-                                              variant="outline"
-                                              className={cn(
-                                                'text-xs',
-                                                priorityColors[req.priority?.toLowerCase() ?? 'other']?.text || 'text-muted-foreground'
-                                              )}
-                                            >
-                                              {req.priority?.toUpperCase() || '—'}
-                                            </Badge>
+                                            <StatusPill value={req.status}   styleMap={statusStyles}   />
+                                            <StatusPill value={req.priority} styleMap={priorityStyles} />
                                             {req.frequency && (
-                                              <Badge variant="outline" className="text-xs">
+                                              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                                                 {req.frequency.replace('_', ' ')}
-                                              </Badge>
+                                              </span>
                                             )}
                                           </div>
 
                                           {req.tags?.length ? (
                                             <div className="flex flex-wrap gap-1.5 pt-1">
-                                              {req.tags.slice(0, 4).map((tag) => (
-                                                <Badge key={tag.id} variant="secondary" className="text-xs">
+                                              {req.tags.slice(0, 4).map(tag => (
+                                                <span
+                                                  key={tag.id}
+                                                  className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489] dark:bg-[#3C3489] dark:text-[#CECBF6]"
+                                                >
                                                   {tag.name}
-                                                </Badge>
+                                                </span>
                                               ))}
                                               {req.tags.length > 4 && (
-                                                <Badge variant="secondary" className="text-xs">
+                                                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                                                   +{req.tags.length - 4}
-                                                </Badge>
+                                                </span>
                                               )}
                                             </div>
                                           ) : null}
@@ -873,6 +788,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
         )}
       </div>
 
+      {/* ── Delete dialog ── */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -883,10 +799,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
