@@ -46,7 +46,7 @@ interface Requirement {
   process?: Process | null
   process_name?: string | null
   tags?: TagItem[] | null
-  deadline?: string | null
+  effective_date ?: string | null
   completion_date?: string | null
   compliance_level: string
   attachments?: string | null
@@ -269,7 +269,7 @@ export default function ShowTest() {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" /> Deadline
                   </div>
-                  <p className="font-medium">{formatDate(requirement.deadline)}</p>
+                  <p className="font-medium">{formatDate(requirement.effective_date )}</p>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

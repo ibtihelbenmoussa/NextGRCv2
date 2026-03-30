@@ -52,7 +52,7 @@ interface Requirement {
   framework?: Framework | null
   process?: Process | null
   tags?: TagItem[] | null
-  deadline?: string | null
+  effective_date?: string | null
   completion_date?: string | null
   compliance_level: string
   attachments?: string | null
@@ -194,7 +194,7 @@ export default function ShowRequirement() {
                     {requirement.description}
                   </p>
                 ) : (
-                  <p className="text-muted-foreground italic">Aucune description fournie.</p>
+                  <p className="text-muted-foreground italic">No description provided.</p>
                 )}
               </CardContent>
             </Card>
@@ -206,7 +206,7 @@ export default function ShowRequirement() {
                   <div className="p-2 rounded-lg bg-primary/10">
                     <ListTodo className="h-5 w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-xl font-semibold">Informations générales</CardTitle>
+                  <CardTitle className="text-xl font-semibold">General Information</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -225,12 +225,12 @@ export default function ShowRequirement() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Processus</p>
+                  <p className="text-sm font-medium text-muted-foreground">Process</p>
                   <p className="font-medium">{requirement.process?.name || '—'}</p>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Fréquence</p>
+                  <p className="text-sm font-medium text-muted-foreground">Frequency</p>
                   <p className="font-medium capitalize">
                     {requirement.frequency.replace('_', ' ') || '—'}
                   </p>
@@ -245,7 +245,7 @@ export default function ShowRequirement() {
                   <div className="p-2 rounded-lg bg-primary/10">
                     <Link2 className="h-5 w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-xl font-semibold">Pièces jointes (liens)</CardTitle>
+                  <CardTitle className="text-xl font-semibold">Attachments (links) (liens)</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
@@ -285,22 +285,22 @@ export default function ShowRequirement() {
                   <div className="p-2 rounded-lg bg-primary/10">
                     <Calendar className="h-5 w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-xl font-semibold">Dates clés</CardTitle>
+                  <CardTitle className="text-xl font-semibold">Key Dates</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
-                    Échéance
+                    Effective Date
                   </div>
-                  <p className="font-medium">{formatDate(requirement.deadline)}</p>
+                  <p className="font-medium">{formatDate(requirement.effective_date)}</p>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle2 className="h-4 w-4" />
-                    Date de complétion
+                    Completion Date
                   </div>
                   <p className="font-medium">{formatDate(requirement.completion_date)}</p>
                 </div>
@@ -308,7 +308,7 @@ export default function ShowRequirement() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
-                    Créé le
+                    Created at
                   </div>
                   <p className="font-medium">{formatDate(requirement.created_at)}</p>
                 </div>
@@ -339,7 +339,7 @@ export default function ShowRequirement() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">Aucun tag assigné</p>
+                  <p className="text-sm text-muted-foreground italic">No tags assigned</p>
                 )}
               </CardContent>
             </Card>

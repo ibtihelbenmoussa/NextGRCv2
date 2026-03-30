@@ -2,6 +2,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { route } from 'ziggy-js';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next'; // ← ajouté
 import type { ColumnDef } from '@tanstack/react-table';
 import type { PaginatedData } from '@/types';
 
@@ -10,39 +11,22 @@ import { ServerDataTable } from '@/components/server-data-table';
 import { DataTableColumnHeader } from '@/components/server-data-table-column-header';
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
+  Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
 
 import {
-  CheckCircle2,
-  ClipboardList,
-  Download,
-  Eye,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
+  CheckCircle2, ClipboardList, Eye,
+  Pencil, Plus, Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -68,7 +52,7 @@ interface Props {
   tests: PaginatedData<PredefinedTest>;
 }
 
-// ─── Soft Badge Style (consistent with other pages) ───────────────────────────
+// ─── Soft Badge ───────────────────────────────────────────────────────────────
 function SoftBadge({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <Badge
@@ -85,6 +69,7 @@ function SoftBadge({ children, className }: { children: React.ReactNode; classNa
 
 // ─── Page Component ───────────────────────────────────────────────────────────
 export default function PredefinedTestsIndex({ tests }: Props) {
+  const { t } = useTranslation(); // ← ajouté
   const { flash } = usePage<{ flash?: { success?: string } }>().props;
 
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -92,7 +77,6 @@ export default function PredefinedTestsIndex({ tests }: Props) {
   const [exportLoading, setExportLoading] = useState(false);
   const [flashVisible, setFlashVisible] = useState(true);
 
-  // Auto-dismiss flash
   useEffect(() => {
     if (!flash?.success) return;
     setFlashVisible(true);
@@ -114,13 +98,9 @@ export default function PredefinedTestsIndex({ tests }: Props) {
       const params = new URLSearchParams(window.location.search);
       const response = await fetch(
         `${route('predefinedTestReq.export')}?${params.toString()}`,
-        {
-          method: 'GET',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        }
+        { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } }
       );
       if (!response.ok) throw new Error('Export failed');
-
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -135,15 +115,15 @@ export default function PredefinedTestsIndex({ tests }: Props) {
     }
   };
 
-  // ── Columns ───────────────────────────────────────────────────────────────
-  const columns: ColumnDef<PredefinedTest>[] = useMemo(
+  // ── Columns — dépend de t pour se mettre à jour au changement de langue ────
+  const columns = useMemo<ColumnDef<PredefinedTest>[]>(
     () => [
       {
         accessorKey: 'test_code',
         header: ({ column }) => (
           <div className="flex items-center gap-1.5">
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            <DataTableColumnHeader column={column} title="Test Code" />
+            <DataTableColumnHeader column={column} title={t('predefinedTestReq.testCode')} />
           </div>
         ),
         cell: ({ row }) => (
@@ -154,7 +134,7 @@ export default function PredefinedTestsIndex({ tests }: Props) {
       {
         accessorKey: 'test_name',
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Test Name" />
+          <DataTableColumnHeader column={column} title={t('predefinedTestReq.testName')} />
         ),
         cell: ({ row }) => (
           <div className="font-medium">{row.getValue('test_name')}</div>
@@ -163,7 +143,7 @@ export default function PredefinedTestsIndex({ tests }: Props) {
       {
         accessorKey: 'objective',
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Objective" />
+          <DataTableColumnHeader column={column} title={t('predefinedTestReq.objective')} />
         ),
         cell: ({ row }) => {
           const val = row.getValue('objective') as string | null;
@@ -172,13 +152,9 @@ export default function PredefinedTestsIndex({ tests }: Props) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="line-clamp-2 text-sm text-muted-foreground cursor-help">
-                    {val}
-                  </span>
+                  <span className="line-clamp-2 text-sm text-muted-foreground cursor-help">{val}</span>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs">{val}</p>
-                </TooltipContent>
+                <TooltipContent><p className="max-w-xs">{val}</p></TooltipContent>
               </Tooltip>
             </TooltipProvider>
           );
@@ -187,7 +163,7 @@ export default function PredefinedTestsIndex({ tests }: Props) {
       {
         accessorKey: 'procedure',
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Procedure" />
+          <DataTableColumnHeader column={column} title={t('predefinedTestReq.procedure')} />
         ),
         cell: ({ row }) => {
           const val = row.getValue('procedure') as string | null;
@@ -196,13 +172,9 @@ export default function PredefinedTestsIndex({ tests }: Props) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="line-clamp-2 text-sm text-muted-foreground cursor-help">
-                    {val}
-                  </span>
+                  <span className="line-clamp-2 text-sm text-muted-foreground cursor-help">{val}</span>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs">{val}</p>
-                </TooltipContent>
+                <TooltipContent><p className="max-w-xs">{val}</p></TooltipContent>
               </Tooltip>
             </TooltipProvider>
           );
@@ -213,19 +185,16 @@ export default function PredefinedTestsIndex({ tests }: Props) {
         header: ({ column }) => (
           <div className="flex items-center gap-1.5">
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            <DataTableColumnHeader column={column} title="Requirement" />
+            <DataTableColumnHeader column={column} title={t('predefinedTestReq.requirement')} />
           </div>
         ),
         cell: ({ row }) => {
           const req = row.original.requirement;
           if (!req) return <span className="text-muted-foreground">—</span>;
-
           return (
             <div className="flex items-center gap-2">
               <SoftBadge>{req.code}</SoftBadge>
-              <span className="text-sm text-muted-foreground truncate max-w-[180px]">
-                {req.title}
-              </span>
+              <span className="text-sm text-muted-foreground truncate max-w-[180px]">{req.title}</span>
             </div>
           );
         },
@@ -233,7 +202,7 @@ export default function PredefinedTestsIndex({ tests }: Props) {
       {
         accessorKey: 'created_at',
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Created" />
+          <DataTableColumnHeader column={column} title={t('predefinedTestReq.created')} />
         ),
         cell: ({ row }) => (
           <span className="text-sm text-muted-foreground">
@@ -251,46 +220,36 @@ export default function PredefinedTestsIndex({ tests }: Props) {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setViewTest(test)}
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => setViewTest(test)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>View details</TooltipContent>
+                  <TooltipContent>{t('predefinedTestReq.view')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => router.visit(route('predefinedTestReq.edit', test.id))}
-                    >
+                    <Button variant="ghost" size="icon"
+                      onClick={() => router.visit(route('predefinedTestReq.edit', test.id))}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Edit</TooltipContent>
+                  <TooltipContent>{t('predefinedTestReq.edit')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                    <Button variant="ghost" size="icon"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => setDeleteId(test.id)}
-                    >
+                      onClick={() => setDeleteId(test.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Delete</TooltipContent>
+                  <TooltipContent>{t('predefinedTestReq.delete')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
@@ -299,30 +258,29 @@ export default function PredefinedTestsIndex({ tests }: Props) {
         size: 120,
       },
     ],
-    []
+    [t] // ← dépend de t
   );
 
   return (
     <AppLayout>
-      <Head title="Predefined Tests" />
+      <Head title={t('predefinedTestReq.title')} />
 
       <div className="space-y-6 py-6 px-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Predefined Tests</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t('predefinedTestReq.title')}
+            </h1>
             <p className="text-muted-foreground mt-1.5">
-              Manage standardized compliance test templates per requirement
+              {t('predefinedTestReq.subtitle')}
             </p>
           </div>
-
           <div className="flex items-center gap-3">
-            
-
             <Button asChild>
               <Link href={route('predefinedTestReq.create')}>
                 <Plus className="mr-2 h-4 w-4" />
-                New Predefined Test
+                {t('predefinedTestReq.newTest')}
               </Link>
             </Button>
           </div>
@@ -335,12 +293,9 @@ export default function PredefinedTestsIndex({ tests }: Props) {
             <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
               {flash.success}
             </p>
-            <Button
-              variant="ghost"
-              size="sm"
+            <Button variant="ghost" size="sm"
               onClick={() => setFlashVisible(false)}
-              className="ml-auto h-7 w-7 p-0 text-emerald-500/70 hover:text-emerald-600"
-            >
+              className="ml-auto h-7 w-7 p-0 text-emerald-500/70 hover:text-emerald-600">
               ×
             </Button>
           </div>
@@ -350,32 +305,26 @@ export default function PredefinedTestsIndex({ tests }: Props) {
         <ServerDataTable
           columns={columns}
           data={tests}
-          searchPlaceholder="Search test code, name or requirement..."
+          searchPlaceholder={t('predefinedTestReq.searchPlaceholder')}
           onExport={handleExport}
           exportLoading={exportLoading}
-          initialState={{
-            sorting: [{ id: 'created_at', desc: true }],
-          }}
+          initialState={{ sorting: [{ id: 'created_at', desc: true }] }}
         />
 
         {/* Delete Confirmation */}
         <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Predefined Test</AlertDialogTitle>
+              <AlertDialogTitle>{t('predefinedTestReq.confirmDelete')}</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to permanently delete this predefined test?
-                <br />
-                This action cannot be undone.
+                {t('predefinedTestReq.confirmDeleteDesc')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-destructive hover:bg-destructive/90"
-              >
-                Delete
+              <AlertDialogCancel>{t('predefinedTestReq.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}
+                className="bg-destructive hover:bg-destructive/90">
+                {t('predefinedTestReq.delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -387,93 +336,71 @@ export default function PredefinedTestsIndex({ tests }: Props) {
             <SheetHeader>
               <SheetTitle className="flex items-center gap-3">
                 <ClipboardList className="h-5 w-5" />
-                Predefined Test Details
+                {t('predefinedTestReq.details')}
               </SheetTitle>
             </SheetHeader>
 
             {viewTest && (
               <div className="mt-8 space-y-8">
-                {/* Header Info */}
                 <div>
                   <div className="font-mono text-sm text-muted-foreground">{viewTest.test_code}</div>
-                  <h2 className="text-2xl font-semibold tracking-tight mt-1">
-                    {viewTest.test_name}
-                  </h2>
+                  <h2 className="text-2xl font-semibold tracking-tight mt-1">{viewTest.test_name}</h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                  {/* Left Column - Long Content */}
                   <div className="lg:col-span-3 space-y-8">
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">OBJECTIVE</div>
+                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                        {t('predefinedTestReq.objective')}
+                      </div>
                       <p className="text-sm leading-relaxed">
-                        {viewTest.objective || 'No objective defined.'}
+                        {viewTest.objective || t('predefinedTestReq.noObjective')}
                       </p>
                     </div>
-
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">PROCEDURE / STEPS</div>
+                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                        {t('predefinedTestReq.procedure')}
+                      </div>
                       <p className="text-sm leading-relaxed whitespace-pre-line">
-                        {viewTest.procedure || 'No procedure defined.'}
+                        {viewTest.procedure || t('predefinedTestReq.noProcedure')}
                       </p>
                     </div>
                   </div>
 
-                  {/* Right Column - Metadata */}
                   <div className="lg:col-span-2 space-y-6">
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">LINKED REQUIREMENT</div>
+                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                        {t('predefinedTestReq.linkedRequirement')}
+                      </div>
                       {viewTest.requirement ? (
                         <div className="space-y-2">
-                          <SoftBadge className="text-base px-3 py-1">
-                            {viewTest.requirement.code}
-                          </SoftBadge>
-                          <p className="text-sm text-muted-foreground">
-                            {viewTest.requirement.title}
-                          </p>
+                          <SoftBadge className="text-base px-3 py-1">{viewTest.requirement.code}</SoftBadge>
+                          <p className="text-sm text-muted-foreground">{viewTest.requirement.title}</p>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No requirement linked</p>
+                        <p className="text-sm text-muted-foreground">{t('predefinedTestReq.noRequirement')}</p>
                       )}
                     </div>
-
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">CREATED</div>
-                      <p className="text-sm">
-                        {format(new Date(viewTest.created_at), 'PPP')}
-                      </p>
+                      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                        {t('predefinedTestReq.created')}
+                      </div>
+                      <p className="text-sm">{format(new Date(viewTest.created_at), 'PPP')}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-3 pt-6 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => setViewTest(null)}
-                    className="flex-1"
-                  >
-                    Close
+                  <Button variant="outline" onClick={() => setViewTest(null)} className="flex-1">
+                    {t('predefinedTestReq.close')}
                   </Button>
-                  <Button
-                    onClick={() => {
-                      setViewTest(null);
-                      router.visit(route('predefinedTestReq.edit', viewTest.id));
-                    }}
-                    className="flex-1"
-                  >
+                  <Button onClick={() => { setViewTest(null); router.visit(route('predefinedTestReq.edit', viewTest.id)); }} className="flex-1">
                     <Pencil className="mr-2 h-4 w-4" />
-                    Edit Test
+                    {t('predefinedTestReq.editTest')}
                   </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setViewTest(null);
-                      setDeleteId(viewTest.id);
-                    }}
-                  >
+                  <Button variant="destructive" onClick={() => { setViewTest(null); setDeleteId(viewTest.id); }}>
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
+                    {t('predefinedTestReq.delete')}
                   </Button>
                 </div>
               </div>

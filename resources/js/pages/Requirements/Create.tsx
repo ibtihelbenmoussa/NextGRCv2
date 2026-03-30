@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'          
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
   ChevronLeft,
@@ -76,20 +76,19 @@ export default function CreateRequirement() {
     framework_id: '',
     process_id: '',
     tags: [] as string[],
-    deadline: '',
+    effective_date: '',        // ← renommé depuis deadline
     completion_date: '',
     compliance_level: '',
     attachments: '',
-    auto_validate: false,           // ← NOUVEAU champ
+    auto_validate: false,
   })
 
-  const [deadlineOpen, setDeadlineOpen] = useState(false)
+  const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)  // ← renommé
   const [completionOpen, setCompletionOpen] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validation minimale côté client
     if (!data.code.trim()) return setError('code', 'Code is required')
     if (!data.title.trim()) return setError('title', 'Title is required')
     if (!data.type) return setError('type', 'Type is required')
@@ -102,7 +101,7 @@ export default function CreateRequirement() {
     post(route('requirements.store'), {
       onSuccess: () => {
         reset()
-        setDeadlineOpen(false)
+        setEffectiveDateOpen(false)
         setCompletionOpen(false)
       },
     })
@@ -357,7 +356,7 @@ export default function CreateRequirement() {
             </CardContent>
           </Card>
 
-          {/* Section 2 – Details & Context (inchangée) */}
+          {/* Section 2 – Details & Context */}
           <Card className="border shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -406,36 +405,41 @@ export default function CreateRequirement() {
                   )}
                 </div>
 
+                {/* ← Effective Date (anciennement Deadline) */}
                 <div className="space-y-2">
-                  <Label>Deadline</Label>
-                  <Popover open={deadlineOpen} onOpenChange={setDeadlineOpen}>
+                  <Label>Effective Date</Label>
+                  <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
                           'w-full justify-start text-left font-normal h-11',
-                          !data.deadline && 'text-muted-foreground',
-                          errors.deadline && 'border-destructive focus-visible:ring-destructive'
+                          !data.effective_date && 'text-muted-foreground',
+                          errors.effective_date && 'border-destructive focus-visible:ring-destructive'
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {data.deadline ? format(new Date(data.deadline), 'PPP') : 'Pick a date'}
+                        {data.effective_date
+                          ? format(new Date(data.effective_date), 'PPP')
+                          : 'Pick a date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={data.deadline ? new Date(data.deadline) : undefined}
+                        selected={data.effective_date ? new Date(data.effective_date) : undefined}
                         onSelect={(date) => {
-                          setData('deadline', date ? format(date, 'yyyy-MM-dd') : '')
-                          clearErrors('deadline')
-                          setDeadlineOpen(false)
+                          setData('effective_date', date ? format(date, 'yyyy-MM-dd') : '')
+                          clearErrors('effective_date')
+                          setEffectiveDateOpen(false)
                         }}
                         initialFocus
                       />
                     </PopoverContent>
                   </Popover>
-                  {errors.deadline && <p className="text-sm text-destructive mt-1.5">{errors.deadline}</p>}
+                  {errors.effective_date && (
+                    <p className="text-sm text-destructive mt-1.5">{errors.effective_date}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -492,7 +496,7 @@ export default function CreateRequirement() {
                   Attachments (URLs)
                 </Label>
                 <Textarea
-                  placeholder="One link per line\nExamples:\nhttps://drive.google.com/file/...\nhttps://company.sharepoint.com/..."
+                  placeholder="One link per line&#10;Examples:&#10;https://drive.google.com/file/...&#10;https://company.sharepoint.com/..."
                   value={data.attachments}
                   onChange={(e) => setData('attachments', e.target.value)}
                   className="min-h-[110px] resize-y"

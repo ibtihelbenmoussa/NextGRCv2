@@ -38,7 +38,7 @@ return new class extends Migration {
             $table->text('owner_id')->nullable();
 
        
-            $table->date('deadline')->nullable();
+            $table->date('effective_date')->nullable();
             $table->date('completion_date')->nullable();
 
             $table->enum('compliance_level', ['Mandatory', 'Optional', 'Recommended'])

@@ -17,6 +17,7 @@ import { ChevronLeft, CheckCircle2, ClipboardList, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import type { PageProps as InertiaPageProps } from '@inertiajs/core'
+import { useTranslation } from 'react-i18next'
 
 interface Requirement {
   id: number
@@ -37,6 +38,7 @@ interface CustomPageProps extends InertiaPageProps {
 }
 
 export default function CreatePredefinedTest({ requirements }: Props) {
+  const { t } = useTranslation()
   const { props } = usePage<CustomPageProps>()
 
   const { data, setData, post, processing, errors, setError, clearErrors, recentlySuccessful } =
@@ -61,35 +63,33 @@ export default function CreatePredefinedTest({ requirements }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
     clearErrors()
 
     let hasError = false
 
     if (!data.requirement_id) {
-      setError('requirement_id', 'Please select a requirement')
+      setError('requirement_id', t('predefinedTestReq.errors.requirementRequired'))
       hasError = true
     }
     if (!data.test_code.trim()) {
-      setError('test_code', 'Test code is required')
+      setError('test_code', t('predefinedTestReq.errors.testCodeRequired'))
       hasError = true
     }
     if (!data.test_name.trim()) {
-      setError('test_name', 'Test name is required')
+      setError('test_name', t('predefinedTestReq.errors.testNameRequired'))
       hasError = true
     }
     if (!data.objective.trim()) {
-      setError('objective', 'Objective is required')
+      setError('objective', t('predefinedTestReq.errors.objectiveRequired'))
       hasError = true
     }
     if (!data.procedure.trim()) {
-      setError('procedure', 'Procedure is required')
+      setError('procedure', t('predefinedTestReq.errors.procedureRequired'))
       hasError = true
     }
 
     if (hasError) return
 
-    // ✅ Nom de route corrigé
     post(route('predefinedTestReq.store'), {
       preserveScroll: true,
       onSuccess: () => {
@@ -103,12 +103,11 @@ export default function CreatePredefinedTest({ requirements }: Props) {
   return (
     <AppLayout
       breadcrumbs={[
-    
-        { title: 'Predefined Tests', href: route('predefinedTestReq.index') },
-        { title: 'Create', href: '' },
+        { title: t('predefinedTestReq.title'), href: route('predefinedTestReq.index') },
+        { title: t('predefinedTestReq.create'), href: '' },
       ]}
     >
-      <Head title="New Predefined Test" />
+      <Head title={t('predefinedTestReq.create')} />
 
       <div className="min-h-full p-6 lg:p-10">
         {/* Header */}
@@ -118,25 +117,29 @@ export default function CreatePredefinedTest({ requirements }: Props) {
               <ClipboardList className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">New Predefined Test</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {t('predefinedTestReq.create')}
+              </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                Link a test to a specific requirement
+                {t('predefinedTestReq.createSubtitle')}
               </p>
             </div>
           </div>
-          {/* ✅ Nom de route corrigé */}
           <Button variant="outline" size="sm" asChild>
             <a href={route('predefinedTestReq.index')}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              {t('predefinedTestReq.back')}
             </a>
           </Button>
         </div>
 
-        {/* Flash / success message */}
+        {/* Flash success */}
         {props.flash?.success && (
           <Alert className="mb-8 bg-emerald-950/50 border-emerald-800 text-emerald-100">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            <AlertTitle className="text-emerald-300">Success</AlertTitle>
+            <AlertTitle className="text-emerald-300">
+              {t('predefinedTestReq.successTitle')}
+            </AlertTitle>
             <AlertDescription>{props.flash.success}</AlertDescription>
           </Alert>
         )}
@@ -144,17 +147,17 @@ export default function CreatePredefinedTest({ requirements }: Props) {
         {recentlySuccessful && (
           <Alert className="mb-8 bg-emerald-950/50 border-emerald-800 text-emerald-100">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            <AlertTitle>Created successfully!</AlertTitle>
-            <AlertDescription>Redirecting to list...</AlertDescription>
+            <AlertTitle>{t('predefinedTestReq.successRedirect')}</AlertTitle>
+            <AlertDescription>{t('predefinedTestReq.redirecting')}</AlertDescription>
           </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-10 max-w-5xl mx-auto">
-          {/* Requirement + auto-validate hint */}
+          {/* Requirement */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                Requirement <span className="text-red-500">*</span>
+                {t('predefinedTestReq.requirement')} <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={data.requirement_id}
@@ -163,8 +166,10 @@ export default function CreatePredefinedTest({ requirements }: Props) {
                   clearErrors('requirement_id')
                 }}
               >
-                <SelectTrigger className={cn('h-11 w-full', errors.requirement_id && 'border-red-500')}>
-                  <SelectValue placeholder="Select a requirement..." />
+                <SelectTrigger
+                  className={cn('h-11 w-full', errors.requirement_id && 'border-red-500')}
+                >
+                  <SelectValue placeholder={t('predefinedTestReq.selectRequirement')} />
                 </SelectTrigger>
                 <SelectContent>
                   {requirements.map((req) => (
@@ -195,16 +200,14 @@ export default function CreatePredefinedTest({ requirements }: Props) {
                     {selectedRequirement.auto_validate ? (
                       <>
                         <p className="font-medium text-blue-300">
-                          Auto-validation is enabled for this requirement
+                          {t('predefinedTestReq.autoValidateEnabled')}
                         </p>
                         <p className="mt-1 opacity-90">
-                          Any test created from this predefined test will be automatically accepted.
+                          {t('predefinedTestReq.autoValidateDesc')}
                         </p>
                       </>
                     ) : (
-                      <p className="opacity-90">
-                        Tests created from this requirement will start with "pending" status.
-                      </p>
+                      <p className="opacity-90">{t('predefinedTestReq.pendingDesc')}</p>
                     )}
                   </div>
                 </div>
@@ -216,11 +219,11 @@ export default function CreatePredefinedTest({ requirements }: Props) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-2">
               <Label htmlFor="test_code" className="flex items-center gap-1.5">
-                Test Code <span className="text-red-500">*</span>
+                {t('predefinedTestReq.testCode')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="test_code"
-                placeholder="TST-001"
+                placeholder={t('predefinedTestReq.testCodePlaceholder')}
                 value={data.test_code}
                 onChange={(e) => {
                   setData('test_code', e.target.value.toUpperCase().trim())
@@ -234,11 +237,11 @@ export default function CreatePredefinedTest({ requirements }: Props) {
 
             <div className="space-y-2">
               <Label htmlFor="test_name" className="flex items-center gap-1.5">
-                Test Name <span className="text-red-500">*</span>
+                {t('predefinedTestReq.testName')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="test_name"
-                placeholder="Password length >= 8 characters"
+                placeholder={t('predefinedTestReq.testNamePlaceholder')}
                 value={data.test_name}
                 onChange={(e) => {
                   setData('test_name', e.target.value.trim())
@@ -254,11 +257,11 @@ export default function CreatePredefinedTest({ requirements }: Props) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="space-y-2">
               <Label htmlFor="objective" className="flex items-center gap-1.5">
-                Objective <span className="text-red-500">*</span>
+                {t('predefinedTestReq.objective')} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="objective"
-                placeholder="Define what this test aims to verify..."
+                placeholder={t('predefinedTestReq.objectivePlaceholder')}
                 value={data.objective}
                 onChange={(e) => {
                   setData('objective', e.target.value)
@@ -271,11 +274,11 @@ export default function CreatePredefinedTest({ requirements }: Props) {
 
             <div className="space-y-2">
               <Label htmlFor="procedure" className="flex items-center gap-1.5">
-                Procedure / Steps <span className="text-red-500">*</span>
+                {t('predefinedTestReq.procedure')} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="procedure"
-                placeholder="Step-by-step instructions to perform the test..."
+                placeholder={t('predefinedTestReq.procedurePlaceholder')}
                 value={data.procedure}
                 onChange={(e) => {
                   setData('procedure', e.target.value)
@@ -287,18 +290,20 @@ export default function CreatePredefinedTest({ requirements }: Props) {
             </div>
           </div>
 
+          {/* Actions */}
           <div className="flex justify-end gap-4 pt-8 border-t border-border/60">
             <Button
               type="button"
               variant="outline"
-              // ✅ Nom de route corrigé
               onClick={() => router.visit(route('predefinedTestReq.index'))}
               disabled={processing}
             >
-              Cancel
+              {t('predefinedTestReq.cancel')}
             </Button>
             <Button type="submit" disabled={processing} className="min-w-[180px]">
-              {processing ? 'Creating...' : 'Create Predefined Test'}
+              {processing
+                ? t('predefinedTestReq.creating')
+                : t('predefinedTestReq.createBtn')}
             </Button>
           </div>
         </form>

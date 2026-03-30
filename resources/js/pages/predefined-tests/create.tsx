@@ -25,7 +25,6 @@ export default function CreatePredefinedTest() {
         post('/predefined-tests')
     }
 
-    // ✅ Dark mode detection (SSR safe)
     const [isDark, setIsDark] = useState(false)
 
     useEffect(() => {
@@ -66,19 +65,18 @@ export default function CreatePredefinedTest() {
             'table',
             'visualblocks',
             'wordcount',
-            'textcolor' // ✅ IMPORTANT
+            'textcolor' 
         ],
 
         toolbar:
             'undo redo | blocks fontfamily fontsize | ' +
             'bold italic underline strikethrough | ' +
-            'forecolor backcolor | ' +   // ✅ AJOUT ICI
+            'forecolor backcolor | ' +   
             'link media table | ' +
             'alignleft aligncenter alignright alignjustify | ' +
             'bullist numlist indent outdent | ' +
             'emoticons charmap | removeformat',
 
-        // ✅ Optionnel : palette personnalisée
         color_map: [
             '000000', 'Black',
             'FF0000', 'Red',
@@ -109,10 +107,10 @@ export default function CreatePredefinedTest() {
         >
             <Head title="Create Predefined Test" />
 
-            <div className="space-y-6 p-4">
+            <div className="space-y-6 p-4 max-w-7xl mx-auto">
 
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">
                             Create Predefined Test

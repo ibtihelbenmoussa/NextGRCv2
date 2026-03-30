@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import {
     Card,
     CardContent,
@@ -20,11 +21,12 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { RiskConfiguration, RiskImpact, RiskProbability, RiskCriteria, CriteriaImpact, RiskScoreLevel } from '@/types/risk-configuration';
 import { Head, Link, useForm, router } from '@inertiajs/react';
-import { ArrowLeft, ChevronLeft, Plus, Trash2, Check, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, LoaderCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import {
     Stepper,
     StepperContent,
+    StepperIndicator,
     StepperItem,
     StepperNav,
     StepperPanel,
@@ -34,7 +36,6 @@ import {
 import { ListTodo, Grid3x3, Layers, Rows, Milestone, Users2 } from 'lucide-react';
 import FastColorPicker from '@/components/ui/fast-color-picker';
 
-// ─── Progressive color scheme ───
 const getProgressiveColors = (count: number): string[] => {
     const colorSchemes: Record<number, string[]> = {
         2: ['#10b981', '#ef4444'],
@@ -68,9 +69,9 @@ const wizardSteps = [
     { title: 'Risk Score Levels', icon: Milestone },
 ];
 
-// ─── Helpers validation ───
-const isScoreEmpty = (score: number | undefined | null): boolean =>
-    score === undefined || score === null || isNaN(Number(score)) || String(score).trim() === '';
+const isScoreEmpty = (score: number | undefined | null): boolean => {
+    return score === undefined || score === null || isNaN(Number(score)) || String(score).trim() === '';
+};
 
 const getScoreError = (
     score: number,
@@ -93,7 +94,7 @@ interface Props {
 
 export default function EditRiskConfiguration({ configuration }: Props) {
 
-    function autoGenerateScoreLevels(count: number, maxScore: number): RiskScoreLevel[] {
+    const autoGenerateScoreLevels = (count: number, maxScore: number): RiskScoreLevel[] => {
         const step = Math.floor(maxScore / count);
         const progressiveColors = getProgressiveColors(count);
         return Array.from({ length: count }, (_, i) => ({
@@ -103,7 +104,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
             color: progressiveColors[i],
             order: i + 1,
         }));
-    }
+    };
 
     const initialScoreLevels = configuration?.score_levels?.length
         ? configuration.score_levels
@@ -137,16 +138,16 @@ export default function EditRiskConfiguration({ configuration }: Props) {
         score_levels: initialScoreLevels,
     });
 
-    // ─── Calcul max score (doit être avant isStepValid) ───
-    const maxImpact = data.impacts.length ? Math.max(...data.impacts.map(i => Number(i.score) || 0)) : 1;
-    const maxProbability = data.probabilities.length ? Math.max(...data.probabilities.map(i => Number(i.score) || 0)) : 1;
-    const totalMaxScore = maxImpact * maxProbability;
-
     const dynamicSteps = useMemo(() => {
         return data.use_criterias
             ? [...wizardSteps, { title: 'Assessment Criteria', icon: Users2 }]
             : wizardSteps;
     }, [data.use_criterias]);
+
+    // ─── Calcul max score ───
+    const maxImpact = data.impacts.length ? Math.max(...data.impacts.map(i => Number(i.score) || 0)) : 1;
+    const maxProbability = data.probabilities.length ? Math.max(...data.probabilities.map(i => Number(i.score) || 0)) : 1;
+    const totalMaxScore = maxImpact * maxProbability;
 
     // ─── Validation par étape ───
     const isStepValid = useMemo(() => {
@@ -216,10 +217,10 @@ export default function EditRiskConfiguration({ configuration }: Props) {
         if (currentStep > dynamicSteps.length) setCurrentStep(dynamicSteps.length);
     }, [dynamicSteps.length, currentStep]);
 
-    const handleScoreLevelFieldChange = (idx: number, field: keyof RiskScoreLevel, value: string | number) => {
-        setScoreLevels(prev => {
+    const handleScoreLevelFieldChange = (levelIdx: number, field: keyof typeof scoreLevels[0], value: string | number) => {
+        setScoreLevels((prev) => {
             const next = [...prev];
-            next[idx] = { ...next[idx], [field]: value };
+            next[levelIdx] = { ...next[levelIdx], [field]: value };
             return next;
         });
     };
@@ -285,22 +286,12 @@ export default function EditRiskConfiguration({ configuration }: Props) {
         })));
     };
 
-    const handleScaleChange = (type: 'impact' | 'probability', value: number) => {
-        if (type === 'impact') {
-            setData('impact_scale_max', value);
-            setData('impacts', generateDefaultImpacts(value));
-            syncCriteriaImpacts(value);
-        } else {
-            setData('probability_scale_max', value);
-            setData('probabilities', generateDefaultProbabilities(value));
-        }
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
         if (!isSubmitting) return;
+
         if (currentStep !== dynamicSteps.length) {
             setIsSubmitting(false);
             return;
@@ -311,9 +302,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
         if (data.impacts.some(i => !i.label.trim())) validationErrors.impacts = 'All impact levels must have labels';
         if (data.probabilities.some(p => !p.label.trim())) validationErrors.probabilities = 'All probability levels must have labels';
         if (scoreLevels.some(level => !level.label.trim())) validationErrors.score_levels = 'All score levels must have labels';
-        if (scoreLevels.some(level => level.min >= level.max)) validationErrors.score_levels = 'Score level min must be less than max';
-        if (scoreLevels.some((l, i, arr) => i > 0 && l.min !== arr[i - 1].max + 1)) validationErrors.score_levels = 'Score levels must be contiguous';
-        if (scoreLevels[scoreLevels.length - 1]?.max !== totalMaxScore) validationErrors.score_levels = `Last max must equal ${totalMaxScore}`;
+        if (scoreLevels.some(level => level.min > level.max)) validationErrors.score_levels = 'Score level min cannot be greater than max';
 
         if (Object.keys(validationErrors).length > 0) {
             console.error(validationErrors);
@@ -418,21 +407,6 @@ export default function EditRiskConfiguration({ configuration }: Props) {
             ]}
         >
             <Head title={`Edit: ${configuration.name}`} />
-            <div className="space-y-6 p-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Edit Risk Configuration</h1>
-                        <p className="text-muted-foreground">Update configuration settings and risk scoring parameters</p>
-                    </div>
-                    <Button variant="outline" asChild>
-                        <Link href="/risk-configurations">
-                            <ChevronLeft className="mr-2 h-4 w-4" />
-                            Back
-                        </Link>
-                    </Button>
-                </div>
-            </div>
-
             <div className="min-h-screen">
                 <form onSubmit={handleSubmit}>
                     <Stepper
@@ -496,20 +470,9 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                                             value={data.name}
                                                             onChange={(e) => setData('name', e.target.value)}
                                                             placeholder="e.g., Default Risk Configuration"
-                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all duration-200 ${data.name.trim() === '' ? 'border-red-500 dark:border-red-500' : ''
-                                                                } ${errors.name ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all duration-200 ${errors.name ? 'border-red-500 focus:ring-red-500' : ''}`}
                                                         />
-                                                        {data.name.trim() === '' && (
-                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                Name is required
-                                                            </p>
-                                                        )}
-                                                        {errors.name && (
-                                                            <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2 mt-2">
-                                                                <span className="w-1 h-1 bg-red-500 rounded-full" />{errors.name}
-                                                            </p>
-                                                        )}
+                                                        {errors.name && <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2 mt-2"><span className="w-1 h-1 bg-red-500 rounded-full"></span>{errors.name}</p>}
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label htmlFor="calculation_method" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Calculation Method</Label>
@@ -533,9 +496,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                                             }}
                                                             className="data-[state=checked]:bg-rose-600 data-[state=checked]:border-rose-600"
                                                         />
-                                                        <Label htmlFor="use_criterias" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-                                                            Use criteria-based assessment
-                                                        </Label>
+                                                        <Label htmlFor="use_criterias" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Use criteria-based assessment</Label>
                                                     </div>
                                                 </div>
                                             </CardContent>
@@ -546,44 +507,44 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                     {idx === 1 && (
                                         <Card className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 sm:p-4">
                                             <CardHeader className="p-0 mb-3">
-                                                <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">Scale Configuration</CardTitle>
-                                                <CardDescription className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Define the number of levels for impact and probability scales</CardDescription>
+                                                <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+                                                    Scale Configuration
+                                                </CardTitle>
+                                                <CardDescription className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+                                                    Define the number of levels for impact and probability scales
+                                                </CardDescription>
                                             </CardHeader>
+
                                             <CardContent className="p-0 pt-2">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Impact Scale (2-10)</Label>
-                                                        <Select value={data.impact_scale_max.toString()} onValueChange={value => handleScaleChange('impact', parseInt(value))}>
-                                                            <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
-                                                                    <SelectItem key={num} value={num.toString()}>{num} Levels</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Probability Scale (2-10)</Label>
-                                                        <Select value={data.probability_scale_max.toString()} onValueChange={value => handleScaleChange('probability', parseInt(value))}>
-                                                            <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
-                                                                    <SelectItem key={num} value={num.toString()}>{num} Levels</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                        Scale Levels (Impact & Probability)
+                                                    </Label>
+
+                                                    <Select
+                                                        value={data.impact_scale_max.toString()}
+                                                        onValueChange={(value) => {
+                                                            const v = parseInt(value);
+                                                            setData('impact_scale_max', v);
+                                                            setData('probability_scale_max', v);
+                                                            setData('impacts', generateDefaultImpacts(v));
+                                                            setData('probabilities', generateDefaultProbabilities(v));
+                                                            syncCriteriaImpacts(v);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+
+                                                        <SelectContent>
+                                                            {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
+                                                                <SelectItem key={num} value={num.toString()}>
+                                                                    {num} Levels
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
-                                                {data.impact_scale_max !== data.probability_scale_max && (
-                                                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                        Impact and Probability scales must have the same number of levels to proceed.
-                                                    </p>
-                                                )}
                                             </CardContent>
                                         </Card>
                                     )}
@@ -633,7 +594,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                         <Card className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                                             <CardHeader className="p-0 mb-3">
                                                 <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-2">
-                                                    <div className="w-2 h-2 bg-rose-500 rounded-full" />
+                                                    <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
                                                     Risk Score Levels
                                                 </CardTitle>
                                                 <CardDescription className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
@@ -656,10 +617,12 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
+
                                                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                     <span>Max Score:</span>
                                                     <span className="font-semibold text-slate-800 dark:text-slate-200 px-2 py-1 rounded-md">{totalMaxScore}</span>
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     {scoreLevels.map((level, levelIdx) => {
                                                         const prev = scoreLevels[levelIdx - 1];
@@ -675,6 +638,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
 
                                                         return (
                                                             <div key={levelIdx} className="flex flex-col gap-3 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+
                                                                 {/* Label */}
                                                                 <div className="space-y-1">
                                                                     <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Label</Label>
@@ -692,69 +656,84 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                                                     )}
                                                                 </div>
 
-                                                                <div className="flex flex-col sm:flex-row gap-2">
-                                                                    {/* Min */}
-                                                                    <div className="flex-1 space-y-1">
-                                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Min</Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={level.min}
-                                                                            onChange={(e) => handleScoreLevelFieldChange(levelIdx, 'min', Number(e.target.value))}
-                                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 ${minHasError ? 'border-red-500 dark:border-red-500' : ''}`}
-                                                                        />
+                                                                <div className="flex flex-col sm:flex-row gap-3">
+
+                                                                    {/* Range Slider Min/Max */}
+                                                                    <div className="flex-1 space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                                                                                Range
+                                                                                {isLast && (
+                                                                                    <span className="text-rose-500 font-normal normal-case tracking-normal ml-1">
+                                                                                        (max = {totalMaxScore})
+                                                                                    </span>
+                                                                                )}
+                                                                            </Label>
+                                                                            <span className={`text-xs font-mono px-2 py-0.5 rounded-md ${minHasError || maxHasError ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                                                {level.min} → {level.max}
+                                                                            </span>
+                                                                        </div>
+                                                                        {levelIdx === 0 ? (
+                                                                            <div className="relative w-full">
+                                                                                <Slider
+                                                                                    min={1}
+                                                                                    max={totalMaxScore}
+                                                                                    step={1}
+                                                                                    value={[1, level.max]}
+                                                                                    onValueChange={([_, newMax]) => {
+                                                                                        handleScoreLevelFieldChange(levelIdx, 'min', 1);
+                                                                                        handleScoreLevelFieldChange(levelIdx, 'max', newMax);
+                                                                                    }}
+                                                                                    className="w-full"
+                                                                                />
+                                                                                <div className="absolute left-0 top-0 w-4 h-full cursor-not-allowed" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <Slider
+                                                                                min={1}
+                                                                                max={totalMaxScore}
+                                                                                step={1}
+                                                                                value={[level.min, level.max]}
+                                                                                onValueChange={([newMin, newMax]) => {
+                                                                                    handleScoreLevelFieldChange(levelIdx, 'min', newMin);
+                                                                                    handleScoreLevelFieldChange(levelIdx, 'max', newMax);
+                                                                                }}
+                                                                                className="w-full"
+                                                                            />
+                                                                        )}
                                                                         {minGeMax && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
                                                                                 Min must be &lt; Max
                                                                             </p>
                                                                         )}
                                                                         {!minGeMax && gapError && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Must be {prev.max + 1} (prev max + 1)
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Max */}
-                                                                    <div className="flex-1 space-y-1">
-                                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                                                                            Max {isLast && (
-                                                                                <span className="text-rose-500 font-normal normal-case tracking-normal ml-1">
-                                                                                    (= {totalMaxScore})
-                                                                                </span>
-                                                                            )}
-                                                                        </Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={level.max}
-                                                                            onChange={(e) => handleScoreLevelFieldChange(levelIdx, 'max', Number(e.target.value))}
-                                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 ${maxHasError ? 'border-red-500 dark:border-red-500' : ''}`}
-                                                                        />
-                                                                        {minGeMax && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                                                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Max must be &gt; Min
+                                                                                Must start at {prev.max + 1}
                                                                             </p>
                                                                         )}
                                                                         {!minGeMax && lastMaxError && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Last max must equal {totalMaxScore} (impact × probability)
+                                                                                Last max must equal {totalMaxScore}
                                                                             </p>
                                                                         )}
                                                                     </div>
 
                                                                     {/* Color */}
-                                                                    <div className="flex-1 space-y-1">
+                                                                    <div className="space-y-1 relative self-start">
                                                                         <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Color</Label>
-                                                                        <div className="flex items-center gap-2">
+                                                                        <div className="flex items-center justify-start">
                                                                             <FastColorPicker
                                                                                 value={level.color}
                                                                                 onChange={(color) => handleScoreLevelFieldChange(levelIdx, 'color', color)}
+                                                                                popoverSide="right"
+                                                                                popoverAlign="start"
                                                                             />
                                                                         </div>
                                                                     </div>
+
                                                                 </div>
                                                             </div>
                                                         );
@@ -781,7 +760,7 @@ export default function EditRiskConfiguration({ configuration }: Props) {
                                                             </Button>
                                                         </div>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            <div className="space-y-1">
+                                                            <div className="space-y-2">
                                                                 <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Criteria Name</Label>
                                                                 <Input
                                                                     value={criteria.name}

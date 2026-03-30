@@ -70,7 +70,7 @@ class RequirementTestController extends Controller
         $this->authorize('create', RequirementTest::class);
 
         $requirements = Requirement::query()
-            ->select('id', 'code', 'title', 'frequency', 'deadline', 'framework_id')
+            ->select('id', 'code', 'title', 'frequency', 'effective_date', 'framework_id')
             ->with('framework:id,code,name')
             ->orderBy('code')
             ->get();
@@ -142,7 +142,7 @@ class RequirementTestController extends Controller
 
         $requirementTest->load('requirement.framework');
 
-        $requirements = Requirement::select('id', 'code', 'title', 'frequency', 'deadline')
+        $requirements = Requirement::select('id', 'code', 'title', 'frequency', 'effective_date')
             ->with('framework:id,code,name')
             ->orderBy('code')
             ->get();
@@ -239,7 +239,7 @@ class RequirementTestController extends Controller
             };
 
             if ($newDeadline) {
-                $requirement->update(['deadline' => $newDeadline]);
+                $requirement->update(['effective_date' => $newDeadline]);
             }
         }
 
@@ -272,7 +272,7 @@ class RequirementTestController extends Controller
             };
 
             if ($newDeadline) {
-                $requirement->update(['deadline' => $newDeadline]);
+                $requirement->update(['effective_date' => $newDeadline]);
             }
         }
 

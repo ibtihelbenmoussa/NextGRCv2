@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import {
     Card,
     CardContent,
@@ -526,44 +527,49 @@ export default function CreateRiskConfiguration() {
                                     {idx === 1 && (
                                         <Card className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 sm:p-4">
                                             <CardHeader className="p-0 mb-3">
-                                                <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">Scale Configuration</CardTitle>
-                                                <CardDescription className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Define the number of levels for impact and probability scales</CardDescription>
+                                                <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+                                                    Scale Configuration
+                                                </CardTitle>
+                                                <CardDescription className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+                                                    Define the number of levels for impact and probability scales
+                                                </CardDescription>
                                             </CardHeader>
+
                                             <CardContent className="p-0 pt-2">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Impact Scale (2-10)</Label>
-                                                        <Select value={data.impact_scale_max.toString()} onValueChange={value => handleScaleChange('impact', parseInt(value))}>
-                                                            <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
-                                                                    <SelectItem key={num} value={num.toString()}>{num} Levels</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Probability Scale (2-10)</Label>
-                                                        <Select value={data.probability_scale_max.toString()} onValueChange={value => handleScaleChange('probability', parseInt(value))}>
-                                                            <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
-                                                                    <SelectItem key={num} value={num.toString()}>{num} Levels</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                        Scale Levels (Impact & Probability)
+                                                    </Label>
+
+                                                    <Select
+                                                        value={data.impact_scale_max.toString()}
+                                                        onValueChange={(value) => {
+                                                            const v = parseInt(value);
+
+                                                            // sync les deux
+                                                            setData('impact_scale_max', v);
+                                                            setData('probability_scale_max', v);
+
+                                                            // regenerate
+                                                            setData('impacts', generateDefaultImpacts(v));
+                                                            setData('probabilities', generateDefaultProbabilities(v));
+
+                                                            syncCriteriaImpacts(v);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+
+                                                        <SelectContent>
+                                                            {Array.from({ length: 9 }, (_, i) => i + 2).map(num => (
+                                                                <SelectItem key={num} value={num.toString()}>
+                                                                    {num} Levels
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
-                                                {data.impact_scale_max !== data.probability_scale_max && (
-                                                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                                                        Impact and Probability scales must have the same number of levels to proceed.
-                                                    </p>
-                                                )}
                                             </CardContent>
                                         </Card>
                                     )}
@@ -636,21 +642,20 @@ export default function CreateRiskConfiguration() {
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
+
                                                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                     <span>Max Score:</span>
                                                     <span className="font-semibold text-slate-800 dark:text-slate-200 px-2 py-1 rounded-md">{totalMaxScore}</span>
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     {scoreLevels.map((level, levelIdx) => {
                                                         const prev = scoreLevels[levelIdx - 1];
                                                         const isLast = levelIdx === scoreLevels.length - 1;
 
                                                         const labelEmpty = level.label.trim() === '';
-                                                        // min doit être strictement < max
                                                         const minGeMax = level.min >= level.max;
-                                                        // min[i] doit être = max[i-1] + 1
                                                         const gapError = levelIdx > 0 && level.min !== prev.max + 1;
-                                                        // dernier max doit = totalMaxScore
                                                         const lastMaxError = isLast && level.max !== totalMaxScore;
 
                                                         const minHasError = minGeMax || gapError;
@@ -658,6 +663,7 @@ export default function CreateRiskConfiguration() {
 
                                                         return (
                                                             <div key={levelIdx} className="flex flex-col gap-3 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+
                                                                 {/* Label */}
                                                                 <div className="space-y-1">
                                                                     <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Label</Label>
@@ -675,69 +681,85 @@ export default function CreateRiskConfiguration() {
                                                                     )}
                                                                 </div>
 
-                                                                <div className="flex flex-col sm:flex-row gap-2">
-                                                                    {/* Min */}
-                                                                    <div className="flex-1 space-y-1">
-                                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Min</Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={level.min}
-                                                                            onChange={(e) => handleScoreLevelFieldChange(levelIdx, 'min', Number(e.target.value))}
-                                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 ${minHasError ? 'border-red-500 dark:border-red-500' : ''}`}
-                                                                        />
+                                                                <div className="flex flex-col sm:flex-row gap-3">
+
+                                                                    {/* Range Slider Min/Max */}
+                                                                    <div className="flex-1 space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                                                                                Range
+                                                                                {isLast && (
+                                                                                    <span className="text-rose-500 font-normal normal-case tracking-normal ml-1">
+                                                                                        (max = {totalMaxScore})
+                                                                                    </span>
+                                                                                )}
+                                                                            </Label>
+                                                                            <span className={`text-xs font-mono px-2 py-0.5 rounded-md ${minHasError || maxHasError ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                                                {level.min} → {level.max}
+                                                                            </span>
+                                                                        </div>
+                                                                        {levelIdx === 0 ? (
+                                                                            <div className="relative w-full">
+                                                                                <Slider
+                                                                                    min={1}
+                                                                                    max={totalMaxScore}
+                                                                                    step={1}
+                                                                                    value={[1, level.max]}
+                                                                                    onValueChange={([_, newMax]) => {
+                                                                                        handleScoreLevelFieldChange(levelIdx, 'min', 1);
+                                                                                        handleScoreLevelFieldChange(levelIdx, 'max', newMax);
+                                                                                    }}
+                                                                                    className="w-full"
+                                                                                />
+                                                                                {/* Overlay qui bloque le premier thumb visuellement et physiquement */}
+                                                                                <div className="absolute left-0 top-0 w-4 h-full cursor-not-allowed" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <Slider
+                                                                                min={1}
+                                                                                max={totalMaxScore}
+                                                                                step={1}
+                                                                                value={[level.min, level.max]}
+                                                                                onValueChange={([newMin, newMax]) => {
+                                                                                    handleScoreLevelFieldChange(levelIdx, 'min', newMin);
+                                                                                    handleScoreLevelFieldChange(levelIdx, 'max', newMax);
+                                                                                }}
+                                                                                className="w-full"
+                                                                            />
+                                                                        )}
                                                                         {minGeMax && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
                                                                                 Min must be &lt; Max
                                                                             </p>
                                                                         )}
                                                                         {!minGeMax && gapError && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Must be {prev.max + 1} (prev max + 1)
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Max */}
-                                                                    <div className="flex-1 space-y-1">
-                                                                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                                                                            Max {isLast && (
-                                                                                <span className="text-rose-500 font-normal normal-case tracking-normal ml-1">
-                                                                                    (= {totalMaxScore})
-                                                                                </span>
-                                                                            )}
-                                                                        </Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={level.max}
-                                                                            onChange={(e) => handleScoreLevelFieldChange(levelIdx, 'max', Number(e.target.value))}
-                                                                            className={`border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-rose-500 ${maxHasError ? 'border-red-500 dark:border-red-500' : ''}`}
-                                                                        />
-                                                                        {minGeMax && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                                                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Max must be &gt; Min
+                                                                                Must start at {prev.max + 1}
                                                                             </p>
                                                                         )}
                                                                         {!minGeMax && lastMaxError && (
-                                                                            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                                                            <p className="text-xs text-red-500 flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block flex-shrink-0" />
-                                                                                Last max must equal {totalMaxScore} (impact × probability)
+                                                                                Last max must equal {totalMaxScore}
                                                                             </p>
                                                                         )}
                                                                     </div>
 
                                                                     {/* Color */}
-                                                                    <div className="flex-1 space-y-1">
+                                                                    <div className="space-y-1 relative self-start">
                                                                         <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Color</Label>
-                                                                        <div className="flex items-center gap-2">
+                                                                        <div className="flex items-center justify-start">
                                                                             <FastColorPicker
                                                                                 value={level.color}
                                                                                 onChange={(color) => handleScoreLevelFieldChange(levelIdx, 'color', color)}
+                                                                                popoverSide="right"
+                                                                                popoverAlign="start"
                                                                             />
                                                                         </div>
                                                                     </div>
+
                                                                 </div>
                                                             </div>
                                                         );
@@ -746,7 +768,6 @@ export default function CreateRiskConfiguration() {
                                             </CardContent>
                                         </Card>
                                     )}
-
                                     {/* ── Step 6 : Assessment Criteria (conditionnel) ── */}
                                     {step.title === 'Assessment Criteria' && (
                                         <Card className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 sm:p-4">

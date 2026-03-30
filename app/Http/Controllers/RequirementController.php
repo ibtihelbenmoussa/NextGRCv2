@@ -58,7 +58,7 @@ class RequirementController extends Controller
             $sort = $request->sort;
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
             $column = ltrim($sort, '-');
-            $allowed = ['code', 'title', 'type', 'status', 'priority', 'deadline', 'created_at'];
+            $allowed = ['code', 'title', 'type', 'status', 'priority', 'effective_date', 'created_at'];
             if (in_array($column, $allowed)) {
                 $query->orderBy($column, $direction);
             }
@@ -97,7 +97,7 @@ class RequirementController extends Controller
                 'process' => $req->process ? ['name' => $req->process->name] : null,
                 'owner_id' => $req->owner_id,
                 'tags' => $req->tags,
-                'deadline' => $req->deadline,
+                'effective_date' => $req->effective_date,
                 'completion_date' => $req->completion_date,
                 'compliance_level' => $req->compliance_level,
                 'attachments' => $req->attachments,
@@ -148,7 +148,7 @@ class RequirementController extends Controller
             'frequency' => 'required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
             'framework_id' => 'required|exists:frameworks,id',
             'process_id' => 'nullable|exists:processes,id',
-            'deadline' => 'nullable|date',
+            'effective_date' => 'nullable|date',
             'completion_date' => 'nullable|date',
             'compliance_level' => 'required|in:Mandatory,Recommended,Optional',
             'attachments' => 'nullable|string',
@@ -168,7 +168,7 @@ class RequirementController extends Controller
             'framework_id' => $validated['framework_id'],
             'process_id' => $validated['process_id'] ?? null,
             'owner_id' => $user->id,
-            'deadline' => $validated['deadline'] ?? null,
+            'effective_date' => $validated['effective_date'] ?? null,
             'completion_date' => $validated['completion_date'] ?? null,
             'compliance_level' => $validated['compliance_level'],
             'attachments' => $validated['attachments'] ?? null,
@@ -240,7 +240,7 @@ class RequirementController extends Controller
             'frequency' => 'sometimes|required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
             'framework_id' => 'sometimes|required|exists:frameworks,id',
             'process_id' => 'sometimes|nullable|exists:processes,id',
-            'deadline' => 'sometimes|nullable|date',
+            'effective_date' => 'sometimes|nullable|date',
             'completion_date' => 'sometimes|nullable|date',
             'compliance_level' => 'sometimes|required|in:Mandatory,Recommended,Optional',
             'attachments' => 'sometimes|nullable|string',
@@ -314,22 +314,22 @@ class RequirementController extends Controller
             ->where(function ($q) use ($date) {
                 $q
                     ->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $date))
-                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('deadline', $date))
-                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('deadline', '<=', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('effective_date', $date))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('effective_date', '<=', $date))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'weekly')
-                        ->whereRaw('DAYOFWEEK(deadline) = ?', [$date->dayOfWeek + 1])
-                        ->whereDate('deadline', '<=', $date))
+                        ->whereRaw('DAYOFWEEK(effective_date) = ?', [$date->dayOfWeek + 1])
+                        ->whereDate('effective_date', '<=', $date))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'monthly')
-                        ->whereRaw('DAY(deadline) = ?', [$date->day])
-                        ->whereDate('deadline', '<=', $date))
+                        ->whereRaw('DAY(effective_date) = ?', [$date->day])
+                        ->whereDate('effective_date', '<=', $date))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'quarterly')
-                        ->whereRaw('DAY(deadline) = ?', [$date->day])
-                        ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$date->month])
-                        ->whereDate('deadline', '<=', $date))
+                        ->whereRaw('DAY(effective_date) = ?', [$date->day])
+                        ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$date->month])
+                        ->whereDate('effective_date', '<=', $date))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'yearly')
-                        ->whereRaw('DAY(deadline) = ?', [$date->day])
-                        ->whereRaw('MONTH(deadline) = ?', [$date->month])
-                        ->whereDate('deadline', '<=', $date))
+                        ->whereRaw('DAY(effective_date) = ?', [$date->day])
+                        ->whereRaw('MONTH(effective_date) = ?', [$date->month])
+                        ->whereDate('effective_date', '<=', $date))
                     ->orWhere('frequency', 'continuous');
             })
             ->pluck('id');
@@ -355,13 +355,13 @@ class RequirementController extends Controller
         $missed = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
             ->where('frequency', '!=', 'one_time')
-            ->whereDate('deadline', '<', $date)
+            ->whereDate('effective_date', '<', $date)
             ->whereDoesntHave('tests', fn($q) => $q->whereDate('test_date', $date))
             ->count();
 
         $due = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
-            ->whereDate('deadline', $date)
+            ->whereDate('effective_date', $date)
             ->whereDoesntHave('tests', fn($q) => $q->whereDate('test_date', $date))
             ->count();
 
@@ -421,22 +421,22 @@ class RequirementController extends Controller
             ->where(function ($q) use ($targetDate) {
                 $q
                     ->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $targetDate))
-                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('deadline', $targetDate))
-                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('deadline', '<=', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'one_time')->whereDate('effective_date', $targetDate))
+                    ->orWhere(fn($q2) => $q2->where('frequency', 'daily')->whereDate('effective_date', '<=', $targetDate))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'weekly')
-                        ->whereRaw('DAYOFWEEK(deadline) = ?', [$targetDate->dayOfWeek + 1])
-                        ->whereDate('deadline', '<=', $targetDate))
+                        ->whereRaw('DAYOFWEEK(effective_date) = ?', [$targetDate->dayOfWeek + 1])
+                        ->whereDate('effective_date', '<=', $targetDate))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'monthly')
-                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                        ->whereDate('deadline', '<=', $targetDate))
+                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                        ->whereDate('effective_date', '<=', $targetDate))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'quarterly')
-                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                        ->whereRaw('MOD(MONTH(deadline), 3) = MOD(?, 3)', [$targetDate->month])
-                        ->whereDate('deadline', '<=', $targetDate))
+                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                        ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$targetDate->month])
+                        ->whereDate('effective_date', '<=', $targetDate))
                     ->orWhere(fn($q2) => $q2->where('frequency', 'yearly')
-                        ->whereRaw('DAY(deadline) = ?', [$targetDate->day])
-                        ->whereRaw('MONTH(deadline) = ?', [$targetDate->month])
-                        ->whereDate('deadline', '<=', $targetDate))
+                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                        ->whereRaw('MONTH(effective_date) = ?', [$targetDate->month])
+                        ->whereDate('effective_date', '<=', $targetDate))
                     ->orWhere('frequency', 'continuous');
             });
 
@@ -451,7 +451,7 @@ class RequirementController extends Controller
             $sort      = $request->sort;
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
             $column    = ltrim($sort, '-');
-            $allowed   = ['code', 'title', 'frequency', 'deadline'];
+            $allowed   = ['code', 'title', 'frequency', 'effective_date'];
             $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
         } else {
             $query->orderBy('code');

@@ -58,7 +58,7 @@ import {
   CircleDot,
   X,
   ArrowRight,
-  UserCheck,   // ← nouveau
+  UserCheck,
 } from 'lucide-react';
 
 import { format } from 'date-fns';
@@ -75,14 +75,13 @@ interface Requirement {
   code: string;
   title: string;
   frequency: string;
-  deadline?: string | null;
+  effective_date?: string | null;   // ← renommé depuis deadline
   framework?: Framework | null;
   process?: Process | null;
   tags?: Tag[] | null;
   latest_test_status?: 'pending' | 'accepted' | 'rejected' | null;
   latest_test_comment?: string | null;
   latest_test_id?: number | null;
-  // ← nouveaux champs réservation
   reservation_user_id?:   number | null;
   reservation_user_name?: string | null;
 }
@@ -103,7 +102,7 @@ interface Props {
   missedToday: number;
   dueToday: number;
   kpi: KpiData;
-  currentUserId: number;   // ← nouveau
+  currentUserId: number;
 }
 
 // ─── Soft Pill + Dot Styles ───────────────────────────────────────────────────
@@ -287,8 +286,8 @@ function OverdueModal({
   todayMidnight: Date;
   onGoToDate: (req: Requirement) => void;
 }) {
-  const getDaysLate = (deadline: string) => {
-    const dl = new Date(deadline); dl.setHours(0, 0, 0, 0);
+  const getDaysLate = (effective_date: string) => {
+    const dl = new Date(effective_date); dl.setHours(0, 0, 0, 0);
     return Math.abs(Math.floor((dl.getTime() - todayMidnight.getTime()) / 86400000));
   };
 
@@ -314,9 +313,9 @@ function OverdueModal({
             <div className="px-5 py-8 text-center text-sm text-muted-foreground">No overdue tests found.</div>
           ) : (
             overdueRequirements.map((req) => {
-              const daysLate = req.deadline ? getDaysLate(req.deadline) : 0;
-              const deadlineFormatted = req.deadline
-                ? format(new Date(req.deadline), 'MMM d, yyyy', { locale: enUS })
+              const daysLate = req.effective_date ? getDaysLate(req.effective_date) : 0;
+              const effectiveDateFormatted = req.effective_date
+                ? format(new Date(req.effective_date), 'MMM d, yyyy', { locale: enUS })
                 : '—';
 
               return (
@@ -339,7 +338,7 @@ function OverdueModal({
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{req.title}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <CalendarIcon className="h-3 w-3 text-red-400/70" />
-                      <span className="text-xs text-red-400/80 font-mono">{deadlineFormatted}</span>
+                      <span className="text-xs text-red-400/80 font-mono">{effectiveDateFormatted}</span>
                       <span className="text-xs text-muted-foreground/50">·</span>
                       <span className="text-xs text-muted-foreground capitalize">{req.frequency?.replace(/_/g, ' ')}</span>
                     </div>
@@ -352,7 +351,7 @@ function OverdueModal({
         </div>
 
         <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/20">
-          <p className="text-xs text-muted-foreground">Clicking a row navigates to that requirement's deadline date</p>
+          <p className="text-xs text-muted-foreground">Clicking a row navigates to that requirement's effective date</p>
           <Button size="sm" variant="ghost" className="h-8 text-muted-foreground hover:text-foreground" onClick={onClose}>
             Close
           </Button>
@@ -371,7 +370,7 @@ export default function RequirementTestsIndex({
   missedToday,
   dueToday,
   kpi = { total: 0, completed: 0, pending: 0, overdue: 0, completionRate: 0 },
-  currentUserId,   // ← nouveau
+  currentUserId,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date(initialDate);
@@ -387,7 +386,6 @@ export default function RequirementTestsIndex({
   const [overdueModalOpen, setOverdueModalOpen] = useState(false);
   const [pendingTestReqId, setPendingTestReqId] = useState<number | null>(null);
 
-  // ← nouveau : IDs en cours de claim/unclaim
   const [reservingIds, setReservingIds] = useState<Set<number>>(new Set());
 
   const formattedDate = useMemo(
@@ -444,13 +442,14 @@ export default function RequirementTestsIndex({
     router.visit(route('requirements.test.create', reqId) + `?date=${format(selectedDate, 'yyyy-MM-dd')}`);
   }, [selectedDate]);
 
+  // ← utilise effective_date au lieu de deadline
   const handleGoToOverdueDate = useCallback((req: Requirement) => {
-    if (!req.deadline) return;
+    if (!req.effective_date) return;
     setOverdueModalOpen(false);
-    const deadlineDate = new Date(req.deadline);
-    deadlineDate.setHours(0, 0, 0, 0);
-    setSelectedDate(deadlineDate);
-    navigate(deadlineDate);
+    const effectiveDate = new Date(req.effective_date);
+    effectiveDate.setHours(0, 0, 0, 0);
+    setSelectedDate(effectiveDate);
+    navigate(effectiveDate);
   }, [navigate]);
 
   const handleCompleteNow = useCallback(() => {
@@ -523,10 +522,11 @@ export default function RequirementTestsIndex({
     }
   };
 
+  // ← utilise effective_date au lieu de deadline
   const isOverdueRow = useCallback((req: Requirement): boolean => {
     if (req.latest_test_status === 'accepted' || req.latest_test_status === 'pending') return false;
-    if (!req.deadline) return false;
-    const dl = new Date(req.deadline); dl.setHours(0, 0, 0, 0);
+    if (!req.effective_date) return false;
+    const dl = new Date(req.effective_date); dl.setHours(0, 0, 0, 0);
     return dl < todayMidnight;
   }, [todayMidnight]);
 
@@ -536,11 +536,12 @@ export default function RequirementTestsIndex({
     return req.latest_test_status === null || req.latest_test_status === 'rejected';
   }, [isPastDate]);
 
+  // ← utilise effective_date au lieu de deadline
   const isDueRow = useCallback((req: Requirement): boolean => {
-    if (!req.deadline) return false;
+    if (!req.effective_date) return false;
     if (!isToday) return false;
     if (req.latest_test_status === 'accepted' || req.latest_test_status === 'pending') return false;
-    const dl = new Date(req.deadline); dl.setHours(0, 0, 0, 0);
+    const dl = new Date(req.effective_date); dl.setHours(0, 0, 0, 0);
     return dl.getTime() === todayMidnight.getTime();
   }, [isToday, todayMidnight]);
 
@@ -714,18 +715,18 @@ export default function RequirementTestsIndex({
       },
     },
 
-    // ─── Deadline ────────────────────────────────────────────────────────────
+    // ─── Effective Date (anciennement Deadline) ───────────────────────────────
     {
-      accessorKey: 'deadline',
+      accessorKey: 'effective_date',
       header: ({ column }) => (
         <div className="flex items-center gap-1.5">
           <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-          <DataTableColumnHeader column={column} title="Deadline" />
+          <DataTableColumnHeader column={column} title="Effective Date" />
         </div>
       ),
       cell: ({ row }) => {
         const req = row.original;
-        const dl = req.deadline;
+        const dl = req.effective_date;
         if (!dl) return <span className="text-muted-foreground">—</span>;
 
         const missed  = isMissedRow(req);
@@ -755,7 +756,6 @@ export default function RequirementTestsIndex({
         const missed = isMissedRow(req);
         const selected = selectedIds.has(req.id);
 
-        // ← bloqué si réservé par quelqu'un d'autre
         const isTakenByOther = !!req.reservation_user_id && req.reservation_user_id !== currentUserId;
 
         let config: {
@@ -834,7 +834,7 @@ export default function RequirementTestsIndex({
   ], [
     isToday, isPastDate, highlightMissed, selectedIds, navigateToCreate,
     isMissedRow, isOverdueRow, isDueRow, todayMidnight,
-    currentUserId, reservingIds, handleReservationToggle,  // ← ajoutés
+    currentUserId, reservingIds, handleReservationToggle,
   ]);
 
   return (
@@ -886,7 +886,7 @@ export default function RequirementTestsIndex({
                 <AlertTriangle className="h-5 w-5 shrink-0 text-red-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-red-400">{missedToday} missed test{missedToday > 1 ? 's' : ''} — deadline passed</p>
-                  <p className="font-mono text-xs text-red-400/70 mt-0.5">These requirements were not tested before their deadline</p>
+                  <p className="font-mono text-xs text-red-400/70 mt-0.5">These requirements were not tested before their effective date</p>
                 </div>
                 <Button size="sm" variant="outline" className="shrink-0 border-red-500/50 text-red-400 hover:bg-red-500/20 gap-1.5" onClick={() => setOverdueModalOpen(true)}>
                   View overdue <ArrowRight className="h-3.5 w-3.5" />
@@ -898,7 +898,7 @@ export default function RequirementTestsIndex({
                 <Clock className="h-5 w-5 shrink-0 text-amber-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-amber-400">{dueToday} test{dueToday > 1 ? 's' : ''} due today</p>
-                  <p className="font-mono text-xs text-amber-400/70 mt-0.5">Deadline: {format(selectedDate, 'EEEE, MMMM d', { locale: enUS })} · 11:59 PM</p>
+                  <p className="font-mono text-xs text-amber-400/70 mt-0.5">Effective Date: {format(selectedDate, 'EEEE, MMMM d', { locale: enUS })} · 11:59 PM</p>
                 </div>
                 <Button size="sm" variant="outline" className="shrink-0 border-amber-500/50 text-amber-400 hover:bg-amber-500/20" onClick={handleCompleteNow}>
                   Complete now

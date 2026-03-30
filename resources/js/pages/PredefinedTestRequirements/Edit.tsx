@@ -13,10 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ChevronLeft, CheckCircle2, ClipboardList, Info, Save } from 'lucide-react'
+import { ChevronLeft, CheckCircle2, ClipboardList, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { PageProps } from '@inertiajs/core'
+import { useTranslation } from 'react-i18next'
 
 interface Requirement {
   id: number
@@ -47,15 +48,17 @@ interface CustomPageProps extends PageProps {
 }
 
 export default function EditPredefinedTest({ test, requirements }: Props) {
+  const { t } = useTranslation()
   const { props } = usePage<CustomPageProps>()
 
-  const { data, setData, put, processing, errors, setError, clearErrors, recentlySuccessful } = useForm({
-    requirement_id: test.requirement_id.toString(),
-    test_code: test.test_code,
-    test_name: test.test_name,
-    objective: test.objective,
-    procedure: test.procedure,
-  })
+  const { data, setData, put, processing, errors, setError, clearErrors, recentlySuccessful } =
+    useForm({
+      requirement_id: test.requirement_id.toString(),
+      test_code: test.test_code,
+      test_name: test.test_name,
+      objective: test.objective,
+      procedure: test.procedure,
+    })
 
   const [selectedRequirement, setSelectedRequirement] = useState<Requirement | null>(null)
 
@@ -71,23 +74,23 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
     let hasError = false
 
     if (!data.requirement_id) {
-      setError('requirement_id', 'Please select a requirement')
+      setError('requirement_id', t('predefinedTestReq.errors.requirementRequired'))
       hasError = true
     }
     if (!data.test_code.trim()) {
-      setError('test_code', 'Test code is required')
+      setError('test_code', t('predefinedTestReq.errors.testCodeRequired'))
       hasError = true
     }
     if (!data.test_name.trim()) {
-      setError('test_name', 'Test name is required')
+      setError('test_name', t('predefinedTestReq.errors.testNameRequired'))
       hasError = true
     }
     if (!data.objective.trim()) {
-      setError('objective', 'Objective is required')
+      setError('objective', t('predefinedTestReq.errors.objectiveRequired'))
       hasError = true
     }
     if (!data.procedure.trim()) {
-      setError('procedure', 'Procedure is required')
+      setError('procedure', t('predefinedTestReq.errors.procedureRequired'))
       hasError = true
     }
 
@@ -106,11 +109,11 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
   return (
     <AppLayout
       breadcrumbs={[
-        { title: 'Predefined Tests', href: route('predefinedTestReq.index') },
-        { title: 'Edit', href: '' },
+        { title: t('predefinedTestReq.title'), href: route('predefinedTestReq.index') },
+        { title: t('predefinedTestReq.editTest'), href: '' },
       ]}
     >
-      <Head title={`Edit Predefined Test - ${test.test_code}`} />
+      <Head title={`${t('predefinedTestReq.editTest')} - ${test.test_code}`} />
 
       <div className="min-h-full p-6 lg:p-10">
         {/* Header */}
@@ -120,23 +123,30 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
               <ClipboardList className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Edit Predefined Test</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {t('predefinedTestReq.editTest')}
+              </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                Update test: <span className="font-mono font-medium">{test.test_code}</span>
+                {t('predefinedTestReq.updateTest')}{' '}
+                <span className="font-mono font-medium">{test.test_code}</span>
               </p>
             </div>
           </div>
           <Button variant="outline" size="sm" asChild>
             <a href={route('predefinedTestReq.index')}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back to List
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              {t('predefinedTestReq.back')}
             </a>
           </Button>
         </div>
 
+        {/* Flash success */}
         {props.flash?.success && (
           <Alert className="mb-8 bg-emerald-950/50 border-emerald-800 text-emerald-100">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            <AlertTitle className="text-emerald-300">Success</AlertTitle>
+            <AlertTitle className="text-emerald-300">
+              {t('predefinedTestReq.successTitle')}
+            </AlertTitle>
             <AlertDescription>{props.flash.success}</AlertDescription>
           </Alert>
         )}
@@ -144,16 +154,17 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
         {recentlySuccessful && (
           <Alert className="mb-8 bg-emerald-950/50 border-emerald-800 text-emerald-100">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            <AlertTitle>Updated successfully!</AlertTitle>
-            <AlertDescription>Redirecting to list...</AlertDescription>
+            <AlertTitle>{t('predefinedTestReq.updateSuccess')}</AlertTitle>
+            <AlertDescription>{t('predefinedTestReq.redirecting')}</AlertDescription>
           </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-10 max-w-5xl mx-auto">
+          {/* Requirement (disabled) */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                Requirement <span className="text-red-500">*</span>
+                {t('predefinedTestReq.requirement')} <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={data.requirement_id}
@@ -163,8 +174,10 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 }}
                 disabled={true}
               >
-                <SelectTrigger className={cn('h-11 w-full', errors.requirement_id && 'border-red-500')}>
-                  <SelectValue placeholder="Select a requirement..." />
+                <SelectTrigger
+                  className={cn('h-11 w-full', errors.requirement_id && 'border-red-500')}
+                >
+                  <SelectValue placeholder={t('predefinedTestReq.selectRequirement')} />
                 </SelectTrigger>
                 <SelectContent>
                   {requirements.map((req) => (
@@ -179,18 +192,17 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 <p className="text-sm text-red-600">{errors.requirement_id}</p>
               )}
             </div>
-
-       
           </div>
 
+          {/* Test Code + Name */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-2">
               <Label htmlFor="test_code" className="flex items-center gap-1.5">
-                Test Code <span className="text-red-500">*</span>
+                {t('predefinedTestReq.testCode')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="test_code"
-                placeholder="TST-001"
+                placeholder={t('predefinedTestReq.testCodePlaceholder')}
                 value={data.test_code}
                 onChange={(e) => {
                   setData('test_code', e.target.value.toUpperCase().trim())
@@ -199,16 +211,18 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 className={cn('h-11 font-mono', errors.test_code && 'border-red-500')}
                 maxLength={50}
               />
-              {errors.test_code && <p className="text-sm text-red-600">{errors.test_code}</p>}
+              {errors.test_code && (
+                <p className="text-sm text-red-600">{errors.test_code}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="test_name" className="flex items-center gap-1.5">
-                Test Name <span className="text-red-500">*</span>
+                {t('predefinedTestReq.testName')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="test_name"
-                placeholder="Password length >= 8 characters"
+                placeholder={t('predefinedTestReq.testNamePlaceholder')}
                 value={data.test_name}
                 onChange={(e) => {
                   setData('test_name', e.target.value.trim())
@@ -216,18 +230,21 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 }}
                 className={cn('h-11', errors.test_name && 'border-red-500')}
               />
-              {errors.test_name && <p className="text-sm text-red-600">{errors.test_name}</p>}
+              {errors.test_name && (
+                <p className="text-sm text-red-600">{errors.test_name}</p>
+              )}
             </div>
           </div>
 
+          {/* Objective + Procedure */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="space-y-2">
               <Label htmlFor="objective" className="flex items-center gap-1.5">
-                Objective <span className="text-red-500">*</span>
+                {t('predefinedTestReq.objective')} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="objective"
-                placeholder="Define what this test aims to verify..."
+                placeholder={t('predefinedTestReq.objectivePlaceholder')}
                 value={data.objective}
                 onChange={(e) => {
                   setData('objective', e.target.value)
@@ -235,16 +252,18 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 }}
                 className={cn('min-h-[180px] resize-y', errors.objective && 'border-red-500')}
               />
-              {errors.objective && <p className="text-sm text-red-600">{errors.objective}</p>}
+              {errors.objective && (
+                <p className="text-sm text-red-600">{errors.objective}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="procedure" className="flex items-center gap-1.5">
-                Procedure / Steps <span className="text-red-500">*</span>
+                {t('predefinedTestReq.procedure')} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="procedure"
-                placeholder="Step-by-step instructions to perform the test..."
+                placeholder={t('predefinedTestReq.procedurePlaceholder')}
                 value={data.procedure}
                 onChange={(e) => {
                   setData('procedure', e.target.value)
@@ -252,10 +271,13 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
                 }}
                 className={cn('min-h-[180px] resize-y', errors.procedure && 'border-red-500')}
               />
-              {errors.procedure && <p className="text-sm text-red-600">{errors.procedure}</p>}
+              {errors.procedure && (
+                <p className="text-sm text-red-600">{errors.procedure}</p>
+              )}
             </div>
           </div>
 
+          {/* Actions */}
           <div className="flex justify-end gap-4 pt-8 border-t border-border/60">
             <Button
               type="button"
@@ -263,19 +285,15 @@ export default function EditPredefinedTest({ test, requirements }: Props) {
               onClick={() => router.visit(route('predefinedTestReq.index'))}
               disabled={processing}
             >
-              Cancel
+              {t('predefinedTestReq.cancel')}
             </Button>
-            <Button
-              type="submit"
-              disabled={processing}
-              className="min-w-[180px] gap-2"
-            >
+            <Button type="submit" disabled={processing} className="min-w-[180px] gap-2">
               {processing ? (
-                <>Saving...</>
+                t('predefinedTestReq.saving')
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Update Test
+                  {t('predefinedTestReq.updateBtn')}
                 </>
               )}
             </Button>

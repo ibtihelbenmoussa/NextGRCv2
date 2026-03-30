@@ -93,7 +93,7 @@ interface Requirement {
   framework?: { code: string; name: string } | null
   process?: { name: string } | null
   tags?: TagItem[]
-  deadline?: string | null
+  effective_date?: string | null
   completion_date?: string | null
   compliance_level: string
   attachments?: string | null
@@ -114,65 +114,65 @@ type ViewMode = 'table' | 'kanban'
 
 const statusStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
   active: {
-    pill:         'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot:          'bg-[#3B6D11]               dark:bg-[#97C459]',
-    kanbanBg:     'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
+    pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
+    dot: 'bg-[#3B6D11]               dark:bg-[#97C459]',
+    kanbanBg: 'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
     kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
-    kanbanText:   'text-[#27500A]             dark:text-[#C0DD97]',
+    kanbanText: 'text-[#27500A]             dark:text-[#C0DD97]',
   },
   draft: {
-    pill:         'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot:          'bg-[#854F0B]               dark:bg-[#EF9F27]',
-    kanbanBg:     'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
+    pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
+    dot: 'bg-[#854F0B]               dark:bg-[#EF9F27]',
+    kanbanBg: 'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
     kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
-    kanbanText:   'text-[#412402]             dark:text-[#FAC775]',
+    kanbanText: 'text-[#412402]             dark:text-[#FAC775]',
   },
   archived: {
-    pill:         'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
-    dot:          'bg-[#888780]               dark:bg-[#B4B2A9]',
-    kanbanBg:     'bg-[#F1EFE8]/60            dark:bg-[#444441]/40',
+    pill: 'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
+    dot: 'bg-[#888780]               dark:bg-[#B4B2A9]',
+    kanbanBg: 'bg-[#F1EFE8]/60            dark:bg-[#444441]/40',
     kanbanBorder: 'border-[#B4B2A9]           dark:border-[#5F5E5A]',
-    kanbanText:   'text-[#444441]             dark:text-[#D3D1C7]',
+    kanbanText: 'text-[#444441]             dark:text-[#D3D1C7]',
   },
 }
 
 const priorityStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
   high: {
-    pill:         'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-    dot:          'bg-[#A32D2D]               dark:bg-[#E24B4A]',
-    kanbanBg:     'bg-[#FCEBEB]/60            dark:bg-[#501313]/40',
+    pill: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
+    dot: 'bg-[#A32D2D]               dark:bg-[#E24B4A]',
+    kanbanBg: 'bg-[#FCEBEB]/60            dark:bg-[#501313]/40',
     kanbanBorder: 'border-[#E24B4A]           dark:border-[#A32D2D]',
-    kanbanText:   'text-[#501313]             dark:text-[#F7C1C1]',
+    kanbanText: 'text-[#501313]             dark:text-[#F7C1C1]',
   },
   medium: {
-    pill:         'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot:          'bg-[#854F0B]               dark:bg-[#EF9F27]',
-    kanbanBg:     'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
+    pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
+    dot: 'bg-[#854F0B]               dark:bg-[#EF9F27]',
+    kanbanBg: 'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
     kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
-    kanbanText:   'text-[#412402]             dark:text-[#FAC775]',
+    kanbanText: 'text-[#412402]             dark:text-[#FAC775]',
   },
   low: {
-    pill:         'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot:          'bg-[#3B6D11]               dark:bg-[#97C459]',
-    kanbanBg:     'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
+    pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
+    dot: 'bg-[#3B6D11]               dark:bg-[#97C459]',
+    kanbanBg: 'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
     kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
-    kanbanText:   'text-[#27500A]             dark:text-[#C0DD97]',
+    kanbanText: 'text-[#27500A]             dark:text-[#C0DD97]',
   },
 }
 
 const fallbackStyle = {
-  pill:         'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
-  dot:          'bg-[#888780]',
-  kanbanBg:     'bg-muted/40',
+  pill: 'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
+  dot: 'bg-[#888780]',
+  kanbanBg: 'bg-muted/40',
   kanbanBorder: 'border-muted',
-  kanbanText:   'text-muted-foreground',
+  kanbanText: 'text-muted-foreground',
 }
 
 // ─── StatusPill — badge Style A ───────────────────────────────────────────────
 
 function StatusPill({ value, styleMap }: { value: string; styleMap: typeof statusStyles }) {
   const key = value?.toLowerCase() ?? ''
-  const s   = styleMap[key] ?? fallbackStyle
+  const s = styleMap[key] ?? fallbackStyle
   const label = key.charAt(0).toUpperCase() + key.slice(1)
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full', s.pill)}>
@@ -192,9 +192,9 @@ function useCountUp(target: number, duration = 900) {
     if (target === 0) { setValue(0); return }
     const start = performance.now()
     const tick = (now: number) => {
-      const elapsed  = now - start
+      const elapsed = now - start
       const progress = Math.min(elapsed / duration, 1)
-      const eased    = 1 - Math.pow(1 - progress, 3)
+      const eased = 1 - Math.pow(1 - progress, 3)
       setValue(Math.round(target * eased))
       if (progress < 1) rafRef.current = requestAnimationFrame(tick)
     }
@@ -221,17 +221,17 @@ function KpiCard({
 }) {
   const numericValue = typeof value === 'number' ? value : 0
 
-  const [mounted, setMounted]   = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [barWidth, setBarWidth] = useState(0)
-  const animatedValue           = useCountUp(mounted ? numericValue : 0, 900)
+  const animatedValue = useCountUp(mounted ? numericValue : 0, 900)
 
-  const cardRef                   = useRef<HTMLDivElement>(null)
-  const [tilt, setTilt]           = useState({ x: 0, y: 0 })
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
-  const [glowPos, setGlowPos]     = useState({ x: 50, y: 50 })
+  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 })
 
   useEffect(() => {
-    const t1 = setTimeout(() => setMounted(true),              delay)
+    const t1 = setTimeout(() => setMounted(true), delay)
     const t2 = setTimeout(() => setBarWidth(fillPercent ?? 0), delay + 120)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [delay, fillPercent])
@@ -240,12 +240,12 @@ function KpiCard({
     const card = cardRef.current
     if (!card) return
     const rect = card.getBoundingClientRect()
-    const dx   = (e.clientX - rect.left - rect.width  / 2) / (rect.width  / 2)
-    const dy   = (e.clientY - rect.top  - rect.height / 2) / (rect.height / 2)
+    const dx = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2)
+    const dy = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2)
     setTilt({ x: dy * -10, y: dx * 10 })
     setGlowPos({
-      x: ((e.clientX - rect.left) / rect.width)  * 100,
-      y: ((e.clientY - rect.top)  / rect.height) * 100,
+      x: ((e.clientX - rect.left) / rect.width) * 100,
+      y: ((e.clientY - rect.top) / rect.height) * 100,
     })
   }
 
@@ -262,7 +262,7 @@ function KpiCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={handleMouseLeave}
       style={{
-        transform:  transformValue,
+        transform: transformValue,
         transition: isHovered
           ? 'transform 0.1s ease-out, box-shadow 0.2s ease-out, opacity 0.5s ease-out'
           : 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease-out, opacity 0.5s ease-out',
@@ -304,9 +304,9 @@ function KpiCard({
         <div
           className="h-0.5 rounded-full"
           style={{
-            width:           `${Math.min(barWidth, 100)}%`,
+            width: `${Math.min(barWidth, 100)}%`,
             backgroundColor: fillColor,
-            transition:      isHovered
+            transition: isHovered
               ? 'width 0.3s ease-out, filter 0.2s ease-out'
               : `width 900ms cubic-bezier(0.4, 0, 0.2, 1) ${delay + 150}ms`,
             filter: isHovered ? `drop-shadow(0 0 3px ${fillColor})` : 'none',
@@ -320,67 +320,67 @@ function KpiCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RequirementsIndex({ requirements }: RequirementsIndexProps) {
-  const [deleteDialogOpen, setDeleteDialogOpen]     = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [requirementToDelete, setRequirementToDelete] = useState<Requirement | null>(null)
-  const [exportLoading, setExportLoading]           = useState(false)
-  const [viewMode, setViewMode]                     = useState<ViewMode>('table')
-  const [groupBy, setGroupBy]                       = useState<GroupBy>('status')
+  const [exportLoading, setExportLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
+  const [groupBy, setGroupBy] = useState<GroupBy>('status')
 
   // ── Stats ────────────────────────────────────────────────────
   const statusStats = useMemo(() => {
-    const data  = requirements.data
+    const data = requirements.data
     const total = data.length || 1
-    const active   = data.filter(r => r.status?.toLowerCase() === 'active').length
-    const draft    = data.filter(r => r.status?.toLowerCase() === 'draft').length
+    const active = data.filter(r => r.status?.toLowerCase() === 'active').length
+    const draft = data.filter(r => r.status?.toLowerCase() === 'draft').length
     const archived = data.filter(r => r.status?.toLowerCase() === 'archived').length
     return {
       total: data.length, active, draft, archived,
-      activeRate:   Math.round((active   / total) * 100),
-      draftRate:    Math.round((draft    / total) * 100),
+      activeRate: Math.round((active / total) * 100),
+      draftRate: Math.round((draft / total) * 100),
       archivedRate: Math.round((archived / total) * 100),
     }
   }, [requirements.data])
 
   const priorityStats = useMemo(() => {
-    const data  = requirements.data
+    const data = requirements.data
     const total = data.length || 1
-    const high   = data.filter(r => r.priority?.toLowerCase() === 'high').length
+    const high = data.filter(r => r.priority?.toLowerCase() === 'high').length
     const medium = data.filter(r => r.priority?.toLowerCase() === 'medium').length
-    const low    = data.filter(r => r.priority?.toLowerCase() === 'low').length
+    const low = data.filter(r => r.priority?.toLowerCase() === 'low').length
     return {
       total: data.length, high, medium, low,
-      highRate:   Math.round((high   / total) * 100),
+      highRate: Math.round((high / total) * 100),
       mediumRate: Math.round((medium / total) * 100),
-      lowRate:    Math.round((low    / total) * 100),
+      lowRate: Math.round((low / total) * 100),
     }
   }, [requirements.data])
 
   // ── KPI cards ────────────────────────────────────────────────
   const kpiCards = groupBy === 'status'
     ? [
-        { label: 'Total',    value: statusStats.total,    sub: 'requirements on page', fillPercent: 100,                     fillColor: '#378add', icon: <CircleDot    className="h-4 w-4" />, valueColor: 'text-foreground',                                                 delay: 0   },
-        { label: 'Active',   value: statusStats.active,   sub: `${statusStats.activeRate}%`,   fillPercent: statusStats.activeRate,   fillColor: '#639922', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: statusStats.active   > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 80  },
-        { label: 'Draft',    value: statusStats.draft,    sub: `${statusStats.draftRate}%`,    fillPercent: statusStats.draftRate,    fillColor: '#ba7517', icon: <FileText     className="h-4 w-4" />, valueColor: statusStats.draft    > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
-        { label: 'Archived', value: statusStats.archived, sub: `${statusStats.archivedRate}%`, fillPercent: statusStats.archivedRate, fillColor: '#6b7280', icon: <Archive      className="h-4 w-4" />, valueColor: statusStats.archived > 0 ? 'text-[#5F5E5A] dark:text-[#B4B2A9]' : 'text-foreground', delay: 240 },
-      ]
+      { label: 'Total', value: statusStats.total, sub: `${requirements.data.length} on page`, fillPercent: 100, fillColor: '#378add', icon: <CircleDot className="h-4 w-4" />, valueColor: 'text-foreground', delay: 0 },
+      { label: 'Active', value: statusStats.active, sub: `${statusStats.activeRate}%`, fillPercent: statusStats.activeRate, fillColor: '#639922', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: statusStats.active > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 80 },
+      { label: 'Draft', value: statusStats.draft, sub: `${statusStats.draftRate}%`, fillPercent: statusStats.draftRate, fillColor: '#ba7517', icon: <FileText className="h-4 w-4" />, valueColor: statusStats.draft > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
+      { label: 'Archived', value: statusStats.archived, sub: `${statusStats.archivedRate}%`, fillPercent: statusStats.archivedRate, fillColor: '#6b7280', icon: <Archive className="h-4 w-4" />, valueColor: statusStats.archived > 0 ? 'text-[#5F5E5A] dark:text-[#B4B2A9]' : 'text-foreground', delay: 240 },
+    ]
     : [
-        { label: 'Total',  value: priorityStats.total,  sub: 'requirements on page', fillPercent: 100,                       fillColor: '#378add', icon: <CircleDot    className="h-4 w-4" />, valueColor: 'text-foreground',                                                   delay: 0   },
-        { label: 'High',   value: priorityStats.high,   sub: `${priorityStats.highRate}%`,   fillPercent: priorityStats.highRate,   fillColor: '#e24b4a', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.high   > 0 ? 'text-[#A32D2D] dark:text-[#F09595]' : 'text-foreground', delay: 80  },
-        { label: 'Medium', value: priorityStats.medium, sub: `${priorityStats.mediumRate}%`, fillPercent: priorityStats.mediumRate, fillColor: '#ba7517', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.medium > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
-        { label: 'Low',    value: priorityStats.low,    sub: `${priorityStats.lowRate}%`,    fillPercent: priorityStats.lowRate,    fillColor: '#639922', icon: <CheckCircle2  className="h-4 w-4" />, valueColor: priorityStats.low    > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 240 },
-      ]
+      { label: 'Total', value: statusStats.total, sub: `${requirements.data.length} on page`, fillPercent: 100, fillColor: '#378add', icon: <CircleDot className="h-4 w-4" />, valueColor: 'text-foreground', delay: 0 },
+      { label: 'High', value: priorityStats.high, sub: `${priorityStats.highRate}%`, fillPercent: priorityStats.highRate, fillColor: '#e24b4a', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.high > 0 ? 'text-[#A32D2D] dark:text-[#F09595]' : 'text-foreground', delay: 80 },
+      { label: 'Medium', value: priorityStats.medium, sub: `${priorityStats.mediumRate}%`, fillPercent: priorityStats.mediumRate, fillColor: '#ba7517', icon: <AlertTriangle className="h-4 w-4" />, valueColor: priorityStats.medium > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
+      { label: 'Low', value: priorityStats.low, sub: `${priorityStats.lowRate}%`, fillPercent: priorityStats.lowRate, fillColor: '#639922', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: priorityStats.low > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 240 },
+    ]
 
   // ── Export ───────────────────────────────────────────────────
   const handleExport = async () => {
     setExportLoading(true)
     try {
-      const params   = new URLSearchParams(window.location.search)
+      const params = new URLSearchParams(window.location.search)
       const response = await fetch(`/requirements/export?${params.toString()}`, {
         method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' },
       })
       if (!response.ok) throw new Error('Export failed')
       const blob = await response.blob()
-      const url  = window.URL.createObjectURL(blob)
+      const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
       link.download = `requirements-${new Date().toISOString().split('T')[0]}.xlsx`
@@ -409,16 +409,16 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
 
   // ── Columns ──────────────────────────────────────────────────
   const statusOptions: FacetedFilterOption[] = [
-    { label: 'Active',   value: 'active',   icon: CheckCircle2 },
-    { label: 'Draft',    value: 'draft',    icon: FileText     },
-    { label: 'Archived', value: 'archived', icon: Archive      },
+    { label: 'Active', value: 'active', icon: CheckCircle2 },
+    { label: 'Draft', value: 'draft', icon: FileText },
+    { label: 'Archived', value: 'archived', icon: Archive },
   ]
 
   const priorityOptions: SelectOption[] = [
-    { label: 'All',    value: 'all'    },
-    { label: 'High',   value: 'high'   },
+    { label: 'All', value: 'all' },
+    { label: 'High', value: 'high' },
     { label: 'Medium', value: 'medium' },
-    { label: 'Low',    value: 'low'    },
+    { label: 'Low', value: 'low' },
   ]
 
   const columns: ColumnDef<Requirement>[] = [
@@ -729,7 +729,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
                                           </div>
 
                                           <div className="flex flex-wrap gap-2 pt-2">
-                                            <StatusPill value={req.status}   styleMap={statusStyles}   />
+                                            <StatusPill value={req.status} styleMap={statusStyles} />
                                             <StatusPill value={req.priority} styleMap={priorityStyles} />
                                             {req.frequency && (
                                               <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">

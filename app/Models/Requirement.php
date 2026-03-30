@@ -18,7 +18,7 @@ class Requirement extends Model
 
 
     protected $casts = [
-        'deadline'        => 'date',
+        'effective_date'        => 'date',
         'completion_date' => 'date',
         'auto_validate'   => 'boolean',
     ];

@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Switch } from '@/components/ui/switch'          // ← ajouté
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
   ChevronLeft,
@@ -56,11 +56,11 @@ interface Requirement {
   frequency: string
   framework_id: number | null
   process_id: number | null
-  deadline: string | null
+  effective_date: string | null      // ← renommé depuis deadline
   completion_date: string | null
   compliance_level: string
   attachments: string | null
-  auto_validate: boolean          // ← ajouté
+  auto_validate: boolean
 }
 
 interface PageProps {
@@ -73,7 +73,6 @@ interface PageProps {
   [key: string]: any
 }
 
-// Normalise ce qu'Inertia envoie — tableau OU objet indexé → T[]
 const toArray = <T,>(val: T[] | Record<string, T> | null | undefined): T[] => {
   if (!val) return []
   if (Array.isArray(val)) return val
@@ -85,7 +84,6 @@ export default function EditRequirement() {
 
   const { requirement, frameworks = [], processes = [] } = props
 
-  // Normalisation défensive des deux listes critiques
   const tags: Tag[] = toArray(props.tags)
   const selectedTagIds: string[] = toArray(props.selectedTagIds)
 
@@ -102,14 +100,14 @@ export default function EditRequirement() {
     framework_id: requirement.framework_id?.toString() || '',
     process_id: requirement.process_id?.toString() || '',
     tags: selectedTagIds,
-    deadline: formatDateString(requirement.deadline),
+    effective_date: formatDateString(requirement.effective_date),  // ← renommé
     completion_date: formatDateString(requirement.completion_date),
     compliance_level: requirement.compliance_level || '',
     attachments: requirement.attachments || '',
-    auto_validate: requirement.auto_validate ?? false,   // ← ajouté
+    auto_validate: requirement.auto_validate ?? false,
   })
 
-  const [deadlineOpen, setDeadlineOpen] = useState(false)
+  const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)  // ← renommé
   const [completionOpen, setCompletionOpen] = useState(false)
   const [flashOpen, setFlashOpen] = useState(false)
   const [flash, setFlash] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -236,7 +234,6 @@ export default function EditRequirement() {
                 </div>
               </div>
 
-              {/* Type / Status / Priority / Auto-validate — même layout que create */}
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
                   <Label>Type <span className="text-red-500 text-base">*</span></Label>
@@ -283,7 +280,6 @@ export default function EditRequirement() {
                   {errors.priority && <p className="text-sm text-destructive mt-1.5">{errors.priority}</p>}
                 </div>
 
-                {/* Auto-validate Switch — identique à create */}
                 <div className="space-y-2 flex flex-col justify-end pb-1.5">
                   <div className="flex items-center space-x-3">
                     <Switch
@@ -407,36 +403,37 @@ export default function EditRequirement() {
                   {errors.compliance_level && <p className="text-sm text-destructive mt-1.5">{errors.compliance_level}</p>}
                 </div>
 
+                {/* ← Effective Date (anciennement Deadline) */}
                 <div className="space-y-2">
-                  <Label>Deadline</Label>
-                  <Popover open={deadlineOpen} onOpenChange={setDeadlineOpen}>
+                  <Label>Effective Date</Label>
+                  <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
                           'w-full justify-start text-left font-normal h-11',
-                          !data.deadline && 'text-muted-foreground',
-                          errors.deadline && 'border-destructive'
+                          !data.effective_date && 'text-muted-foreground',
+                          errors.effective_date && 'border-destructive'
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {data.deadline ? format(new Date(data.deadline), 'PPP') : 'Pick a date'}
+                        {data.effective_date ? format(new Date(data.effective_date), 'PPP') : 'Pick a date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={data.deadline ? new Date(data.deadline) : undefined}
+                        selected={data.effective_date ? new Date(data.effective_date) : undefined}
                         onSelect={date => {
-                          setData('deadline', date ? format(date, 'yyyy-MM-dd') : '')
-                          clearErrors('deadline')
-                          setDeadlineOpen(false)
+                          setData('effective_date', date ? format(date, 'yyyy-MM-dd') : '')
+                          clearErrors('effective_date')
+                          setEffectiveDateOpen(false)
                         }}
                         initialFocus
                       />
                     </PopoverContent>
                   </Popover>
-                  {errors.deadline && <p className="text-sm text-destructive mt-1.5">{errors.deadline}</p>}
+                  {errors.effective_date && <p className="text-sm text-destructive mt-1.5">{errors.effective_date}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -469,7 +466,6 @@ export default function EditRequirement() {
                 </div>
               </div>
 
-              {/* Tags */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
                   <TagIcon className="h-4 w-4" />
