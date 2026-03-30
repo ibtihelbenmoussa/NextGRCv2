@@ -7,6 +7,8 @@ use App\Models\RequirementTest;
 use App\Models\RequirementTestReservation;
 use App\Models\Framework;
 use App\Models\Process;
+use App\Models\BusinessUnit;
+use App\Models\MacroProcess;
 use App\Models\Tag;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,7 +34,7 @@ class RequirementController extends Controller
 
         $query = Requirement::where('organization_id', $currentOrgId)
             ->where('is_deleted', 0)
-            ->with(['framework', 'process','tags']);
+            ->with(['framework', 'process', 'tags']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -119,16 +121,51 @@ class RequirementController extends Controller
             ],
         ]);
     }
-
     public function create()
     {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
+
         return Inertia::render('Requirements/Create', [
-            'frameworks' => Framework::select('id', 'code', 'name')->get(),
-            'processes' => Process::select('id', 'name')->get(),
-            'tags' => Tag::select('id', 'name')->get(),
+            'frameworks' => Framework::where('organization_id', $currentOrgId)
+                ->select('id', 'code', 'name')
+                ->orderBy('name')
+                ->get(),
+
+            'tags' => Tag::where('organization_id', $currentOrgId)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
+    /**
+     * Récupère les processus liés à un framework
+     */
+    /**
+     * Récupère les processus liés à un framework (pour Inertia partial reload)
+     */
+    public function getProcessesByFramework(Framework $framework)
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
 
+        // Sécurité
+        if ($framework->organization_id !== $currentOrgId) {
+            abort(403, 'Unauthorized access to this framework.');
+        }
+
+        $processes = $framework->processes()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->select('processes.id', 'processes.name', 'processes.code')
+            ->orderBy('processes.name')
+            ->get();
+
+        // Important : Retourner une réponse Inertia avec "only"
+        return Inertia::render('Requirements/Create', [
+            'processes' => $processes
+        ])->with('only', ['processes']);
+    }
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -213,7 +250,14 @@ class RequirementController extends Controller
             'requirement' => $requirement,
             'frameworks' => Framework::where('organization_id', $currentOrgId)
                 ->select('id', 'code', 'name')->get(),
-            'processes' => Process::select('id', 'name')->get(),
+            'processes' => $requirement->framework
+                ? $requirement->framework->processes()
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')
+                    ->select('processes.id', 'processes.name', 'processes.code')  // ← table explicite
+                    ->orderBy('processes.name')
+                    ->get()
+                : [],
             'tags' => Tag::where('organization_id', $currentOrgId)
                 ->select('id', 'name')->get(),
             'selectedTagIds' => $requirement->tags->pluck('id')
@@ -350,7 +394,7 @@ class RequirementController extends Controller
             : [];
 
         $completed = (int) ($testCounts['accepted'] ?? 0);
-        $pending   = (int) ($testCounts['pending'] ?? 0);
+        $pending = (int) ($testCounts['pending'] ?? 0);
 
         $missed = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
@@ -366,19 +410,18 @@ class RequirementController extends Controller
             ->count();
 
         return [
-            'reqIds'         => $reqIds,
-            'total'          => $total,
-            'completed'      => $completed,
-            'pending'        => $pending,
-            'missed'         => $missed,
-            'due'            => $due,
+            'reqIds' => $reqIds,
+            'total' => $total,
+            'completed' => $completed,
+            'pending' => $pending,
+            'missed' => $missed,
+            'due' => $due,
             'completionRate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
         ];
     }
 
     public function getRequirementsForTesting(Request $request)
     {
-        
         $user = Auth::user();
         $currentOrgId = $user->current_organization_id;
 
@@ -395,7 +438,7 @@ class RequirementController extends Controller
 
         $perPage = (int) $request->input('per_page', 15);
         $perPage = in_array($perPage, [10, 15, 20, 30, 50]) ? $perPage : 15;
-        $search  = trim($request->query('search', ''));
+        $search = trim($request->query('search', ''));
 
         $query = Requirement::query()
             ->where('organization_id', $currentOrgId)
@@ -448,10 +491,10 @@ class RequirementController extends Controller
         }
 
         if ($request->filled('sort')) {
-            $sort      = $request->sort;
+            $sort = $request->sort;
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-            $column    = ltrim($sort, '-');
-            $allowed   = ['code', 'title', 'frequency', 'effective_date'];
+            $column = ltrim($sort, '-');
+            $allowed = ['code', 'title', 'frequency', 'effective_date'];
             $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
         } else {
             $query->orderBy('code');
@@ -459,22 +502,19 @@ class RequirementController extends Controller
 
         $requirements = $query->paginate($perPage)->withQueryString();
 
-        // ─── Réservations pour cette date ───────────────────────────────────
         $reservations = RequirementTestReservation::where('date', $targetDate->toDateString())
             ->with('user:id,name')
             ->get()
             ->keyBy('requirement_id');
-        // ────────────────────────────────────────────────────────────────────
 
         $requirements->through(function (Requirement $req) use ($reservations) {
             $latestTest = $req->tests->first();
-            $req->latest_test_status  = $latestTest?->validation_status ?? null;
+            $req->latest_test_status = $latestTest?->validation_status ?? null;
             $req->latest_test_comment = $latestTest?->validation_comment ?? null;
-            $req->latest_test_id      = $latestTest?->id ?? null;
+            $req->latest_test_id = $latestTest?->id ?? null;
 
-            // ← réservation
             $res = $reservations->get($req->id);
-            $req->reservation_user_id   = $res?->user_id ?? null;
+            $req->reservation_user_id = $res?->user_id ?? null;
             $req->reservation_user_name = $res?->user?->name ?? null;
 
             return $req;
@@ -483,18 +523,18 @@ class RequirementController extends Controller
         $kpis = $this->computeKpisForDate($currentOrgId, $targetDate);
 
         return Inertia::render('RequirementTests/Index', [
-            'requirements'  => $requirements,
-            'date'          => $targetDate->format('Y-m-d'),
-            'isToday'       => $targetDate->isToday(),
-            'filters'       => $request->only(['search', 'date']),
-            'missedToday'   => $kpis['missed'],
-            'dueToday'      => $kpis['due'],
-            'currentUserId' => Auth::id(),  // ← nouveau
-            'kpi'           => [
-                'total'          => $kpis['total'],
-                'completed'      => $kpis['completed'],
-                'pending'        => $kpis['pending'],
-                'overdue'        => $kpis['missed'],
+            'requirements' => $requirements,
+            'date' => $targetDate->format('Y-m-d'),
+            'isToday' => $targetDate->isToday(),
+            'filters' => $request->only(['search', 'date']),
+            'missedToday' => $kpis['missed'],
+            'dueToday' => $kpis['due'],
+            'currentUserId' => Auth::id(),
+            'kpi' => [
+                'total' => $kpis['total'],
+                'completed' => $kpis['completed'],
+                'pending' => $kpis['pending'],
+                'overdue' => $kpis['missed'],
                 'completionRate' => $kpis['completionRate'],
             ],
         ]);

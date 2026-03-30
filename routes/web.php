@@ -181,6 +181,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ================= REQUIREMENTS =================
     Route::get('requirements/export', [RequirementController::class, 'export'])->name('requirements.export');
     Route::resource('requirements', RequirementController::class);
+    Route::get('requirements/frameworks/{framework}/processes', 
+        [RequirementController::class, 'getProcessesByFramework']
+    )->name('requirements.processes-by-framework');
 
     // ================= REQUIREMENT TESTS =================
     Route::get('requirement-tests/validation', [RequirementTestController::class, 'validation'])

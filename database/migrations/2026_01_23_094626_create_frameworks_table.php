@@ -13,7 +13,9 @@ return new class extends Migration
 
             $table->unsignedBigInteger('organization_id');
 
-            $table->string('code')->unique();
+            //$table->string('code')->unique();
+                        $table->unique(['code', 'organization_id'], 'frameworks_code_org_unique');
+
             $table->string('name');
             $table->string('version')->nullable();
 

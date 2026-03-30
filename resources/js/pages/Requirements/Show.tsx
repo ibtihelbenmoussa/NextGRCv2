@@ -25,6 +25,8 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { CardUpload, type FileUploadItem } from '@/components/card-upload';
+
 
 interface Framework {
   code: string
@@ -56,8 +58,15 @@ interface Requirement {
   completion_date?: string | null
   compliance_level: string
   attachments?: string | null
+  documents?: DocumentItem[]
   created_at: string
   updated_at: string
+}
+interface DocumentItem {
+  id: number
+  file_name: string
+  file_path: string
+  url?: string
 }
 
 export default function ShowRequirement() {
@@ -248,6 +257,40 @@ export default function ShowRequirement() {
                   <CardTitle className="text-xl font-semibold">Attachments (links) (liens)</CardTitle>
                 </div>
               </CardHeader>
+              <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+  <CardHeader className="pb-4">
+    <div className="flex items-center gap-3">
+      <div className="p-2 rounded-lg bg-primary/10">
+        <FileText className="h-5 w-5 text-primary" />
+      </div>
+      <CardTitle className="text-xl font-semibold">Documents</CardTitle>
+    </div>
+  </CardHeader>
+
+  <CardContent>
+    {requirement.documents && requirement.documents.length > 0 ? (
+      <div className="space-y-3">
+        {requirement.documents.map((doc) => (
+          <a
+            key={doc.id}
+            href={doc.url || `/storage/${doc.file_path}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/40 transition"
+          >
+            <FileText className="h-4 w-4 text-primary" />
+            <span className="text-sm">{doc.file_name}</span>
+          </a>
+        ))}
+      </div>
+    ) : (
+      <div className="flex items-center gap-3 text-muted-foreground py-4">
+        <AlertCircle className="h-5 w-5" />
+        <span>No documents uploaded</span>
+      </div>
+    )}
+  </CardContent>
+</Card>
               <CardContent>
                 {attachmentUrls.length > 0 ? (
                   <div className="space-y-4">
@@ -276,44 +319,38 @@ export default function ShowRequirement() {
             </Card>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-8">
-            {/* Dates importantes */}
-            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Calendar className="h-5 w-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl font-semibold">Key Dates</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    Effective Date
-                  </div>
-                  <p className="font-medium">{formatDate(requirement.effective_date)}</p>
-                </div>
+{/* Sidebar */}
+<div className="space-y-8">
+  {/* Dates importantes */}
+  <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+    <CardHeader className="pb-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-primary/10">
+          <Calendar className="h-5 w-5 text-primary" />
+        </div>
+        <CardTitle className="text-xl font-semibold">Key Dates</CardTitle>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-6">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Clock className="h-4 w-4" />
+          Effective Date
+        </div>
+        <p className="font-medium">
+          {formatDate(requirement.effective_date ?? new Date().toISOString().split('T')[0])}
+        </p>
+      </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Completion Date
-                  </div>
-                  <p className="font-medium">{formatDate(requirement.completion_date)}</p>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    Created at
-                  </div>
-                  <p className="font-medium">{formatDate(requirement.created_at)}</p>
-                </div>
-              </CardContent>
-            </Card>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Calendar className="h-4 w-4" />
+          Created at
+        </div>
+        <p className="font-medium">{formatDate(requirement.created_at)}</p>
+      </div>
+    </CardContent>
+  </Card>
 
             {/* Tags */}
             <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">

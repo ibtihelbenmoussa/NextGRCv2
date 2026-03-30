@@ -38,6 +38,17 @@ public function jurisdictions()
             'tag_id'
         )->withTimestamps();
     }
+    // Ajouter dans Framework.php
+
+public function processes()
+{
+    return $this->belongsToMany(
+        \App\Models\Process::class,
+        'framework_process',
+        'framework_id',
+        'process_id'
+    )->withTimestamps();
+}
 }
 
 

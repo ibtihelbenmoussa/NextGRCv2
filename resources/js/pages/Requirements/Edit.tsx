@@ -1,5 +1,5 @@
 // resources/js/pages/requirements/edit.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import AppLayout from '@/layouts/app-layout'
@@ -42,7 +42,7 @@ import { format } from 'date-fns'
 import { MultiSelect } from '@/components/ui/multi-select'
 
 interface Framework { id: number; code: string; name: string }
-interface Process { id: number; name: string }
+interface Process { id: number; name: string; code?: string }
 interface Tag { id: number; name: string }
 
 interface Requirement {
@@ -56,7 +56,7 @@ interface Requirement {
   frequency: string
   framework_id: number | null
   process_id: number | null
-  effective_date: string | null      // ← renommé depuis deadline
+  effective_date: string | null
   completion_date: string | null
   compliance_level: string
   attachments: string | null
@@ -82,7 +82,7 @@ const toArray = <T,>(val: T[] | Record<string, T> | null | undefined): T[] => {
 export default function EditRequirement() {
   const { props } = usePage<PageProps>()
 
-  const { requirement, frameworks = [], processes = [] } = props
+  const { requirement, frameworks = [] } = props
 
   const tags: Tag[] = toArray(props.tags)
   const selectedTagIds: string[] = toArray(props.selectedTagIds)
@@ -90,27 +90,64 @@ export default function EditRequirement() {
   const formatDateString = (date: string | null) => (date ? date.split('T')[0] : '')
 
   const { data, setData, put, processing, errors, setError, clearErrors } = useForm({
-    code: requirement.code || '',
-    title: requirement.title || '',
-    description: requirement.description || '',
-    type: requirement.type || '',
-    status: requirement.status || '',
-    priority: requirement.priority || '',
-    frequency: requirement.frequency || '',
-    framework_id: requirement.framework_id?.toString() || '',
-    process_id: requirement.process_id?.toString() || '',
+    code: requirement?.code || '',
+    title: requirement?.title || '',
+    description: requirement?.description || '',
+    type: requirement?.type || '',
+    status: requirement?.status || '',
+    priority: requirement?.priority || '',
+    frequency: requirement?.frequency || '',
+    framework_id: requirement?.framework_id?.toString() || '',
+    process_id: requirement?.process_id?.toString() || '',
     tags: selectedTagIds,
-    effective_date: formatDateString(requirement.effective_date),  // ← renommé
-    completion_date: formatDateString(requirement.completion_date),
-    compliance_level: requirement.compliance_level || '',
-    attachments: requirement.attachments || '',
-    auto_validate: requirement.auto_validate ?? false,
+    effective_date: formatDateString(requirement?.effective_date),
+    completion_date: formatDateString(requirement?.completion_date),
+    compliance_level: requirement?.compliance_level || '',
+    attachments: requirement?.attachments || '',
+    auto_validate: requirement?.auto_validate ?? false,
   })
 
-  const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)  // ← renommé
+  // Initialiser avec les processes déjà chargés par le controller (pour le framework actuel)
+  const [processes, setProcesses] = useState<Process[]>(toArray(props.processes))
+  const [loadingProcesses, setLoadingProcesses] = useState(false)
+  // Garder une trace du framework "initial" pour ne pas recharger inutilement au montage
+  const [initialFrameworkId] = useState(requirement?.framework_id?.toString() || '')
+
+  const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)
   const [completionOpen, setCompletionOpen] = useState(false)
   const [flashOpen, setFlashOpen] = useState(false)
   const [flash, setFlash] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  // Recharger les processes quand le framework change,
+  // mais seulement si c'est un changement réel (pas le montage initial)
+  useEffect(() => {
+    if (!data.framework_id) {
+      setProcesses([])
+      setData('process_id', '')
+      return
+    }
+
+    // Au montage, le framework n'a pas changé → on garde les processes déjà fournis
+    if (data.framework_id === initialFrameworkId) return
+
+    setLoadingProcesses(true)
+    setData('process_id', '') // Reset le process quand on change de framework
+
+    router.get(
+      route('requirements.processes-by-framework', data.framework_id),
+      {},
+      {
+        preserveState: true,
+        preserveScroll: true,
+        only: ['processes'],
+        onSuccess: (page) => {
+          const loaded = (page.props.processes as Process[]) || []
+          setProcesses(loaded)
+        },
+        onFinish: () => setLoadingProcesses(false),
+      }
+    )
+  }, [data.framework_id])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -176,7 +213,7 @@ export default function EditRequirement() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Edit Requirement</h1>
             <p className="text-muted-foreground mt-1.5">
-              Modify <span className="font-medium text-foreground">{requirement.title}</span>
+              Modify <span className="font-medium text-foreground">{requirement?.title || '...'}</span>
             </p>
           </div>
           <Button variant="outline" size="sm" asChild>
@@ -341,19 +378,31 @@ export default function EditRequirement() {
                   {errors.framework_id && <p className="text-sm text-destructive mt-1.5">{errors.framework_id}</p>}
                 </div>
 
+                {/* Process — dynamique comme dans Create */}
                 <div className="space-y-2">
                   <Label>Process (optional)</Label>
                   <Select
                     value={data.process_id || 'none'}
-                    onValueChange={v => setData('process_id', v === 'none' ? '' : v)}
+                    onValueChange={(v) => setData('process_id', v === 'none' ? '' : v)}
+                    disabled={!data.framework_id || loadingProcesses}
                   >
                     <SelectTrigger className="h-11">
-                      <SelectValue placeholder="None" />
+                      <SelectValue
+                        placeholder={
+                          !data.framework_id
+                            ? 'Select a framework first'
+                            : loadingProcesses
+                              ? 'Loading processes...'
+                              : 'None / Not applicable'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None / Not applicable</SelectItem>
-                      {toArray(processes).map(proc => (
-                        <SelectItem key={proc.id} value={proc.id.toString()}>{proc.name}</SelectItem>
+                      {processes.map((proc) => (
+                        <SelectItem key={proc.id} value={proc.id.toString()}>
+                          {proc.code ? `${proc.code} — ` : ''}{proc.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -403,7 +452,6 @@ export default function EditRequirement() {
                   {errors.compliance_level && <p className="text-sm text-destructive mt-1.5">{errors.compliance_level}</p>}
                 </div>
 
-                {/* ← Effective Date (anciennement Deadline) */}
                 <div className="space-y-2">
                   <Label>Effective Date</Label>
                   <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
@@ -436,7 +484,7 @@ export default function EditRequirement() {
                   {errors.effective_date && <p className="text-sm text-destructive mt-1.5">{errors.effective_date}</p>}
                 </div>
 
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label>Completion Date (optional)</Label>
                   <Popover open={completionOpen} onOpenChange={setCompletionOpen}>
                     <PopoverTrigger asChild>
@@ -463,7 +511,7 @@ export default function EditRequirement() {
                       />
                     </PopoverContent>
                   </Popover>
-                </div>
+                </div> */}
               </div>
 
               <div className="space-y-2">
