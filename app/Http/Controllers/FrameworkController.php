@@ -6,8 +6,10 @@ use App\Models\Framework;
 use App\Models\Tag;
 use App\Models\Jurisdiction;
 use App\Models\BusinessUnit;
+use App\Models\Document;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\FrameworksExport;
@@ -116,44 +118,73 @@ class FrameworkController extends Controller
                 Rule::unique('frameworks', 'code')
                     ->where('organization_id', $currentOrgId),
             ],
-            'name'            => 'required|string|max:255',
-            'version'         => 'nullable|string|max:255',
-            'type'            => 'required|in:standard,regulation,contract,internal_policy',
-            'publisher'       => 'nullable|string|max:255',
-            'tags'            => 'nullable|array',
-            'tags.*'          => 'exists:tags,id',
-            'jurisdictions'   => 'nullable|array',
-            'jurisdictions.*' => 'exists:jurisdictions,id',
-            'processes'       => 'nullable|array',
-            'processes.*'     => 'exists:processes,id',
-            'status'          => 'required|in:active,draft,deprecated,archived',
-            'release_date'    => 'nullable|date',
-            'effective_date'  => 'nullable|date',
-            'retired_date'    => 'nullable|date',
-            'description'     => 'nullable|string',
-            'language'        => 'nullable|string',
-            'url_reference'   => 'nullable|url',
+            'name'                    => 'required|string|max:255',
+            'version'                 => 'nullable|string|max:255',
+            'type'                    => 'required|in:standard,regulation,contract,internal_policy',
+            'publisher'               => 'nullable|string|max:255',
+            'tags'                    => 'nullable|array',
+            'tags.*'                  => 'exists:tags,id',
+            'jurisdictions'           => 'nullable|array',
+            'jurisdictions.*'         => 'exists:jurisdictions,id',
+            'processes'               => 'nullable|array',
+            'processes.*'             => 'exists:processes,id',
+            'status'                  => 'required|in:active,draft,deprecated,archived',
+            'release_date'            => 'nullable|date',
+            'effective_date'          => 'nullable|date',
+            'retired_date'            => 'nullable|date',
+            'description'             => 'nullable|string',
+            'language'                => 'nullable|string',
+            'url_reference'           => 'nullable|url',
+            // ── Documents ──
+            'documents'               => 'nullable|array|max:10',
+            'documents.*'             => 'file|max:10240',
+            'document_categories'     => 'nullable|array',
+            'document_categories.*'   => 'nullable|string|max:100',
+            'document_descriptions'   => 'nullable|array',
+            'document_descriptions.*' => 'nullable|string|max:500',
         ]);
 
         $framework = Framework::create([
             'name'            => $data['name'],
             'code'            => $data['code'],
-            'version'         => $data['version']      ?? null,
+            'version'         => $data['version']        ?? null,
             'type'            => $data['type'],
-            'publisher'       => $data['publisher']    ?? null,
+            'publisher'       => $data['publisher']      ?? null,
             'status'          => $data['status'],
-            'release_date'    => $data['release_date'] ?? null,
+            'release_date'    => $data['release_date']   ?? null,
             'effective_date'  => $data['effective_date'] ?? null,
-            'retired_date'    => $data['retired_date'] ?? null,
-            'description'     => $data['description']  ?? null,
-            'language'        => $data['language']     ?? null,
-            'url_reference'   => $data['url_reference'] ?? null,
+            'retired_date'    => $data['retired_date']   ?? null,
+            'description'     => $data['description']    ?? null,
+            'language'        => $data['language']       ?? null,
+            'url_reference'   => $data['url_reference']  ?? null,
             'organization_id' => $currentOrgId,
         ]);
 
         $framework->tags()->sync($data['tags'] ?? []);
         $framework->jurisdictions()->sync($data['jurisdictions'] ?? []);
         $framework->processes()->sync($data['processes'] ?? []);
+
+        // ── Upload documents ──
+        if ($request->hasFile('documents')) {
+            $categories   = $request->input('document_categories', []);
+            $descriptions = $request->input('document_descriptions', []);
+
+            foreach ($request->file('documents') as $index => $file) {
+                if (!$file->isValid()) continue;
+                $path = $file->store("frameworks/{$framework->id}/documents", 'public');
+                $framework->documents()->create([
+                    'name'        => $file->getClientOriginalName(),
+                    'file_path'   => $path,
+                    'file_name'   => $file->getClientOriginalName(),
+                    'mime_type'   => $file->getMimeType(),
+                    'file_size'   => $file->getSize(),
+                    'disk'        => 'public',
+                    'category'    => $categories[$index] ?? null,
+                    'description' => $descriptions[$index] ?? null,
+                    'uploaded_by' => $user->id,
+                ]);
+            }
+        }
 
         return redirect('/frameworks')->with('success', 'Framework created successfully.');
     }
@@ -169,6 +200,7 @@ class FrameworkController extends Controller
             'processes:id,macro_process_id,name,code',
             'processes.macroProcess:id,business_unit_id,name',
             'processes.macroProcess.businessUnit:id,name',
+            'documents', // ← nouveau
         ]);
 
         $framework->tags_names = $framework->tags
@@ -196,6 +228,7 @@ class FrameworkController extends Controller
             'jurisdictions:id,name',
             'tags:id,name',
             'processes:id,name,code,macro_process_id',
+            'documents', // ← nouveau
         ]);
 
         return Inertia::render('Frameworks/Edit', [
@@ -228,43 +261,72 @@ class FrameworkController extends Controller
                     ->where('organization_id', $currentOrgId)
                     ->ignore($framework->id),
             ],
-            'name'            => 'required|string|max:255',
-            'version'         => 'nullable|string|max:255',
-            'type'            => 'required|in:standard,regulation,contract,internal_policy',
-            'publisher'       => 'nullable|string|max:255',
-            'tags'            => 'nullable|array',
-            'tags.*'          => 'exists:tags,id',
-            'jurisdictions'   => 'nullable|array',
-            'jurisdictions.*' => 'exists:jurisdictions,id',
-            'processes'       => 'nullable|array',
-            'processes.*'     => 'exists:processes,id',
-            'status'          => 'required|in:active,draft,deprecated,archived',
-            'release_date'    => 'nullable|date',
-            'effective_date'  => 'nullable|date',
-            'retired_date'    => 'nullable|date',
-            'description'     => 'nullable|string',
-            'language'        => 'nullable|string',
-            'url_reference'   => 'nullable|url',
+            'name'                    => 'required|string|max:255',
+            'version'                 => 'nullable|string|max:255',
+            'type'                    => 'required|in:standard,regulation,contract,internal_policy',
+            'publisher'               => 'nullable|string|max:255',
+            'tags'                    => 'nullable|array',
+            'tags.*'                  => 'exists:tags,id',
+            'jurisdictions'           => 'nullable|array',
+            'jurisdictions.*'         => 'exists:jurisdictions,id',
+            'processes'               => 'nullable|array',
+            'processes.*'             => 'exists:processes,id',
+            'status'                  => 'required|in:active,draft,deprecated,archived',
+            'release_date'            => 'nullable|date',
+            'effective_date'          => 'nullable|date',
+            'retired_date'            => 'nullable|date',
+            'description'             => 'nullable|string',
+            'language'                => 'nullable|string',
+            'url_reference'           => 'nullable|url',
+            // ── Documents ──
+            'documents'               => 'nullable|array|max:10',
+            'documents.*'             => 'file|max:10240',
+            'document_categories'     => 'nullable|array',
+            'document_categories.*'   => 'nullable|string|max:100',
+            'document_descriptions'   => 'nullable|array',
+            'document_descriptions.*' => 'nullable|string|max:500',
         ]);
 
         $framework->update([
             'name'           => $data['name'],
             'code'           => $data['code'],
-            'version'        => $data['version']      ?? null,
+            'version'        => $data['version']        ?? null,
             'type'           => $data['type'],
-            'publisher'      => $data['publisher']    ?? null,
+            'publisher'      => $data['publisher']      ?? null,
             'status'         => $data['status'],
-            'release_date'   => $data['release_date'] ?? null,
+            'release_date'   => $data['release_date']   ?? null,
             'effective_date' => $data['effective_date'] ?? null,
-            'retired_date'   => $data['retired_date'] ?? null,
-            'description'    => $data['description']  ?? null,
-            'language'       => $data['language']     ?? null,
-            'url_reference'  => $data['url_reference'] ?? null,
+            'retired_date'   => $data['retired_date']   ?? null,
+            'description'    => $data['description']    ?? null,
+            'language'       => $data['language']       ?? null,
+            'url_reference'  => $data['url_reference']  ?? null,
         ]);
 
         $framework->tags()->sync($data['tags'] ?? []);
         $framework->jurisdictions()->sync($data['jurisdictions'] ?? []);
         $framework->processes()->sync($data['processes'] ?? []);
+
+        // ── Upload nouveaux documents ──
+        if ($request->hasFile('documents')) {
+            $categories   = $request->input('document_categories', []);
+            $descriptions = $request->input('document_descriptions', []);
+
+            foreach ($request->file('documents') as $index => $file) {
+                if (!$file->isValid()) continue;
+                $path = $file->store("frameworks/{$framework->id}/documents", 'public');
+                $framework->documents()->create([
+                    'name'        => $file->getClientOriginalName(),
+                    'file_path'   => $path,
+                    'file_name'   => $file->getClientOriginalName(),
+                    'mime_type'   => $file->getMimeType(),
+                    'file_size'   => $file->getSize(),
+                    'disk'        => 'public',
+                    'category'    => $categories[$index] ?? null,
+                    'description' => $descriptions[$index] ?? null,
+                    'uploaded_by' => $user->id,
+                ]);
+            }
+        }
 
         return redirect('/frameworks')->with('success', 'Framework updated successfully.');
     }
@@ -276,6 +338,49 @@ class FrameworkController extends Controller
         $framework->update(['is_deleted' => 1]);
 
         return redirect('/frameworks')->with('success', 'Framework deleted successfully.');
+    }
+
+    // ─── Download document ────────────────────────────────────────────────────
+    public function downloadDocument(Framework $framework, Document $document)
+    {
+        $this->authorizeFramework($framework);
+
+        if (
+            $document->documentable_id !== $framework->id
+            || $document->documentable_type !== Framework::class
+        ) {
+            abort(403, 'Unauthorized');
+        }
+
+        if (!Storage::disk($document->disk)->exists($document->file_path)) {
+            abort(404, 'File not found');
+        }
+
+        return Storage::disk($document->disk)->download(
+            $document->file_path,
+            $document->file_name
+        );
+    }
+
+    // ─── Destroy document ────────────────────────────────────────────────────
+    public function destroyDocument(Framework $framework, Document $document)
+    {
+        $this->authorizeFramework($framework);
+
+        if (
+            $document->documentable_id !== $framework->id
+            || $document->documentable_type !== Framework::class
+        ) {
+            abort(403, 'Unauthorized');
+        }
+
+        if (Storage::disk($document->disk)->exists($document->file_path)) {
+            Storage::disk($document->disk)->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return back()->with('success', 'Document deleted.');
     }
 
     // ─── Export ──────────────────────────────────────────────────────────────

@@ -1,11 +1,12 @@
 // resources/js/pages/Frameworks/Edit.tsx
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CardUpload, type FileUploadItem } from '@/components/card-upload'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -23,9 +24,10 @@ import { cn } from '@/lib/utils'
 import {
   ChevronLeft, Calendar as CalendarIcon, Building2, Globe,
   Tag as TagIcon, FileText, Plus, Pencil, Trash2, Search, X, Check,
-  Layers, ChevronRight, ChevronDown, Minus,
+  Layers, ChevronRight, ChevronDown, Minus, FileUp, Download, File, AlertCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { route } from 'ziggy-js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Jurisdiction { id: number; name: string }
@@ -33,11 +35,37 @@ interface Tag { id: number; name: string }
 interface Process { id: number; name: string; code: string; macro_process_id: number }
 interface MacroProcess { id: number; name: string; code: string; business_unit_id: number; processes: Process[] }
 interface BusinessUnit { id: number; name: string; code: string; macro_processes: MacroProcess[] }
+interface Document {
+  id: number
+  name: string
+  file_name: string
+  mime_type: string
+  file_size: number
+  category: string | null
+  description: string | null
+}
 interface Framework {
   id: number; code: string; name: string; version: string | null; type: string
   status: string; publisher: string | null; release_date: string | null
   effective_date: string | null; retired_date: string | null
   description: string | null; language: string | null; url_reference: string | null
+  documents: Document[]
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(mimeType: string) {
+  if (mimeType.includes('pdf')) return '📄'
+  if (mimeType.includes('image')) return '🖼️'
+  if (mimeType.includes('word') || mimeType.includes('document')) return '📝'
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊'
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜️'
+  return '📎'
 }
 
 // ─── ManageDialog ─────────────────────────────────────────────────────────────
@@ -244,7 +272,7 @@ function TriCheckbox({ state, onChange, className }: TriCheckboxProps) {
   )
 }
 
-// ─── ProcessSelector multi-select ─────────────────────────────────────────────
+// ─── ProcessSelector ──────────────────────────────────────────────────────────
 interface ProcessSelectorProps {
   businessUnits: BusinessUnit[]
   selectedProcessIds: string[]
@@ -266,7 +294,6 @@ function ProcessSelector({
   const [expandedMPs, setExpandedMPs] = useState<Set<number>>(new Set())
   const [search, setSearch] = useState('')
 
-  // Auto-expand BU/MP qui ont des processus déjà sélectionnés (au mount uniquement)
   useEffect(() => {
     if (selectedProcessIds.length === 0) return
     const buIds = new Set<number>()
@@ -283,7 +310,7 @@ function ProcessSelector({
     })
     setExpandedBUs(buIds)
     setExpandedMPs(mpIds)
-  }, []) // intentionnellement au mount seulement
+  }, [])
 
   const toggleBU = (id: number) => setExpandedBUs(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
@@ -316,7 +343,6 @@ function ProcessSelector({
   const countSelectedInMP = (mp: MacroProcess) =>
     mp.processes.filter(p => selectedProcessIds.includes(p.id.toString())).length
 
-  // Filtrage par recherche
   const q = search.toLowerCase().trim()
   const filteredBUs = q
     ? businessUnits
@@ -352,7 +378,6 @@ function ProcessSelector({
 
   return (
     <div className="space-y-3">
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -368,7 +393,6 @@ function ProcessSelector({
         )}
       </div>
 
-      {/* Tree */}
       <div className={cn('rounded-xl border overflow-hidden', error ? 'border-destructive' : 'border-input')}>
         {filteredBUs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground text-sm italic">
@@ -381,17 +405,9 @@ function ProcessSelector({
 
           return (
             <div key={bu.id} className={cn(buIdx > 0 && 'border-t border-input')}>
-              {/* ── Business Unit row ── */}
               <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-accent/40 transition-colors">
-                <TriCheckbox
-                  state={buState}
-                  onChange={() => onToggleBusinessUnit(bu)}
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleBU(bu.id)}
-                  className="flex items-center gap-2.5 flex-1 text-left min-w-0"
-                >
+                <TriCheckbox state={buState} onChange={() => onToggleBusinessUnit(bu)} />
+                <button type="button" onClick={() => toggleBU(bu.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/20">
                     <Building2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   </div>
@@ -406,14 +422,10 @@ function ProcessSelector({
                   </span>
                 )}
                 <button type="button" onClick={() => toggleBU(bu.id)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                  {buExpanded
-                    ? <ChevronDown className="h-4 w-4" />
-                    : <ChevronRight className="h-4 w-4" />
-                  }
+                  {buExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
               </div>
 
-              {/* ── MacroProcesses ── */}
               {buExpanded && (
                 <div className="border-t border-input/50 bg-muted/20">
                   {bu.macro_processes.length === 0 ? (
@@ -425,17 +437,9 @@ function ProcessSelector({
 
                     return (
                       <div key={mp.id} className={cn(mpIdx > 0 && 'border-t border-input/30')}>
-                        {/* MacroProcess row */}
                         <div className="flex items-center gap-2 pl-8 pr-3 py-2 hover:bg-accent/30 transition-colors">
-                          <TriCheckbox
-                            state={mpState}
-                            onChange={() => onToggleMacroProcess(mp)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => toggleMP(mp.id)}
-                            className="flex items-center gap-2.5 flex-1 text-left min-w-0"
-                          >
+                          <TriCheckbox state={mpState} onChange={() => onToggleMacroProcess(mp)} />
+                          <button type="button" onClick={() => toggleMP(mp.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
                             <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-violet-50 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/20">
                               <Layers className="h-3 w-3 text-violet-600 dark:text-violet-400" />
                             </div>
@@ -450,14 +454,10 @@ function ProcessSelector({
                             </span>
                           )}
                           <button type="button" onClick={() => toggleMP(mp.id)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                            {mpExpanded
-                              ? <ChevronDown className="h-3.5 w-3.5" />
-                              : <ChevronRight className="h-3.5 w-3.5" />
-                            }
+                            {mpExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                           </button>
                         </div>
 
-                        {/* ── Processes ── */}
                         {mpExpanded && (
                           <div className="border-t border-input/20 bg-muted/30">
                             {mp.processes.length === 0 ? (
@@ -471,33 +471,22 @@ function ProcessSelector({
                                   onClick={() => onToggleProcess(process)}
                                   className={cn(
                                     'w-full flex items-center gap-2.5 pl-[4.5rem] pr-4 py-2 text-left transition-all',
-                                    isSelected
-                                      ? 'bg-emerald-50 dark:bg-emerald-500/10'
-                                      : 'hover:bg-accent/20'
+                                    isSelected ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'hover:bg-accent/20'
                                   )}
                                 >
                                   <div className={cn(
                                     'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all',
-                                    isSelected
-                                      ? 'border-emerald-500 bg-emerald-500'
-                                      : 'border-gray-300 dark:border-gray-600'
+                                    isSelected ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 dark:border-gray-600'
                                   )}>
                                     {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <span className={cn(
-                                      'text-sm font-medium truncate block',
-                                      isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'
-                                    )}>
+                                    <span className={cn('text-sm font-medium truncate block', isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground')}>
                                       {process.name}
                                     </span>
-                                    {process.code && (
-                                      <span className="text-xs text-muted-foreground">{process.code}</span>
-                                    )}
+                                    {process.code && <span className="text-xs text-muted-foreground">{process.code}</span>}
                                   </div>
-                                  {isSelected && (
-                                    <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                                  )}
+                                  {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />}
                                 </button>
                               )
                             })}
@@ -511,6 +500,115 @@ function ProcessSelector({
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─── ExistingDocumentsList ────────────────────────────────────────────────────
+interface ExistingDocumentsListProps {
+  frameworkId: number
+  documents: Document[]
+  onDeleted: (docId: number) => void
+}
+
+function ExistingDocumentsList({ frameworkId, documents, onDeleted }: ExistingDocumentsListProps) {
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [confirmId, setConfirmId] = useState<number | null>(null)
+
+  if (documents.length === 0) return null
+
+  const handleDelete = (docId: number) => {
+    setDeletingId(docId)
+    router.delete(
+      route('frameworks.documents.destroy', { framework: frameworkId, document: docId }),
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          onDeleted(docId)
+          setConfirmId(null)
+        },
+        onFinish: () => setDeletingId(null),
+      }
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-foreground flex items-center gap-2">
+        <File className="h-4 w-4 text-muted-foreground" />
+        Existing documents
+        <span className="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+          {documents.length}
+        </span>
+      </p>
+
+      <div className="divide-y divide-input rounded-xl border border-input overflow-hidden">
+        {documents.map(doc => (
+          <div key={doc.id} className="flex items-center gap-3 px-4 py-3 bg-background hover:bg-accent/20 transition-colors group">
+            {/* Icon */}
+            <span className="text-xl flex-shrink-0 select-none" aria-hidden>
+              {getFileIcon(doc.mime_type)}
+            </span>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{doc.file_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(doc.file_size)}
+                {doc.category && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
+                    {doc.category}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              {/* Download */}
+              <a
+                href={route('frameworks.documents.download', { framework: frameworkId, document: doc.id })}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Download"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+
+              {/* Delete */}
+              {confirmId === doc.id ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(doc.id)}
+                    disabled={deletingId === doc.id}
+                    className="h-7 px-2.5 rounded-lg text-xs font-semibold text-white bg-destructive hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === doc.id ? '...' : 'Confirm'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmId(null)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmId(doc.id)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -545,7 +643,16 @@ export default function EditFramework() {
     jurisdictions:  selectedJurisdictions.map(String) as string[],
     tags:           selectedTags.map(String)           as string[],
     processes:      selectedProcesses.map(String)      as string[],
+    // ── Nouveaux documents à uploader ──
+    documents:             [] as File[],
+    document_categories:   [] as (string | null)[],
+    document_descriptions: [] as (string | null)[],
   })
+
+  // Documents existants (gérés en local pour suppression optimiste)
+  const [existingDocuments, setExistingDocuments] = useState<Document[]>(
+    framework.documents ?? []
+  )
 
   const [jurisdictionsDialogOpen, setJurisdictionsDialogOpen] = useState(false)
   const [tagsDialogOpen, setTagsDialogOpen] = useState(false)
@@ -565,7 +672,7 @@ export default function EditFramework() {
     }
   }, [props.flash])
 
-  // ─── Refs stale-closure fix ───────────────────────────────────────────────
+// ─── Refs stale-closure fix ───────────────────────────────────────────────
   const jurisdictionsRef = useRef<string[]>([])
   const tagsRef = useRef<string[]>([])
   const processesRef = useRef<string[]>([])
@@ -573,7 +680,24 @@ export default function EditFramework() {
   useEffect(() => { tagsRef.current = data.tags }, [data.tags])
   useEffect(() => { processesRef.current = data.processes }, [data.processes])
 
-  // ─── Toggle process individuel ────────────────────────────────────────────
+  // ─── Clear stale server errors on mount ──────────────────────────────────
+  useEffect(() => { clearErrors() }, [])
+
+  // ─── Documents handlers ───────────────────────────────────────────────────
+  const handleFilesChange = (files: FileUploadItem[]) => {
+    setData(prev => ({
+  ...prev,
+  documents: files.map(f => f.file),
+  document_categories: files.map(() => null),
+  document_descriptions: files.map(() => null),
+}))
+  }
+
+  const handleDocumentDeleted = (docId: number) => {
+    setExistingDocuments(prev => prev.filter(d => d.id !== docId))
+  }
+
+  // ─── Process handlers ─────────────────────────────────────────────────────
   const toggleProcess = (process: Process) => {
     const idStr = process.id.toString()
     const next = processesRef.current.includes(idStr)
@@ -583,7 +707,6 @@ export default function EditFramework() {
     setData('processes', next)
   }
 
-  // ─── Toggle macro-process (tous ses enfants) ──────────────────────────────
   const toggleMacroProcess = (mp: MacroProcess) => {
     const procIds = mp.processes.map(p => p.id.toString())
     const current = processesRef.current
@@ -595,7 +718,6 @@ export default function EditFramework() {
     setData('processes', next)
   }
 
-  // ─── Toggle business unit (tous ses processus enfants) ────────────────────
   const toggleBusinessUnit = (bu: BusinessUnit) => {
     const allProcIds = bu.macro_processes.flatMap(mp => mp.processes.map(p => p.id.toString()))
     const current = processesRef.current
@@ -681,8 +803,10 @@ export default function EditFramework() {
     }})
   }
 
-  // ─── Selected processes summary ───────────────────────────────────────────
-  const allProcesses = (businessUnits as BusinessUnit[]).flatMap(bu => bu.macro_processes.flatMap(mp => mp.processes))
+const allProcesses = useMemo(() =>
+  (businessUnits as BusinessUnit[])
+    .flatMap(bu => bu.macro_processes.flatMap(mp => mp.processes)),
+[businessUnits])
   const selectedProcessesList = allProcesses.filter(p => data.processes.includes(p.id.toString()))
 
   return (
@@ -726,7 +850,8 @@ export default function EditFramework() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-10">
-          {/* Basic Information */}
+
+          {/* ── Basic Information ── */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -786,7 +911,7 @@ export default function EditFramework() {
             </CardContent>
           </Card>
 
-          {/* Jurisdictions & Tags */}
+          {/* ── Jurisdictions & Tags ── */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -842,7 +967,7 @@ export default function EditFramework() {
             </CardContent>
           </Card>
 
-          {/* Process Scope */}
+          {/* ── Process Scope ── */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -879,7 +1004,7 @@ export default function EditFramework() {
             </CardContent>
           </Card>
 
-          {/* Important Dates */}
+          {/* ── Important Dates ── */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -913,7 +1038,7 @@ export default function EditFramework() {
             </CardContent>
           </Card>
 
-          {/* Description & Reference */}
+          {/* ── Description & Reference ── */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -948,7 +1073,67 @@ export default function EditFramework() {
             </CardContent>
           </Card>
 
-          {/* Actions */}
+          {/* ── Documents ─────────────────────────────────────────────────────── */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2 border-b">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <FileUp className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Documents</CardTitle>
+                  <CardDescription className="text-xs">
+                    Manage attached files for this framework (max 10 MB each)
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-6 space-y-6">
+              {/* Documents existants */}
+              <ExistingDocumentsList
+                frameworkId={framework.id}
+                documents={existingDocuments}
+                onDeleted={handleDocumentDeleted}
+              />
+
+              {/* Séparateur si des docs existants sont présents */}
+              {existingDocuments.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground font-medium px-2">Add new files</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
+
+              {/* Upload de nouveaux fichiers */}
+              <CardUpload
+                maxFiles={10}
+                maxSize={10 * 1024 * 1024}
+                accept="*"
+                multiple={true}
+                simulateUpload={true}
+                onFilesChange={handleFilesChange}
+                labels={{
+                  dropzone: 'Drag & drop files here, or click to select',
+                  browse: 'Browse files',
+                  maxSize: 'Max file size: 10 MB',
+                  filesCount: 'files uploaded',
+                  addFiles: 'Add more files',
+                  removeAll: 'Remove all',
+                }}
+              />
+
+              {errors.documents && (
+                <p className="text-xs text-destructive flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {errors.documents}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Actions ── */}
           <div className="flex justify-end gap-4 pt-8">
             <Button variant="outline" size="lg" asChild disabled={processing}>
               <Link href="/frameworks">Cancel</Link>

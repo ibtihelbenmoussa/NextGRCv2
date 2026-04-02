@@ -184,25 +184,33 @@ export default function CreateRequirement() {
     )
   }, [data.framework_id])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!data.code.trim()) { setError('code', 'Code is required'); return }
-    if (!data.title.trim()) { setError('title', 'Title is required'); return }
-    if (!data.type) { setError('type', 'Type is required'); return }
-    if (!data.status) { setError('status', 'Status is required'); return }
-    if (!data.priority) { setError('priority', 'Priority is required'); return }
-    if (!data.frequency) { setError('frequency', 'Frequency is required'); return }
-    if (!data.framework_id) { setError('framework_id', 'Framework is required'); return }
-    if (!data.compliance_level) { setError('compliance_level', 'Compliance level is required'); return }
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault()
+  if (!data.code.trim()) { setError('code', 'Code is required'); return }
+  if (!data.title.trim()) { setError('title', 'Title is required'); return }
+  if (!data.type) { setError('type', 'Type is required'); return }
+  if (!data.status) { setError('status', 'Status is required'); return }
+  if (!data.priority) { setError('priority', 'Priority is required'); return }
+  if (!data.frequency) { setError('frequency', 'Frequency is required'); return }
+  if (!data.framework_id) { setError('framework_id', 'Framework is required'); return }
+  if (!data.compliance_level) { setError('compliance_level', 'Compliance level is required'); return }
 
-    post(route('requirements.store'), {
-      onSuccess: () => {
-        reset()
-        setEffectiveDateOpen(false)
-      },
-    })
+  // ← Corriger process_id avant envoi
+  if (data.process_id === 'none' || data.process_id === '') {
+    setData('process_id', '')
   }
 
+  post(route('requirements.store'), {
+    forceFormData: true,
+    onSuccess: () => {
+      reset()
+      setEffectiveDateOpen(false)
+    },
+    onError: (errors) => {
+      console.error('Validation errors:', errors)
+    },
+  })
+}
   // ─── Step indicator ─────────────────────────────────────────────────────────
   const steps = [
     { label: 'Basic info', icon: ListTodo },
@@ -335,7 +343,7 @@ export default function CreateRequirement() {
                 <Label className="text-sm text-muted-foreground">Process (optional)</Label>
                 <Select
                   value={data.process_id}
-                  onValueChange={(v) => setData('process_id', v)}
+                  onValueChange={(v) => setData('process_id', v === 'none' ? '' : v)}
                   disabled={!data.framework_id || loadingProcesses}
                 >
                   <SelectTrigger>

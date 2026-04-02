@@ -1,11 +1,13 @@
 // resources/js/pages/Frameworks/Create.tsx
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CardUpload, type FileUploadItem } from '@/components/card-upload'
+import { route } from 'ziggy-js'                    // ← Ajouté
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -23,7 +25,7 @@ import { cn } from '@/lib/utils'
 import {
   ChevronLeft, Calendar as CalendarIcon, Building2, Globe,
   Tag as TagIcon, FileText, Plus, Pencil, Trash2, Search, X, Check,
-  Layers, ChevronRight, ChevronDown, Minus,
+  Layers, ChevronRight, ChevronDown, Minus,FileUp,           // ← AJOUTÉ ICI
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -76,129 +78,252 @@ function ManageDialog({
   const handleDelete = () => { if (!confirmDelete) return; onDelete(confirmDelete); setConfirmDelete(null) }
   const selectedCount = selectedIds.length
 
+  if (!open) return null
+
   return (
     <>
+      {/* Confirm Delete */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center" onClick={() => setConfirmDelete(null)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative rounded-2xl shadow-2xl p-6 w-80 border bg-white border-gray-100 dark:bg-gray-900 dark:border-gray-700/60" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-50 dark:bg-red-500/10">
-              <Trash2 className="h-5 w-5 text-red-500 dark:text-red-400" />
-            </div>
-            <h3 className="text-center font-semibold mb-1 text-gray-900 dark:text-gray-100">Delete item?</h3>
-            <p className="text-center text-sm mb-5 text-gray-500 dark:text-gray-400">
-              <span className="font-medium text-gray-700 dark:text-gray-200">"{confirmDelete.name}"</span> will be permanently removed.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2.5 text-sm font-medium rounded-xl transition-colors text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-colors bg-red-500 hover:bg-red-600">Delete</button>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl border bg-background shadow-xl p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Delete item?</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <span className="font-medium text-foreground">"{confirmDelete.name}"</span> will be permanently removed.
+                </p>
+              </div>
+              <div className="flex gap-2 w-full mt-2">
+                <button
+                  onClick={() => setConfirmDelete(null)}
+                  className="flex-1 py-2 text-sm font-medium rounded-lg border border-input bg-background hover:bg-accent transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 py-2 text-sm font-semibold rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className={cn('fixed inset-0 z-[60] flex items-center justify-center transition-all duration-300', open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')}>
-        <div className={cn('absolute inset-0 transition-all duration-300', open ? 'bg-black/40 dark:bg-black/65 backdrop-blur-md' : 'bg-transparent backdrop-blur-none')} onClick={() => onOpenChange(false)} />
-        <div className={cn('relative w-[520px] max-h-[90vh] flex flex-col rounded-3xl overflow-hidden transition-all duration-300 bg-white/85 dark:bg-gray-900/80 border border-white/70 dark:border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.18)] dark:shadow-[0_40px_80px_rgba(0,0,0,0.55)]', open ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4')} style={{ backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)' }}>
-          <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-20 dark:opacity-30" style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }} />
-          <div className="absolute -bottom-12 -left-12 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-10 dark:opacity-20" style={{ background: `linear-gradient(135deg, ${accentTo}, ${accentFrom})` }} />
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+        onClick={() => onOpenChange(false)}
+      />
 
-          <div className="relative px-6 pt-6 pb-4">
-            <div className="flex items-start justify-between mb-1">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}>
-                  <span className="text-white">{icon}</span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold leading-tight text-gray-900 dark:text-gray-50">{title}</h2>
-                  <p className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">{description}</p>
-                </div>
+      {/* Modal */}
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-lg flex flex-col max-h-[85vh] rounded-2xl border bg-background shadow-2xl overflow-hidden">
+
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0"
+                style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}
+              >
+                {icon}
               </div>
-              <button onClick={() => onOpenChange(false)} className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 bg-gray-100/80 hover:bg-gray-200/80 text-gray-400 hover:text-gray-600 dark:bg-white/10 dark:hover:bg-white/20 dark:text-gray-400 dark:hover:text-gray-200">
-                <X className="h-4 w-4" />
-              </button>
+              <div>
+                <h2 className="text-base font-semibold text-foreground">{title}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+              </div>
             </div>
-            {selectedCount > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {selectedIds.map(id => {
-                  const item = items.find(i => i.id.toString() === id)
-                  if (!item) return null
+            <button
+              onClick={() => onOpenChange(false)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0 ml-4"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Selected pills */}
+          {selectedCount > 0 && (
+            <div className="px-6 pt-3 pb-0 flex flex-wrap gap-1.5">
+              {selectedIds.map(id => {
+                const item = items.find(i => i.id.toString() === id)
+                if (!item) return null
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border"
+                    style={{
+                      background: `${accentFrom}15`,
+                      borderColor: `${accentFrom}35`,
+                      color: accentFrom,
+                    }}
+                  >
+                    {item.name}
+                    <button onClick={() => onToggle(item)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="px-6 pt-3 pb-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-9 pr-9 py-2 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/50 transition-all"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between mt-1.5 px-0.5">
+              <span className="text-xs text-muted-foreground">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</span>
+              {selectedCount > 0 && (
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: `${accentFrom}15`, color: accentFrom }}
+                >
+                  {selectedCount} selected
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto px-6 pb-2">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Search className="h-8 w-8 mb-2 opacity-20" />
+                <p className="text-sm">No results for "{search}"</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filtered.map(item => {
+                  const isSelected = selectedIds.includes(item.id.toString())
+                  const isEditing = editingItem?.id === item.id
                   return (
-                    <span key={id} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border transition-all" style={{ background: `linear-gradient(135deg, ${accentFrom}20, ${accentTo}20)`, borderColor: `${accentFrom}45`, color: accentFrom }}>
-                      {item.name}
-                      <button onClick={() => onToggle(item)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"><X className="h-3 w-3" /></button>
-                    </span>
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'group flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all',
+                        isSelected
+                          ? 'border-input bg-accent/40'
+                          : 'border-transparent hover:border-input hover:bg-accent/30'
+                      )}
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleEdit()
+                              if (e.key === 'Escape') { setEditingItem(null); setEditingName('') }
+                            }}
+                            className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                            autoFocus
+                          />
+                          <button
+                            onClick={handleEdit}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
+                            style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setEditingItem(null); setEditingName('') }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="flex items-center gap-3 flex-1 text-left min-w-0" onClick={() => onToggle(item)}>
+                            {/* Checkbox */}
+                            <div
+                              className={cn(
+                                'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                                isSelected ? 'border-transparent' : 'border-input bg-background'
+                              )}
+                              style={isSelected ? { background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`, borderColor: accentFrom } : {}}
+                            >
+                              {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                            </div>
+                            <span className={cn('text-sm font-medium truncate', isSelected ? 'text-foreground' : 'text-foreground/80')}>
+                              {item.name}
+                            </span>
+                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex-shrink-0">
+                            <button
+                              onClick={() => { setEditingItem(item); setEditingName(item.name) }}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(item)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )
                 })}
               </div>
             )}
           </div>
 
-          <div className="relative px-6 pb-3">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
-              <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
-                className="w-full pl-10 pr-10 py-2.5 rounded-2xl text-sm focus:outline-none transition-all bg-black/5 border border-black/8 text-gray-800 placeholder-gray-400 dark:bg-white/8 dark:border-white/10 dark:text-gray-100 dark:placeholder-gray-600 focus:bg-white focus:dark:bg-white/15"
-                onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 3px ${accentFrom}30` }}
-                onBlur={e => { e.currentTarget.style.boxShadow = 'none' }} />
-              {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"><X className="h-4 w-4" /></button>}
-            </div>
-            <div className="flex items-center justify-between mt-2 px-1">
-              <span className="text-xs text-gray-400 dark:text-gray-600">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</span>
-              {selectedCount > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${accentFrom}18`, color: accentFrom }}>{selectedCount} selected</span>}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-6 pb-3 space-y-1.5">
-            {filtered.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 dark:text-gray-600">
-                <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No results for "{search}"</p>
-              </div>
-            ) : filtered.map(item => {
-              const isSelected = selectedIds.includes(item.id.toString())
-              const isEditing = editingItem?.id === item.id
-              return (
-                <div key={item.id} className={cn('group flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-150', !isSelected && 'bg-white/50 hover:bg-white/80 border-gray-100/80 hover:border-gray-200 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/8 dark:hover:border-white/15')} style={isSelected ? { background: `linear-gradient(135deg, ${accentFrom}14, ${accentTo}08)`, borderColor: `${accentFrom}40` } : {}}>
-                  {isEditing ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input value={editingName} onChange={e => setEditingName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleEdit(); if (e.key === 'Escape') { setEditingItem(null); setEditingName('') } }}
-                        className="flex-1 px-3 py-1.5 text-sm rounded-xl border focus:outline-none bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100"
-                        style={{ borderColor: `${accentFrom}55`, boxShadow: `0 0 0 3px ${accentFrom}20` }} autoFocus />
-                      <button onClick={handleEdit} className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow" style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}><Check className="h-4 w-4" /></button>
-                      <button onClick={() => { setEditingItem(null); setEditingName('') }} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 bg-gray-100 dark:bg-white/10"><X className="h-4 w-4" /></button>
-                    </div>
-                  ) : (
-                    <>
-                      <button className="flex items-center gap-3 flex-1 text-left" onClick={() => onToggle(item)}>
-                        <div className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200', !isSelected && 'border-gray-300 dark:border-gray-600')} style={isSelected ? { background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`, borderColor: accentFrom, boxShadow: `0 2px 8px ${accentFrom}55` } : {}}>
-                          {isSelected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
-                        </div>
-                        <span className={cn('text-sm font-medium transition-colors', !isSelected && 'text-gray-700 dark:text-gray-300')} style={isSelected ? { color: accentFrom } : {}}>{item.name}</span>
-                      </button>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-150">
-                        <button onClick={() => { setEditingItem(item); setEditingName(item.name) }} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-white/10"><Pencil className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => setConfirmDelete(item)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/15"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="px-6 py-4 mt-auto border-t bg-white/60 border-black/6 dark:bg-white/5 dark:border-white/8">
+          {/* Footer */}
+          <div className="px-6 py-4 border-t bg-muted/30 space-y-3">
+            {/* Add new */}
             <div className="flex gap-2">
-              <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Add new..."
-                className="flex-1 px-4 py-2.5 rounded-2xl text-sm focus:outline-none border bg-white/90 border-black/10 text-gray-800 placeholder-gray-400 dark:bg-white/10 dark:border-white/10 dark:text-gray-100 dark:placeholder-gray-600"
-                onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 3px ${accentFrom}28`; e.currentTarget.style.borderColor = `${accentFrom}65` }}
-                onBlur={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '' }} />
-              <button onClick={handleAdd} disabled={!newName.trim()} className="px-5 py-2.5 rounded-2xl text-sm font-semibold text-white flex items-center gap-1.5 transition-all hover:opacity-90 hover:scale-105 disabled:opacity-40 disabled:scale-100 shadow-lg" style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`, boxShadow: `0 4px 14px ${accentFrom}45` }}>
-                <Plus className="h-4 w-4" />Add
+              <input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                placeholder="Add new item..."
+                className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/50 transition-all"
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newName.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5 transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}
+              >
+                <Plus className="h-4 w-4" />
+                Add
               </button>
             </div>
-            <button onClick={() => onOpenChange(false)} className="mt-3 w-full py-2.5 rounded-2xl text-sm font-semibold text-white bg-gray-900 dark:bg-gray-700">
+            {/* Done */}
+            <button
+              onClick={() => onOpenChange(false)}
+              className="w-full py-2.5 rounded-lg text-sm font-semibold border border-input bg-background hover:bg-accent text-foreground transition-colors"
+            >
               Done — {selectedCount} selected
             </button>
           </div>
@@ -207,9 +332,7 @@ function ManageDialog({
     </>
   )
 }
-
 // ─── TriCheckbox ──────────────────────────────────────────────────────────────
-// Checkbox visuelle avec 3 états : unchecked / indeterminate / checked
 type CheckState = 'none' | 'partial' | 'all'
 
 interface TriCheckboxProps {
@@ -239,7 +362,7 @@ function TriCheckbox({ state, onChange, className }: TriCheckboxProps) {
   )
 }
 
-// ─── ProcessSelector multi-select ─────────────────────────────────────────────
+// ─── ProcessSelector ──────────────────────────────────────────────────────────
 interface ProcessSelectorProps {
   businessUnits: BusinessUnit[]
   selectedProcessIds: string[]
@@ -292,31 +415,59 @@ function ProcessSelector({
   const countSelectedInMP = (mp: MacroProcess) =>
     mp.processes.filter(p => selectedProcessIds.includes(p.id.toString())).length
 
-  // Filtrage par recherche
   const q = search.toLowerCase().trim()
-  const filteredBUs = q
-    ? businessUnits
-        .map(bu => ({
-          ...bu,
-          macro_processes: bu.macro_processes
-            .map(mp => ({
-              ...mp,
-              processes: mp.processes.filter(p =>
-                p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
-              ),
-            }))
-            .filter(mp =>
-              mp.name.toLowerCase().includes(q) ||
-              mp.code.toLowerCase().includes(q) ||
-              mp.processes.length > 0
-            ),
-        }))
-        .filter(bu =>
-          bu.name.toLowerCase().includes(q) ||
-          bu.code.toLowerCase().includes(q) ||
-          bu.macro_processes.length > 0
-        )
-    : businessUnits
+
+  // ── IDs matchés — on garde les objets ORIGINAUX, on filtre seulement la visibilité ──
+  const matchedBUIds = useMemo(() => {
+    if (!q) return null
+    const ids = new Set<number>()
+    businessUnits.forEach(bu => {
+      const buMatch = bu.name.toLowerCase().includes(q) || bu.code.toLowerCase().includes(q)
+      if (buMatch) { ids.add(bu.id); return }
+      bu.macro_processes.forEach(mp => {
+        const mpMatch = mp.name.toLowerCase().includes(q) || mp.code.toLowerCase().includes(q)
+        if (mpMatch) { ids.add(bu.id); return }
+        mp.processes.forEach(p => {
+          if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) ids.add(bu.id)
+        })
+      })
+    })
+    return ids
+  }, [businessUnits, q])
+
+  const matchedMPIds = useMemo(() => {
+    if (!q) return null
+    const ids = new Set<number>()
+    businessUnits.forEach(bu => {
+      const buMatch = bu.name.toLowerCase().includes(q) || bu.code.toLowerCase().includes(q)
+      bu.macro_processes.forEach(mp => {
+        const mpMatch = mp.name.toLowerCase().includes(q) || mp.code.toLowerCase().includes(q)
+        if (buMatch || mpMatch) { ids.add(mp.id); return }
+        mp.processes.forEach(p => {
+          if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) ids.add(mp.id)
+        })
+      })
+    })
+    return ids
+  }, [businessUnits, q])
+
+  const matchedProcessIds = useMemo(() => {
+    if (!q) return null
+    const ids = new Set<number>()
+    businessUnits.forEach(bu => {
+      const buMatch = bu.name.toLowerCase().includes(q) || bu.code.toLowerCase().includes(q)
+      bu.macro_processes.forEach(mp => {
+        const mpMatch = mp.name.toLowerCase().includes(q) || mp.code.toLowerCase().includes(q)
+        mp.processes.forEach(p => {
+          if (buMatch || mpMatch || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q))
+            ids.add(p.id)
+        })
+      })
+    })
+    return ids
+  }, [businessUnits, q])
+
+  const visibleBUs = q ? businessUnits.filter(bu => matchedBUIds?.has(bu.id)) : businessUnits
 
   if (businessUnits.length === 0) {
     return (
@@ -334,7 +485,7 @@ function ProcessSelector({
         <Input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search processes..."
+          placeholder="Search business units, macro-processes or processes..."
           className="pl-8 pr-8 h-9 text-sm"
         />
         {search && (
@@ -344,33 +495,23 @@ function ProcessSelector({
         )}
       </div>
 
-      {/* Tree */}
+      {/* Tree — objets originaux, visibilité filtrée par IDs */}
       <div className={cn('rounded-xl border overflow-hidden', error ? 'border-destructive' : 'border-input')}>
-        {filteredBUs.length === 0 ? (
+        {visibleBUs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground text-sm italic">
             No matching processes found.
           </div>
-        ) : filteredBUs.map((bu, buIdx) => {
+        ) : visibleBUs.map((bu, buIdx) => {
           const buExpanded = expandedBUs.has(bu.id) || !!q
           const buState = getBUState(bu)
           const buCount = countSelectedInBU(bu)
 
           return (
             <div key={bu.id} className={cn(buIdx > 0 && 'border-t border-input')}>
-              {/* ── Business Unit row ── */}
+              {/* BU row */}
               <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-accent/40 transition-colors group">
-                {/* Tri-checkbox BU */}
-                <TriCheckbox
-                  state={buState}
-                  onChange={() => onToggleBusinessUnit(bu)}
-                />
-
-                {/* Toggle expand */}
-                <button
-                  type="button"
-                  onClick={() => toggleBU(bu.id)}
-                  className="flex items-center gap-2.5 flex-1 text-left min-w-0"
-                >
+                <TriCheckbox state={buState} onChange={() => onToggleBusinessUnit(bu)} />
+                <button type="button" onClick={() => toggleBU(bu.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/20">
                     <Building2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   </div>
@@ -379,119 +520,94 @@ function ProcessSelector({
                     {bu.code && <span className="text-xs text-muted-foreground">{bu.code}</span>}
                   </div>
                 </button>
-
                 {buCount > 0 && (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 flex-shrink-0">
                     {buCount}
                   </span>
                 )}
-
                 <button type="button" onClick={() => toggleBU(bu.id)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                  {buExpanded
-                    ? <ChevronDown className="h-4 w-4" />
-                    : <ChevronRight className="h-4 w-4" />
-                  }
+                  {buExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
               </div>
 
-              {/* ── MacroProcesses ── */}
+              {/* MacroProcesses */}
               {buExpanded && (
                 <div className="border-t border-input/50 bg-muted/20">
                   {bu.macro_processes.length === 0 ? (
                     <p className="px-12 py-2.5 text-xs text-muted-foreground italic">Aucun macro-processus</p>
-                  ) : bu.macro_processes.map((mp, mpIdx) => {
-                    const mpExpanded = expandedMPs.has(mp.id) || !!q
-                    const mpState = getMPState(mp)
-                    const mpCount = countSelectedInMP(mp)
+                  ) : bu.macro_processes
+                      .filter(mp => !q || matchedMPIds?.has(mp.id))
+                      .map((mp, mpIdx) => {
+                        const mpExpanded = expandedMPs.has(mp.id) || !!q
+                        const mpState = getMPState(mp)
+                        const mpCount = countSelectedInMP(mp)
 
-                    return (
-                      <div key={mp.id} className={cn(mpIdx > 0 && 'border-t border-input/30')}>
-                        {/* MacroProcess row */}
-                        <div className="flex items-center gap-2 pl-8 pr-3 py-2 hover:bg-accent/30 transition-colors">
-                          {/* Tri-checkbox MP */}
-                          <TriCheckbox
-                            state={mpState}
-                            onChange={() => onToggleMacroProcess(mp)}
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => toggleMP(mp.id)}
-                            className="flex items-center gap-2.5 flex-1 text-left min-w-0"
-                          >
-                            <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-violet-50 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/20">
-                              <Layers className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+                        return (
+                          <div key={mp.id} className={cn(mpIdx > 0 && 'border-t border-input/30')}>
+                            <div className="flex items-center gap-2 pl-8 pr-3 py-2 hover:bg-accent/30 transition-colors">
+                              <TriCheckbox state={mpState} onChange={() => onToggleMacroProcess(mp)} />
+                              <button type="button" onClick={() => toggleMP(mp.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
+                                <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-violet-50 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/20">
+                                  <Layers className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium text-foreground truncate block">{mp.name}</span>
+                                  {mp.code && <span className="text-xs text-muted-foreground">{mp.code}</span>}
+                                </div>
+                              </button>
+                              {mpCount > 0 && (
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 flex-shrink-0">
+                                  {mpCount}
+                                </span>
+                              )}
+                              <button type="button" onClick={() => toggleMP(mp.id)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                                {mpExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                              </button>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-foreground truncate block">{mp.name}</span>
-                              {mp.code && <span className="text-xs text-muted-foreground">{mp.code}</span>}
-                            </div>
-                          </button>
 
-                          {mpCount > 0 && (
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 flex-shrink-0">
-                              {mpCount}
-                            </span>
-                          )}
-
-                          <button type="button" onClick={() => toggleMP(mp.id)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                            {mpExpanded
-                              ? <ChevronDown className="h-3.5 w-3.5" />
-                              : <ChevronRight className="h-3.5 w-3.5" />
-                            }
-                          </button>
-                        </div>
-
-                        {/* ── Processes ── */}
-                        {mpExpanded && (
-                          <div className="border-t border-input/20 bg-muted/30">
-                            {mp.processes.length === 0 ? (
-                              <p className="px-20 py-2 text-xs text-muted-foreground italic">Aucun processus</p>
-                            ) : mp.processes.map(process => {
-                              const isSelected = selectedProcessIds.includes(process.id.toString())
-                              return (
-                                <button
-                                  key={process.id}
-                                  type="button"
-                                  onClick={() => onToggleProcess(process)}
-                                  className={cn(
-                                    'w-full flex items-center gap-2.5 pl-[4.5rem] pr-4 py-2 text-left transition-all',
-                                    isSelected
-                                      ? 'bg-emerald-50 dark:bg-emerald-500/10'
-                                      : 'hover:bg-accent/20'
-                                  )}
-                                >
-                                  {/* Checkbox process */}
-                                  <div className={cn(
-                                    'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all',
-                                    isSelected
-                                      ? 'border-emerald-500 bg-emerald-500'
-                                      : 'border-gray-300 dark:border-gray-600'
-                                  )}>
-                                    {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className={cn(
-                                      'text-sm font-medium truncate block',
-                                      isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'
-                                    )}>
-                                      {process.name}
-                                    </span>
-                                    {process.code && (
-                                      <span className="text-xs text-muted-foreground">{process.code}</span>
-                                    )}
-                                  </div>
-                                  {isSelected && (
-                                    <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                                  )}
-                                </button>
-                              )
-                            })}
+                            {/* Processes */}
+                            {mpExpanded && (
+                              <div className="border-t border-input/20 bg-muted/30">
+                                {mp.processes.length === 0 ? (
+                                  <p className="px-20 py-2 text-xs text-muted-foreground italic">Aucun processus</p>
+                                ) : mp.processes
+                                    .filter(p => !q || matchedProcessIds?.has(p.id))
+                                    .map(process => {
+                                      const isSelected = selectedProcessIds.includes(process.id.toString())
+                                      return (
+                                        <button
+                                          key={process.id}
+                                          type="button"
+                                          onClick={() => onToggleProcess(process)}
+                                          className={cn(
+                                            'w-full flex items-center gap-2.5 pl-[4.5rem] pr-4 py-2 text-left transition-all',
+                                            isSelected ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'hover:bg-accent/20'
+                                          )}
+                                        >
+                                          <div className={cn(
+                                            'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                                            isSelected ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 dark:border-gray-600'
+                                          )}>
+                                            {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <span className={cn(
+                                              'text-sm font-medium truncate block',
+                                              isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'
+                                            )}>
+                                              {process.name}
+                                            </span>
+                                            {process.code && <span className="text-xs text-muted-foreground">{process.code}</span>}
+                                          </div>
+                                          {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />}
+                                        </button>
+                                      )
+                                    })}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
                 </div>
               )}
             </div>
@@ -516,6 +632,9 @@ export default function CreateFramework() {
     release_date: '', effective_date: '', retired_date: '',
     description: '', language: '', url_reference: '',
     tags: [] as string[],
+    documents: [] as File[],
+    document_categories: [] as (string | null)[],
+    document_descriptions: [] as (string | null)[],
   })
 
   const [jurisdictionsDialogOpen, setJurisdictionsDialogOpen] = useState(false)
@@ -536,7 +655,6 @@ export default function CreateFramework() {
     }
   }, [props.flash])
 
-  // ─── Refs pour éviter les closures stales ────────────────────────────────
   const processesRef = useRef<string[]>([])
   useEffect(() => { processesRef.current = data.processes }, [data.processes])
 
@@ -545,7 +663,15 @@ export default function CreateFramework() {
   useEffect(() => { jurisdictionsRef.current = data.jurisdictions }, [data.jurisdictions])
   useEffect(() => { tagsRef.current = data.tags }, [data.tags])
 
-  // ─── Toggle process individuel ───────────────────────────────────────────
+
+  const handleFilesChange = (files: FileUploadItem[]) => {
+    setData({
+      ...data,
+      documents: files.map((f) => f.file),
+      document_categories: files.map(() => null),
+      document_descriptions: files.map(() => null),
+    })
+  }
   const toggleProcess = (process: Process) => {
     const idStr = process.id.toString()
     const current = processesRef.current
@@ -556,49 +682,36 @@ export default function CreateFramework() {
     setData('processes', next)
   }
 
-  // ─── Toggle macro-process (tous ses enfants) ─────────────────────────────
   const toggleMacroProcess = (mp: MacroProcess) => {
     const procIds = mp.processes.map(p => p.id.toString())
     const current = processesRef.current
     const allSelected = procIds.every(id => current.includes(id))
-    let next: string[]
-    if (allSelected) {
-      // tout décocher
-      next = current.filter(id => !procIds.includes(id))
-    } else {
-      // tout cocher (ajouter ceux qui manquent)
-      const toAdd = procIds.filter(id => !current.includes(id))
-      next = [...current, ...toAdd]
-    }
+    const next = allSelected
+      ? current.filter(id => !procIds.includes(id))
+      : [...current, ...procIds.filter(id => !current.includes(id))]
     processesRef.current = next
     setData('processes', next)
   }
 
-  // ─── Toggle business unit (tous ses processus enfants) ───────────────────
   const toggleBusinessUnit = (bu: BusinessUnit) => {
     const allProcIds = bu.macro_processes.flatMap(mp => mp.processes.map(p => p.id.toString()))
     const current = processesRef.current
     const allSelected = allProcIds.every(id => current.includes(id))
-    let next: string[]
-    if (allSelected) {
-      next = current.filter(id => !allProcIds.includes(id))
-    } else {
-      const toAdd = allProcIds.filter(id => !current.includes(id))
-      next = [...current, ...toAdd]
-    }
+    const next = allSelected
+      ? current.filter(id => !allProcIds.includes(id))
+      : [...current, ...allProcIds.filter(id => !current.includes(id))]
     processesRef.current = next
     setData('processes', next)
   }
 
-  // ─── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     clearErrors()
     const errs: Record<string, string> = {}
-    if (!data.code.trim())           errs.code          = 'Code is required'
-    if (!data.name.trim())           errs.name          = 'Name is required'
-    if (!data.type)                  errs.type          = 'Type is required'
-    if (!data.status)                errs.status        = 'Status is required'
+    if (!data.code.trim())               errs.code          = 'Code is required'
+    if (!data.name.trim())               errs.name          = 'Name is required'
+    if (!data.type)                      errs.type          = 'Type is required'
+    if (!data.status)                    errs.status        = 'Status is required'
     if (data.jurisdictions.length === 0) errs.jurisdictions = 'At least one jurisdiction is required'
     if (Object.keys(errs).length > 0) {
       Object.entries(errs).forEach(([k, v]) => setError(k as any, v))
@@ -612,7 +725,6 @@ export default function CreateFramework() {
     })
   }
 
-  // ─── Jurisdiction handlers ────────────────────────────────────────────────
   const toggleJurisdiction = (item: Jurisdiction) => {
     const idStr = item.id.toString()
     const next = jurisdictionsRef.current.includes(idStr)
@@ -639,7 +751,6 @@ export default function CreateFramework() {
     }})
   }
 
-  // ─── Tag handlers ─────────────────────────────────────────────────────────
   const toggleTag = (item: Tag) => {
     const idStr = item.id.toString()
     const next = tagsRef.current.includes(idStr)
@@ -666,7 +777,6 @@ export default function CreateFramework() {
     }})
   }
 
-  // ─── Selected processes summary ───────────────────────────────────────────
   const allProcesses = businessUnits.flatMap(bu => bu.macro_processes.flatMap(mp => mp.processes))
   const selectedProcesses = allProcesses.filter(p => data.processes.includes(p.id.toString()))
 
@@ -674,7 +784,6 @@ export default function CreateFramework() {
     <AppLayout breadcrumbs={[{ title: 'Frameworks', href: '/frameworks' }, { title: 'Create', href: '' }]}>
       <Head title="Create Framework" />
 
-      {/* Flash */}
       <Dialog open={flashOpen} onOpenChange={setFlashOpen}>
         <DialogContent className={cn(flash?.type === 'success' ? 'border-green-600' : 'border-red-600')}>
           <DialogHeader>
@@ -687,15 +796,14 @@ export default function CreateFramework() {
         </DialogContent>
       </Dialog>
 
-      {/* Manage Dialogs */}
       <ManageDialog open={jurisdictionsDialogOpen} onOpenChange={setJurisdictionsDialogOpen}
         title="Manage Jurisdictions" description="Select geographic scopes for this framework"
-        icon={<Globe className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
+  icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
         items={jurisdictionsList} selectedIds={data.jurisdictions}
         onToggle={toggleJurisdiction} onAdd={createJurisdiction} onEdit={updateJurisdiction} onDelete={deleteJurisdiction} />
       <ManageDialog open={tagsDialogOpen} onOpenChange={setTagsDialogOpen}
         title="Manage Tags" description="Categorize and label this framework"
-        icon={<TagIcon className="h-5 w-5" />} accentFrom="#0ea5e9" accentTo="#06b6d4"
+  icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
         items={tagsList} selectedIds={data.tags}
         onToggle={toggleTag} onAdd={createTag} onEdit={updateTag} onDelete={deleteTag} />
 
@@ -779,7 +887,6 @@ export default function CreateFramework() {
               </div>
             </CardHeader>
             <CardContent className="space-y-8 pt-2">
-              {/* Jurisdictions */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Jurisdictions <span className="text-destructive text-base">*</span></Label>
@@ -803,7 +910,6 @@ export default function CreateFramework() {
                 {errors.jurisdictions && <p className="text-sm text-destructive">{errors.jurisdictions}</p>}
               </div>
 
-              {/* Tags */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label><TagIcon className="h-4 w-4 inline mr-1.5" />Tags</Label>
@@ -828,7 +934,7 @@ export default function CreateFramework() {
             </CardContent>
           </Card>
 
-          {/* ── Process Scope ── */}
+          {/* Process Scope */}
           <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
@@ -840,7 +946,6 @@ export default function CreateFramework() {
               </div>
             </CardHeader>
             <CardContent className="pt-2 space-y-4">
-              {/* Selected summary pills */}
               {selectedProcesses.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
                   <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 self-center mr-1">
@@ -854,7 +959,6 @@ export default function CreateFramework() {
                   ))}
                 </div>
               )}
-
               <ProcessSelector
                 businessUnits={businessUnits}
                 selectedProcessIds={data.processes}
@@ -878,9 +982,9 @@ export default function CreateFramework() {
             <CardContent className="pt-2">
               <div className="grid gap-6 md:grid-cols-3">
                 {[
-                  { label: 'Release Date', field: 'release_date' as const, open: releaseOpen, setOpen: setReleaseOpen },
-                  { label: 'Effective Date', field: 'effective_date' as const, open: effectiveOpen, setOpen: setEffectiveOpen },
-                  { label: 'Retired Date (optional)', field: 'retired_date' as const, open: retiredOpen, setOpen: setRetiredOpen },
+                  { label: 'Release Date',           field: 'release_date'   as const, open: releaseOpen,    setOpen: setReleaseOpen },
+                  { label: 'Effective Date',          field: 'effective_date' as const, open: effectiveOpen,  setOpen: setEffectiveOpen },
+                  { label: 'Retired Date (optional)', field: 'retired_date'   as const, open: retiredOpen,    setOpen: setRetiredOpen },
                 ].map(({ label, field, open, setOpen }) => (
                   <div key={field} className="space-y-2">
                     <Label>{label}</Label>
@@ -932,6 +1036,44 @@ export default function CreateFramework() {
                   <Input type="url" value={data.url_reference} onChange={e => setData('url_reference', e.target.value)} placeholder="https://www.iso.org/standard/..." />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2 border-b">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <FileUp className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Documents</CardTitle>
+                  <CardDescription className="text-xs">
+                    Attach files related to this framework (optional, max 10 MB each)
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-6">
+              <CardUpload
+                maxFiles={10}
+                maxSize={10 * 1024 * 1024}
+                accept="*"
+                multiple={true}
+                simulateUpload={true}
+                onFilesChange={handleFilesChange}
+                labels={{
+                  dropzone: 'Drag & drop files here, or click to select',
+                  browse: 'Browse files',
+                  maxSize: 'Max file size: 10 MB',
+                  filesCount: 'files uploaded',
+                  addFiles: 'Add more files',
+                  removeAll: 'Remove all',
+                }}
+              />
+              {errors.documents && (
+                <p className="text-xs text-destructive mt-2">{errors.documents}</p>
+              )}
             </CardContent>
           </Card>
 

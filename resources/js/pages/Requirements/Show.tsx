@@ -1,45 +1,30 @@
 // resources/js/pages/Requirements/Show.tsx
-import { Head, Link, router, usePage } from '@inertiajs/react'
+import React from 'react'
+import { Head, router, usePage } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
-  ArrowLeft,
-  Pencil,
-  Calendar,
-  Link2,
-  Tag,
-  FileText,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Building2,
-  ListTodo,
-  Globe,
+  ArrowLeft, Pencil, Calendar, Link2, Tag,
+  FileText, AlertCircle, Clock, ListTodo,
+  Download, File, FileSpreadsheet, FileImage,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { CardUpload, type FileUploadItem } from '@/components/card-upload';
 
+interface Framework { code: string; name: string }
+interface Process { name: string }
+interface TagItem { id: number; name: string }
 
-interface Framework {
-  code: string
-  name: string
-}
-
-interface Process {
-  name: string
-}
-
-interface TagItem {
+interface DocumentItem {
   id: number
   name: string
+  file_name: string
+  file_path: string
+  mime_type?: string
+  file_size?: number
+  url?: string
 }
 
 interface Requirement {
@@ -62,66 +47,66 @@ interface Requirement {
   created_at: string
   updated_at: string
 }
-interface DocumentItem {
-  id: number
-  file_name: string
-  file_path: string
-  url?: string
+
+const formatDate = (date?: string | null): string => {
+  if (!date) return '—'
+  try {
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return date
+    return format(d, 'dd MMMM yyyy', { locale: fr })
+  } catch { return date }
+}
+
+const formatBytes = (bytes?: number): string => {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const getStatusColor = (status: string) => ({
+  active: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
+  draft: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
+  archived: 'bg-slate-500/10 text-slate-700 border-slate-500/30 dark:bg-slate-900/40 dark:text-slate-300',
+}[status.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
+
+const getPriorityColor = (priority: string) => ({
+  high: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
+  medium: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
+  low: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
+}[priority.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
+
+const getComplianceColor = (level: string) => ({
+  mandatory: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
+  recommended: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
+  optional: 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300',
+}[level.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
+
+const getFileIcon = (mimeType?: string): React.ReactNode => {
+  if (!mimeType) return <File className="h-4 w-4 text-muted-foreground" />
+  if (mimeType.startsWith('image/')) return <FileImage className="h-4 w-4 text-blue-500" />
+  if (mimeType === 'application/pdf') return <FileText className="h-4 w-4 text-red-500" />
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+  return <FileText className="h-4 w-4 text-primary" />
 }
 
 export default function ShowRequirement() {
   const { requirement } = usePage<{ requirement: Requirement }>().props
 
-  const formatDate = (date?: string | null): string => {
-    if (!date) return '—'
-    try {
-      const d = new Date(date)
-      if (isNaN(d.getTime())) return date
-      return format(d, 'dd MMMM yyyy', { locale: fr })
-    } catch {
-      return date
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      active: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
-      draft: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
-      archived: 'bg-slate-500/10 text-slate-700 border-slate-500/30 dark:bg-slate-900/40 dark:text-slate-300',
-    }
-    return colors[status.toLowerCase()] || 'bg-gray-500/10 text-gray-700 border-gray-500/30 dark:bg-gray-800/40 dark:text-gray-300'
-  }
-
-  const getPriorityColor = (priority: string) => {
-    const colors: Record<string, string> = {
-      high: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
-      medium: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
-      low: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
-    }
-    return colors[priority.toLowerCase()] || 'bg-gray-500/10 text-gray-700 border-gray-500/30 dark:bg-gray-800/40 dark:text-gray-300'
-  }
-
-  const getComplianceColor = (level: string) => {
-    const colors: Record<string, string> = {
-      mandatory: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
-      recommended: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
-      optional: 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300',
-    }
-    return colors[level.toLowerCase()] || 'bg-gray-500/10 text-gray-700 border-gray-500/30 dark:bg-gray-800/40 dark:text-gray-300'
-  }
-
   const attachmentUrls = (requirement.attachments || '')
     .split('\n')
-    .map(line => line.trim())
-    .filter(line => line && line.startsWith('http'))
+    .map(l => l.trim())
+    .filter(l => l.startsWith('http'))
 
   const tags = requirement.tags ?? []
+  const documents = requirement.documents ?? []
 
   return (
     <AppLayout>
       <Head title={`Requirement • ${requirement.title}`} />
 
       <div className="p-6 lg:p-10 space-y-10 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 pb-4 border-b border-border/60">
           <div className="flex items-center gap-5">
@@ -141,9 +126,7 @@ export default function ShowRequirement() {
                 <Badge variant="outline" className="font-mono text-sm px-3 py-1 bg-muted/50">
                   {requirement.code}
                 </Badge>
-                <Badge
-                  className={`px-4 py-1.5 text-base font-medium rounded-full border ${getStatusColor(requirement.status)}`}
-                >
+                <Badge className={`px-4 py-1.5 text-base font-medium rounded-full border ${getStatusColor(requirement.status)}`}>
                   {requirement.status.charAt(0).toUpperCase() + requirement.status.slice(1)}
                 </Badge>
               </div>
@@ -160,20 +143,14 @@ export default function ShowRequirement() {
           </Button>
         </div>
 
-        {/* Badges rapides */}
+        {/* Quick badges */}
         <div className="flex flex-wrap gap-3">
-          <Badge
-            className={`px-5 py-1.5 text-base font-medium rounded-full border ${getPriorityColor(requirement.priority)}`}
-          >
+          <Badge className={`px-5 py-1.5 text-base font-medium rounded-full border ${getPriorityColor(requirement.priority)}`}>
             Priority: {requirement.priority.charAt(0).toUpperCase() + requirement.priority.slice(1)}
           </Badge>
-
-          <Badge
-            className={`px-5 py-1.5 text-base font-medium rounded-full border ${getComplianceColor(requirement.compliance_level)}`}
-          >
+          <Badge className={`px-5 py-1.5 text-base font-medium rounded-full border ${getComplianceColor(requirement.compliance_level)}`}>
             {requirement.compliance_level.charAt(0).toUpperCase() + requirement.compliance_level.slice(1)}
           </Badge>
-
           <Badge variant="outline" className="px-5 py-1.5 text-base">
             {requirement.frequency
               .replace('_', ' ')
@@ -183,10 +160,12 @@ export default function ShowRequirement() {
           </Badge>
         </div>
 
-        {/* Contenu principal */}
+        {/* Main grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Colonne principale */}
+
+          {/* Left column */}
           <div className="lg:col-span-2 space-y-8">
+
             {/* Description */}
             <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
               <CardHeader className="pb-4">
@@ -223,7 +202,6 @@ export default function ShowRequirement() {
                   <p className="text-sm font-medium text-muted-foreground">Type</p>
                   <p className="font-medium capitalize">{requirement.type || '—'}</p>
                 </div>
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Framework</p>
                   <p className="font-medium">
@@ -232,12 +210,10 @@ export default function ShowRequirement() {
                       : '—'}
                   </p>
                 </div>
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Process</p>
                   <p className="font-medium">{requirement.process?.name || '—'}</p>
                 </div>
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Frequency</p>
                   <p className="font-medium capitalize">
@@ -247,50 +223,67 @@ export default function ShowRequirement() {
               </CardContent>
             </Card>
 
-            {/* Attachments */}
+            {/* Documents */}
+            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                    Documents
+                    {documents.length > 0 && (
+                      <Badge variant="secondary" className="text-sm">
+                        {documents.length}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <a
+                        key={doc.id}
+                        href={`/requirements/${requirement.id}/documents/${doc.id}/download`}
+                        download
+                        className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/60 hover:bg-muted/40 hover:border-primary/30 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 rounded-md bg-muted/60 group-hover:bg-primary/10 transition-colors shrink-0">
+                            {getFileIcon(doc.mime_type)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{doc.file_name}</p>
+                            {doc.file_size && (
+                              <p className="text-xs text-muted-foreground">{formatBytes(doc.file_size)}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 text-muted-foreground py-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>No documents uploaded</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Attachments URLs */}
             <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10">
                     <Link2 className="h-5 w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-xl font-semibold">Attachments (links) (liens)</CardTitle>
+                  <CardTitle className="text-xl font-semibold">Attachments (links)</CardTitle>
                 </div>
               </CardHeader>
-              <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
-  <CardHeader className="pb-4">
-    <div className="flex items-center gap-3">
-      <div className="p-2 rounded-lg bg-primary/10">
-        <FileText className="h-5 w-5 text-primary" />
-      </div>
-      <CardTitle className="text-xl font-semibold">Documents</CardTitle>
-    </div>
-  </CardHeader>
-
-  <CardContent>
-    {requirement.documents && requirement.documents.length > 0 ? (
-      <div className="space-y-3">
-        {requirement.documents.map((doc) => (
-          <a
-            key={doc.id}
-            href={doc.url || `/storage/${doc.file_path}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/40 transition"
-          >
-            <FileText className="h-4 w-4 text-primary" />
-            <span className="text-sm">{doc.file_name}</span>
-          </a>
-        ))}
-      </div>
-    ) : (
-      <div className="flex items-center gap-3 text-muted-foreground py-4">
-        <AlertCircle className="h-5 w-5" />
-        <span>No documents uploaded</span>
-      </div>
-    )}
-  </CardContent>
-</Card>
               <CardContent>
                 {attachmentUrls.length > 0 ? (
                   <div className="space-y-4">
@@ -302,7 +295,7 @@ export default function ShowRequirement() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 text-primary hover:text-primary/80 hover:underline transition-all group text-base break-all"
                       >
-                        <div className="p-2 rounded-md bg-primary/5 group-hover:bg-primary/10 transition-colors">
+                        <div className="p-2 rounded-md bg-primary/5 group-hover:bg-primary/10 transition-colors shrink-0">
                           <Link2 className="h-4 w-4" />
                         </div>
                         <span>{url}</span>
@@ -317,40 +310,41 @@ export default function ShowRequirement() {
                 )}
               </CardContent>
             </Card>
+
           </div>
 
-{/* Sidebar */}
-<div className="space-y-8">
-  {/* Dates importantes */}
-  <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
-    <CardHeader className="pb-4">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Calendar className="h-5 w-5 text-primary" />
-        </div>
-        <CardTitle className="text-xl font-semibold">Key Dates</CardTitle>
-      </div>
-    </CardHeader>
-    <CardContent className="space-y-6">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          Effective Date
-        </div>
-        <p className="font-medium">
-          {formatDate(requirement.effective_date ?? new Date().toISOString().split('T')[0])}
-        </p>
-      </div>
+          {/* Sidebar */}
+          <div className="space-y-8">
 
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calendar className="h-4 w-4" />
-          Created at
-        </div>
-        <p className="font-medium">{formatDate(requirement.created_at)}</p>
-      </div>
-    </CardContent>
-  </Card>
+            {/* Key Dates */}
+            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl font-semibold">Key Dates</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    Effective Date
+                  </div>
+                  <p className="font-medium">
+                    {formatDate(requirement.effective_date ?? new Date().toISOString().split('T')[0])}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    Created at
+                  </div>
+                  <p className="font-medium">{formatDate(requirement.created_at)}</p>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Tags */}
             <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -380,6 +374,7 @@ export default function ShowRequirement() {
                 )}
               </CardContent>
             </Card>
+
           </div>
         </div>
       </div>

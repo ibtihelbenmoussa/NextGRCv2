@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Document;
+
 
 
 
@@ -67,5 +69,10 @@ public function activeReservation(?string $date = null): HasOne
 {
     return $this->hasOne(RequirementTestReservation::class)
                 ->where('date', $date ?? today()->toDateString());
+}
+
+public function documents()
+{
+    return $this->morphMany(Document::class, 'documentable');
 }
 }

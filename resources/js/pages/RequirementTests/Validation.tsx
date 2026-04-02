@@ -1,12 +1,10 @@
-// resources/js/pages/Validation.tsx (or wherever your validation page is)
 import { Head, router } from '@inertiajs/react';
 import { route } from 'ziggy-js';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import {
   Dialog,
@@ -33,7 +31,6 @@ import { cn } from '@/lib/utils';
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Test {
   id: number;
-  test_code: string;
   status: string;
   comment?: string;
   evidence?: any;
@@ -47,42 +44,50 @@ interface Test {
   };
 }
 
+interface Counts {
+  all: number;
+  pending: number;
+  accepted: number;
+  rejected: number;
+}
+
 interface Props {
   tests: {
     data: Test[];
     links: any;
     meta: any;
   };
+  counts: Counts;
+  tab: 'all' | 'pending' | 'accepted' | 'rejected';
 }
 
-// ─── Soft Pill + Dot Styles (consistent across the app) ───────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const validationStyles: Record<string, { pill: string; dot: string }> = {
   accepted: {
     pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot: 'bg-[#3B6D11] dark:bg-[#97C459]',
+    dot:  'bg-[#3B6D11] dark:bg-[#97C459]',
   },
   rejected: {
     pill: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-    dot: 'bg-[#A32D2D] dark:bg-[#E24B4A]',
+    dot:  'bg-[#A32D2D] dark:bg-[#E24B4A]',
   },
   pending: {
     pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot: 'bg-[#854F0B] dark:bg-[#EF9F27]',
+    dot:  'bg-[#854F0B] dark:bg-[#EF9F27]',
   },
 };
 
 const fallbackStyle = {
   pill: 'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
-  dot: 'bg-[#888780]',
+  dot:  'bg-[#888780]',
 };
 
-// ─── Validation Pill Component ────────────────────────────────────────────────
+// ─── ValidationPill ───────────────────────────────────────────────────────────
 function ValidationPill({ status }: { status: Test['validation_status'] }) {
   const key = status.toLowerCase();
-  const s = validationStyles[key] ?? fallbackStyle;
-
+  const s   = validationStyles[key] ?? fallbackStyle;
   const label = key === 'accepted' ? 'Accepted' : key === 'rejected' ? 'Rejected' : 'Pending';
-  const Icon = key === 'accepted' ? CheckCircle2 : key === 'rejected' ? XCircle : Clock;
+  const Icon  = key === 'accepted' ? CheckCircle2 : key === 'rejected' ? XCircle : Clock;
 
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full', s.pill)}>
@@ -93,7 +98,7 @@ function ValidationPill({ status }: { status: Test['validation_status'] }) {
   );
 }
 
-// ─── Animated counter hook ────────────────────────────────────────────────────
+// ─── useCountUp ───────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 900) {
   const [value, setValue] = useState(0);
   const rafRef = useRef<number | null>(null);
@@ -102,9 +107,9 @@ function useCountUp(target: number, duration = 900) {
     if (target === 0) { setValue(0); return; }
     const start = performance.now();
     const tick = (now: number) => {
-      const elapsed = now - start;
+      const elapsed  = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased    = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(target * eased));
       if (progress < 1) rafRef.current = requestAnimationFrame(tick);
     };
@@ -115,50 +120,35 @@ function useCountUp(target: number, duration = 900) {
   return value;
 }
 
-// ─── KPI Card (consistent with other pages) ───────────────────────────────────
+// ─── KpiCard ──────────────────────────────────────────────────────────────────
 function KpiCard({
   label, value, sub, fillPercent, fillColor, icon, valueColor, delay = 0,
 }: {
-  label: string;
-  value: number;
-  sub?: string;
-  fillPercent?: number;
-  fillColor: string;
-  icon: React.ReactNode;
-  valueColor?: string;
-  delay?: number;
+  label: string; value: number; sub?: string; fillPercent?: number;
+  fillColor: string; icon: React.ReactNode; valueColor?: string; delay?: number;
 }) {
-  const [mounted, setMounted] = useState(false);
+  const [mounted,  setMounted]  = useState(false);
   const [barWidth, setBarWidth] = useState(0);
   const animatedValue = useCountUp(mounted ? value : 0, 900);
 
   const cardRef = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
-  const [isHovered, setIsHovered] = useState(false);
-  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 });
+  const [tilt,     setTilt]     = useState({ x: 0, y: 0 });
+  const [isHovered,setIsHovered]= useState(false);
+  const [glowPos,  setGlowPos]  = useState({ x: 50, y: 50 });
 
   useEffect(() => {
-    const t1 = setTimeout(() => setMounted(true), delay);
+    const t1 = setTimeout(() => setMounted(true),            delay);
     const t2 = setTimeout(() => setBarWidth(fillPercent ?? 0), delay + 120);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [delay, fillPercent]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const card = cardRef.current;
-    if (!card) return;
+    const card = cardRef.current; if (!card) return;
     const rect = card.getBoundingClientRect();
-    const dx = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2);
-    const dy = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2);
+    const dx = (e.clientX - rect.left - rect.width  / 2) / (rect.width  / 2);
+    const dy = (e.clientY - rect.top  - rect.height / 2) / (rect.height / 2);
     setTilt({ x: dy * -10, y: dx * 10 });
-    setGlowPos({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
-    });
-  };
-
-  const handleMouseLeave = () => {
-    setTilt({ x: 0, y: 0 });
-    setIsHovered(false);
+    setGlowPos({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 });
   };
 
   const transformValue = isHovered
@@ -170,12 +160,12 @@ function KpiCard({
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={handleMouseLeave}
+      onMouseLeave={() => { setTilt({ x: 0, y: 0 }); setIsHovered(false); }}
       style={{
-        transform: transformValue,
+        transform:  transformValue,
         transition: isHovered
           ? 'transform 0.1s ease-out, box-shadow 0.2s ease-out, opacity 0.5s ease-out'
-          : 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease-out, opacity 0.5s ease-out',
+          : 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.4s ease-out, opacity 0.5s ease-out',
         boxShadow: isHovered
           ? `0 12px 32px -8px ${fillColor}40, 0 4px 16px -4px ${fillColor}25`
           : '0 1px 3px rgba(0,0,0,0.12)',
@@ -184,71 +174,54 @@ function KpiCard({
       className="bg-muted/40 rounded-lg p-4 flex flex-col gap-1.5 cursor-default relative overflow-hidden"
     >
       {isHovered && (
-        <div
-          className="pointer-events-none absolute inset-0 rounded-lg"
-          style={{ background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${fillColor}18 0%, transparent 65%)` }}
-        />
+        <div className="pointer-events-none absolute inset-0 rounded-lg"
+          style={{ background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${fillColor}18 0%, transparent 65%)` }} />
       )}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-lg transition-opacity duration-300"
-        style={{ background: `linear-gradient(90deg, transparent, ${fillColor}80, transparent)`, opacity: isHovered ? 1 : 0 }}
-      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-lg transition-opacity duration-300"
+        style={{ background: `linear-gradient(90deg,transparent,${fillColor}80,transparent)`, opacity: isHovered ? 1 : 0 }} />
+
       <div className="flex items-center justify-between relative z-10">
         <span className="text-xs text-muted-foreground font-mono tracking-wide uppercase">{label}</span>
-        <span className={cn('transition-all duration-300', isHovered ? 'text-foreground/80 scale-110' : 'text-muted-foreground/60')}>
-          {icon}
-        </span>
+        <span className={cn('transition-all duration-300', isHovered ? 'text-foreground/80 scale-110' : 'text-muted-foreground/60')}>{icon}</span>
       </div>
       <div className={cn('text-2xl font-semibold leading-none tabular-nums relative z-10 transition-transform duration-200', valueColor, isHovered && 'scale-105 origin-left')}>
         {animatedValue}
       </div>
       {sub && (
-        <div
-          className={cn('text-xs font-mono relative z-10 transition-opacity duration-500', mounted ? 'opacity-100' : 'opacity-0')}
-          style={{ color: fillColor, transitionDelay: `${delay + 350}ms` }}
-        >
+        <div className={cn('text-xs font-mono relative z-10 transition-opacity duration-500', mounted ? 'opacity-100' : 'opacity-0')}
+          style={{ color: fillColor, transitionDelay: `${delay + 350}ms` }}>
           {sub}
         </div>
       )}
       <div className="h-0.5 rounded-full bg-border mt-1 overflow-hidden relative z-10">
-        <div
-          className="h-0.5 rounded-full"
-          style={{
-            width: `${Math.min(barWidth, 100)}%`,
-            backgroundColor: fillColor,
-            transition: isHovered
-              ? 'width 0.3s ease-out, filter 0.2s ease-out'
-              : `width 900ms cubic-bezier(0.4, 0, 0.2, 1) ${delay + 150}ms`,
-            filter: isHovered ? `drop-shadow(0 0 3px ${fillColor})` : 'none',
-          }}
-        />
+        <div className="h-0.5 rounded-full" style={{
+          width: `${Math.min(barWidth, 100)}%`,
+          backgroundColor: fillColor,
+          transition: isHovered ? 'width 0.3s ease-out, filter 0.2s ease-out' : `width 900ms cubic-bezier(0.4,0,0.2,1) ${delay + 150}ms`,
+          filter: isHovered ? `drop-shadow(0 0 3px ${fillColor})` : 'none',
+        }} />
       </div>
     </div>
   );
 }
 
-// ─── Page Component ───────────────────────────────────────────────────────────
-export default function Validation({ tests }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedTest, setSelectedTest] = useState<Test | null>(null);
-  const [actionType, setActionType] = useState<'accept' | 'reject' | null>(null);
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function Validation({ tests, counts, tab }: Props) {
+  const [modalOpen,     setModalOpen]     = useState(false);
+  const [selectedTest,  setSelectedTest]  = useState<Test | null>(null);
+  const [actionType,    setActionType]    = useState<'accept' | 'reject' | null>(null);
   const [rejectComment, setRejectComment] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [processing,    setProcessing]    = useState(false);
 
-  const stats = useMemo(() => {
-    const all = tests.data;
-    const total = all.length;
-    const pending = all.filter(t => t.validation_status === 'pending').length;
-    const accepted = all.filter(t => t.validation_status === 'accepted').length;
-    const rejected = all.filter(t => t.validation_status === 'rejected').length;
-    return { total, pending, accepted, rejected };
-  }, [tests.data]);
+  const safeTotal = counts.all || 1;
 
-  const filteredTests = useMemo(() => {
-    if (activeFilter === 'all') return tests.data;
-    return tests.data.filter(t => t.validation_status === activeFilter);
-  }, [tests.data, activeFilter]);
+  // ── Navigation par tab (rechargement serveur) ─────────────────────────────
+  const handleTabChange = (newTab: 'all' | 'pending' | 'accepted' | 'rejected') => {
+    router.visit(route('requirement-tests.validation') + `?tab=${newTab}`, {
+      preserveScroll: true,
+      replace: true,
+    });
+  };
 
   const openModal = (test: Test, type: 'accept' | 'reject') => {
     setSelectedTest(test);
@@ -264,7 +237,10 @@ export default function Validation({ tests }: Props) {
       return;
     }
     setProcessing(true);
-    const routeName = actionType === 'accept' ? 'requirement-tests.accept' : 'requirement-tests.reject';
+    const routeName = actionType === 'accept'
+      ? 'requirement-tests.accept'
+      : 'requirement-tests.reject';
+
     router.patch(
       route(routeName, selectedTest.id),
       { comment: actionType === 'reject' ? rejectComment : undefined },
@@ -285,63 +261,47 @@ export default function Validation({ tests }: Props) {
     );
   };
 
-  const safeTotal = stats.total || 1;
-
   const kpiCards = [
     {
-      label: 'Total',
-      value: stats.total,
-      sub: 'tests on this page',
-      fillPercent: 100,
-      fillColor: '#378add',
-      icon: <ClipboardList className="h-4 w-4" />,
-      valueColor: 'text-foreground',
-      delay: 0,
+      label: 'Total', value: counts.all, sub: 'tests on this page',
+      fillPercent: 100, fillColor: '#378add',
+      icon: <ClipboardList className="h-4 w-4" />, valueColor: 'text-foreground', delay: 0,
     },
     {
-      label: 'Pending',
-      value: stats.pending,
-      sub: `${Math.round((stats.pending / safeTotal) * 100)}% of total`,
-      fillPercent: Math.round((stats.pending / safeTotal) * 100),
-      fillColor: '#ba7517',
+      label: 'Pending', value: counts.pending,
+      sub: `${Math.round((counts.pending / safeTotal) * 100)}% of total`,
+      fillPercent: Math.round((counts.pending / safeTotal) * 100), fillColor: '#ba7517',
       icon: <Clock className="h-4 w-4" />,
-      valueColor: stats.pending > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground',
-      delay: 80,
+      valueColor: counts.pending > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 80,
     },
     {
-      label: 'Accepted',
-      value: stats.accepted,
-      sub: `${Math.round((stats.accepted / safeTotal) * 100)}% of total`,
-      fillPercent: Math.round((stats.accepted / safeTotal) * 100),
-      fillColor: '#639922',
+      label: 'Accepted', value: counts.accepted,
+      sub: `${Math.round((counts.accepted / safeTotal) * 100)}% of total`,
+      fillPercent: Math.round((counts.accepted / safeTotal) * 100), fillColor: '#639922',
       icon: <ShieldCheck className="h-4 w-4" />,
-      valueColor: stats.accepted > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground',
-      delay: 160,
+      valueColor: counts.accepted > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 160,
     },
     {
-      label: 'Rejected',
-      value: stats.rejected,
-      sub: `${Math.round((stats.rejected / safeTotal) * 100)}% of total`,
-      fillPercent: Math.round((stats.rejected / safeTotal) * 100),
-      fillColor: '#e24b4a',
+      label: 'Rejected', value: counts.rejected,
+      sub: `${Math.round((counts.rejected / safeTotal) * 100)}% of total`,
+      fillPercent: Math.round((counts.rejected / safeTotal) * 100), fillColor: '#e24b4a',
       icon: <ShieldX className="h-4 w-4" />,
-      valueColor: stats.rejected > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground',
-      delay: 240,
+      valueColor: counts.rejected > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground', delay: 240,
     },
   ];
 
   const filterTabs = [
-    { key: 'all' as const, label: 'All', count: stats.total },
-    { key: 'pending' as const, label: 'Pending', count: stats.pending },
-    { key: 'accepted' as const, label: 'Accepted', count: stats.accepted },
-    { key: 'rejected' as const, label: 'Rejected', count: stats.rejected },
+    { key: 'all'      as const, label: 'All',      count: counts.all      },
+    { key: 'pending'  as const, label: 'Pending',  count: counts.pending  },
+    { key: 'accepted' as const, label: 'Accepted', count: counts.accepted },
+    { key: 'rejected' as const, label: 'Rejected', count: counts.rejected },
   ];
 
   const emptyState = {
-    all: { icon: <ClipboardList className="h-8 w-8 text-muted-foreground" />, title: 'No tests found', sub: 'Tests will appear here once they are submitted' },
-    pending: { icon: <Clock className="h-8 w-8 text-amber-400" />, title: 'No tests pending validation', sub: 'Tests will appear here once they are submitted' },
-    accepted: { icon: <ShieldCheck className="h-8 w-8 text-emerald-400" />, title: 'No accepted tests yet', sub: 'Try switching to a different filter' },
-    rejected: { icon: <ShieldX className="h-8 w-8 text-red-400" />, title: 'No rejected tests — all tests passed validation', sub: 'Try switching to a different filter' },
+    all:      { icon: <ClipboardList className="h-8 w-8 text-muted-foreground" />, title: 'No tests found',                          sub: 'Tests will appear here once they are submitted'  },
+    pending:  { icon: <Clock         className="h-8 w-8 text-amber-400"        />, title: 'No tests pending validation',             sub: 'Tests will appear here once they are submitted'  },
+    accepted: { icon: <ShieldCheck   className="h-8 w-8 text-emerald-400"      />, title: 'No accepted tests yet',                   sub: 'Try switching to a different filter'             },
+    rejected: { icon: <ShieldX       className="h-8 w-8 text-red-400"          />, title: 'No rejected tests — all tests passed',    sub: 'Try switching to a different filter'             },
   };
 
   return (
@@ -349,95 +309,101 @@ export default function Validation({ tests }: Props) {
       <Head title="Test Validation" />
 
       <div className="space-y-6 py-6 px-4">
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Test Validation</h1>
-            <p className="text-muted-foreground mt-1.5">Review and validate compliance test results</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Test Validation</h1>
+          <p className="text-muted-foreground mt-1.5">Review and validate compliance test results</p>
         </div>
 
-        {/* KPI Cards - Now consistent */}
+        {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ perspective: '1200px' }}>
-          {kpiCards.map((card) => (
-            <KpiCard key={card.label} {...card} />
-          ))}
+          {kpiCards.map((card) => <KpiCard key={card.label} {...card} />)}
         </div>
 
         <Separator />
 
         {/* Filter Tabs */}
         <div className="flex items-center gap-2 flex-wrap">
-          {filterTabs.map((tab) => (
+          {filterTabs.map((t) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveFilter(tab.key)}
+              key={t.key}
+              onClick={() => handleTabChange(t.key)}
               className={cn(
                 'inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-sm font-medium transition-all duration-150',
-                activeFilter === tab.key
+                tab === t.key
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'border-border/60 text-muted-foreground bg-muted/20 hover:bg-muted/40 hover:text-foreground'
               )}
             >
-              {tab.label}
-              <span
-                className={cn(
-                  'inline-flex items-center justify-center rounded-full text-xs font-semibold min-w-[20px] h-5 px-1.5',
-                  activeFilter === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {tab.count}
+              {t.label}
+              <span className={cn(
+                'inline-flex items-center justify-center rounded-full text-xs font-semibold min-w-[20px] h-5 px-1.5',
+                tab === t.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+              )}>
+                {t.count}
               </span>
             </button>
           ))}
         </div>
 
-        {/* Tests Table */}
+        {/* Table */}
         <div className="rounded-xl border border-border/60 overflow-hidden shadow-sm">
-          <div className="grid grid-cols-[130px_140px_1fr_130px_150px_160px] gap-4 px-5 py-3 bg-muted/40 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {/* Header */}
+          <div className="grid grid-cols-[140px_1fr_140px_180px_180px] gap-4 px-5 py-3 bg-muted/40 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
             <span>Validation</span>
-            <span>Test Code</span>
             <span>Requirement</span>
             <span>Date</span>
             <span>Comment</span>
             <span className="text-right">Actions</span>
           </div>
 
-          {filteredTests.length === 0 ? (
+          {tests.data.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="p-4 rounded-full bg-muted/40">{emptyState[activeFilter].icon}</div>
-              <p className="text-muted-foreground font-medium">{emptyState[activeFilter].title}</p>
-              <p className="text-sm text-muted-foreground/60">{emptyState[activeFilter].sub}</p>
+              <div className="p-4 rounded-full bg-muted/40">{emptyState[tab].icon}</div>
+              <p className="text-muted-foreground font-medium">{emptyState[tab].title}</p>
+              <p className="text-sm text-muted-foreground/60">{emptyState[tab].sub}</p>
             </div>
           ) : (
-            filteredTests.map((test, idx) => (
+            tests.data.map((test, idx) => (
               <div
                 key={test.id}
                 className={cn(
-                  'grid grid-cols-[130px_140px_1fr_130px_150px_160px] gap-4 px-5 py-4 items-center border-b last:border-0 transition-colors hover:bg-muted/20',
+                  'grid grid-cols-[140px_1fr_140px_180px_180px] gap-4 px-5 py-4 items-center border-b last:border-0 transition-colors hover:bg-muted/20',
                   idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'
                 )}
               >
-                <div>
-                  <ValidationPill status={test.validation_status} />
-                </div>
-                <div className="font-mono text-sm font-medium">{test.test_code || '—'}</div>
+                {/* Validation status */}
+                <div><ValidationPill status={test.validation_status} /></div>
+
+                {/* Requirement */}
                 <div className="min-w-0">
                   {test.requirement ? (
-                    <div>
+                    <>
                       <span className="text-xs font-mono text-muted-foreground">{test.requirement.code}</span>
                       <p className="text-sm font-medium truncate">{test.requirement.title}</p>
-                    </div>
+                    </>
                   ) : (
                     <span className="text-muted-foreground text-sm">—</span>
                   )}
                 </div>
+
+                {/* Date */}
                 <div className="text-sm text-muted-foreground">
-                  {test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy', { locale: enUS }) : '—'}
+                  {test.test_date
+                    ? format(new Date(test.test_date), 'MMM d, yyyy', { locale: enUS })
+                    : '—'}
                 </div>
-                <div className="text-sm text-muted-foreground truncate max-w-[140px]" title={test.comment || undefined}>
+
+                {/* Comment */}
+                <div
+                  className="text-sm text-muted-foreground truncate max-w-[170px]"
+                  title={test.comment || undefined}
+                >
                   {test.comment || '—'}
                 </div>
+
+                {/* Actions */}
                 <div className="flex justify-end gap-2">
                   {test.validation_status === 'pending' ? (
                     <>
@@ -469,54 +435,57 @@ export default function Validation({ tests }: Props) {
         </div>
       </div>
 
-      {/* Validation Modal */}
+      {/* Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-              {actionType === 'accept' ? (
-                <ShieldCheck className="h-5 w-5 text-emerald-400" />
-              ) : (
-                <ShieldX className="h-5 w-5 text-red-400" />
-              )}
+              {actionType === 'accept'
+                ? <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                : <ShieldX     className="h-5 w-5 text-red-400"     />}
               Test Validation
             </DialogTitle>
           </DialogHeader>
 
           <div className="py-4 space-y-6">
-            <div className="rounded-lg border border-border/60 bg-muted/20 px-5 py-4 space-y-2">
-              <p className="font-mono text-sm text-muted-foreground">{selectedTest?.test_code}</p>
+            {/* Info requirement */}
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-5 py-4 space-y-1">
+              {selectedTest?.requirement && (
+                <p className="text-xs font-mono text-muted-foreground">{selectedTest.requirement.code}</p>
+              )}
               <p className="font-medium">{selectedTest?.requirement?.title || 'Compliance Test'}</p>
+              {selectedTest?.test_date && (
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(selectedTest.test_date), 'EEEE, MMMM d, yyyy', { locale: enUS })}
+                </p>
+              )}
             </div>
 
+            {/* Accept / Reject toggle */}
             <div className="flex justify-center gap-6">
-              <button
-                onClick={() => setActionType('accept')}
-                className={cn(
-                  'flex flex-col items-center gap-2 px-8 py-5 rounded-xl border-2 transition-all duration-200',
-                  actionType === 'accept'
-                    ? 'border-emerald-500 bg-emerald-950/50 text-emerald-300 scale-105 shadow-lg shadow-emerald-950/50'
-                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:border-emerald-700 hover:text-emerald-400'
-                )}
-              >
-                <CheckCircle className="h-8 w-8" />
-                <span className="font-semibold text-sm">Accept</span>
-              </button>
-
-              <button
-                onClick={() => setActionType('reject')}
-                className={cn(
-                  'flex flex-col items-center gap-2 px-8 py-5 rounded-xl border-2 transition-all duration-200',
-                  actionType === 'reject'
-                    ? 'border-red-500 bg-red-950/50 text-red-300 scale-105 shadow-lg shadow-red-950/50'
-                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:border-red-700 hover:text-red-400'
-                )}
-              >
-                <XCircle className="h-8 w-8" />
-                <span className="font-semibold text-sm">Reject</span>
-              </button>
+              {(['accept', 'reject'] as const).map((type) => {
+                const isActive = actionType === type;
+                const Icon = type === 'accept' ? CheckCircle : XCircle;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setActionType(type)}
+                    className={cn(
+                      'flex flex-col items-center gap-2 px-8 py-5 rounded-xl border-2 transition-all duration-200',
+                      isActive && type === 'accept' && 'border-emerald-500 bg-emerald-950/50 text-emerald-300 scale-105 shadow-lg shadow-emerald-950/50',
+                      isActive && type === 'reject' && 'border-red-500     bg-red-950/50     text-red-300     scale-105 shadow-lg shadow-red-950/50',
+                      !isActive && type === 'accept' && 'border-border/60 bg-muted/20 text-muted-foreground hover:border-emerald-700 hover:text-emerald-400',
+                      !isActive && type === 'reject' && 'border-border/60 bg-muted/20 text-muted-foreground hover:border-red-700     hover:text-red-400',
+                    )}
+                  >
+                    <Icon className="h-8 w-8" />
+                    <span className="font-semibold text-sm capitalize">{type}</span>
+                  </button>
+                );
+              })}
             </div>
 
+            {/* Rejection reason */}
             {actionType === 'reject' && (
               <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
                 <Label className="flex items-center gap-1.5 text-sm font-medium">
@@ -543,7 +512,7 @@ export default function Validation({ tests }: Props) {
               className={cn(
                 'min-w-[140px]',
                 actionType === 'accept' ? 'bg-emerald-700 hover:bg-emerald-600 text-white' :
-                actionType === 'reject' ? 'bg-red-700 hover:bg-red-600 text-white' : ''
+                actionType === 'reject' ? 'bg-red-700     hover:bg-red-600     text-white' : ''
               )}
             >
               {processing ? (
@@ -558,9 +527,7 @@ export default function Validation({ tests }: Props) {
                 <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Confirm Accept</span>
               ) : actionType === 'reject' ? (
                 <span className="flex items-center gap-2"><XCircle className="h-4 w-4" /> Confirm Reject</span>
-              ) : (
-                'Select an action'
-              )}
+              ) : 'Select an action'}
             </Button>
           </DialogFooter>
         </DialogContent>

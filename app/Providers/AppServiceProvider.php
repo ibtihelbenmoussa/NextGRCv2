@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
+use App\Services\WorkingDayService;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -12,7 +14,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+            $this->app->singleton(WorkingDayService::class);
+
     }
 
     /**
