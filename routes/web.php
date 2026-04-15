@@ -13,6 +13,8 @@ use App\Http\Controllers\RequirementController;
 use App\Http\Controllers\TestResultController;
 use App\Http\Controllers\PredefinedTestRequirmentController;
 use App\Http\Controllers\RequirementTestReservationController;
+use App\Http\Controllers\GapAssessmentController;
+
 
 
 Route::get('/', function () {
@@ -200,6 +202,16 @@ Route::delete('requirements/{requirement}/documents/{document}',
     ->name('requirements.documents.destroy');
 
 Route::resource('requirements', RequirementController::class);
+   // ================= Gap Assessment =================
+
+Route::get('/gapassessment', [GapAssessmentController::class, 'index'])
+    ->name('gapassessment.index');
+
+Route::post('/gapassessment', [GapAssessmentController::class, 'store'])
+    ->name('gapassessment.store');
+
+Route::get('/gapassessment/create', [GapAssessmentController::class, 'create'])
+    ->name('gapassessment.create');
    // ================= REQUIREMENT TESTS =================
 
 // ✅ Routes statiques EN PREMIER

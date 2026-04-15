@@ -50,19 +50,33 @@ function autoInputClass(isAuto: boolean) {
   return 'border-[#97C459] focus-visible:ring-[#97C459]/30 bg-[#EAF3DE]/10'
 }
 
+// ─── Helper : génère le test_code depuis requirement + framework + date ────────
+
+function buildTestCode(requirement: Requirement, dateStr?: string): string {
+  const today = dateStr ?? format(new Date(), 'yyyy-MM-dd')
+  const parts: string[] = []
+  if (requirement.framework?.code) parts.push(requirement.framework.code.toUpperCase())
+  if (requirement.code)            parts.push(requirement.code.toUpperCase())
+  parts.push(today)
+  return parts.join('-')
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Create({ requirement, defaultDate }: Props) {
 
-const savedDate = typeof window !== 'undefined'
-  ? localStorage.getItem('selectedComplianceDate')
-  : null
+  const savedDate = typeof window !== 'undefined'
+    ? localStorage.getItem('selectedComplianceDate')
+    : null
 
-const resolvedDate = savedDate ?? defaultDate ?? format(new Date(), 'yyyy-MM-dd')
+  const resolvedDate = savedDate ?? defaultDate ?? format(new Date(), 'yyyy-MM-dd')
   const isBackfill   = defaultDate !== undefined && defaultDate !== format(new Date(), 'yyyy-MM-dd')
 
+  // ← test_code pré-rempli dès l'init avec framework + requirement + date
+  const initialTestCode = buildTestCode(requirement, resolvedDate)
+
   const { data, setData, post, processing, errors, setError, clearErrors, recentlySuccessful } = useForm({
-    test_code:      '',
+    test_code:      initialTestCode,
     name:           '',
     objective:      '',
     procedure:      '',
@@ -72,33 +86,41 @@ const resolvedDate = savedDate ?? defaultDate ?? format(new Date(), 'yyyy-MM-dd'
     evidence:       '',
     requirement_id: requirement.id,
     test_date:      resolvedDate,
-    tested_at: resolvedDate,
+    tested_at:      resolvedDate,
     comment:        '',
     failure_reason: '',
   })
 
   // Tracks which fields were auto-filled
-  const [autoFields, setAutoFields] = useState<Set<string>>(new Set())
-useEffect(() => {
-  const savedDate = localStorage.getItem('selectedComplianceDate');
+  // test_code est toujours auto-rempli au départ
+  const [autoFields, setAutoFields] = useState<Set<string>>(new Set(['test_code']))
 
-  if (savedDate) {
-    setData(prev => ({
-      ...prev,
-      test_date: savedDate,
-      tested_at: format(new Date(), 'yyyy-MM-dd'),
-    }));
-  }
-}, []);
+  useEffect(() => {
+    const savedDate = localStorage.getItem('selectedComplianceDate')
+
+    if (savedDate) {
+      // Recalcule le test_code avec la date sauvegardée
+      const updatedTestCode = buildTestCode(requirement, savedDate)
+      setData(prev => ({
+        ...prev,
+        test_date:  savedDate,
+        tested_at:  format(new Date(), 'yyyy-MM-dd'),
+        test_code:  updatedTestCode,
+      }))
+      setAutoFields(prev => new Set(prev).add('test_code'))
+    }
+  }, [])
+
   useEffect(() => {
     fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
       .then(r => r.json())
       .then(predefined => {
         if (predefined && predefined.id) {
-          const filled = new Set<string>()
+          const filled = new Set<string>(autoFields)
           const updates: Partial<typeof data> = {}
 
-          if (predefined.test_code) { updates.test_code = predefined.test_code; filled.add('test_code') }
+          // test_code : on ne l'écrase PAS avec le predefined,
+          // on garde notre format framework-requirement-date
           if (predefined.test_name) { updates.name      = predefined.test_name;  filled.add('name')      }
           if (predefined.objective) { updates.objective  = predefined.objective;  filled.add('objective') }
           if (predefined.procedure) { updates.procedure  = predefined.procedure;  filled.add('procedure') }
@@ -130,38 +152,26 @@ useEffect(() => {
     return isValid
   }
 
-  /* const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!validateForm()) return
-    post(route('requirements.test.store', requirement.id), {
-      preserveScroll: true,
+
+    const savedDate = localStorage.getItem('selectedComplianceDate')
+    const testDate  = savedDate || data.test_date
+    const testedAt  = format(new Date(), 'yyyy-MM-dd')
+
+    router.post(route('requirements.test.store', requirement.id), {
+      ...data,
+      test_date: testDate,
+      tested_at: testedAt,
+    }, {
       onSuccess: () => {
-        window.location.href = route('req-testing.index') + `?date=${data.test_date}`
+        localStorage.removeItem('selectedComplianceDate')
+        router.visit(route('req-testing.index') + `?date=${testDate}`)
       },
     })
   }
- */
-const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!validateForm()) return;
 
-  const savedDate = localStorage.getItem('selectedComplianceDate');
-
-  const testDate = savedDate || data.test_date;
-  const testedAt = format(new Date(), 'yyyy-MM-dd');
-
-  router.post(route('requirements.test.store', requirement.id), {
-    ...data,
-    test_date: testDate,
-    tested_at: testedAt,
-  }, {
-    onSuccess: () => {
-      localStorage.removeItem('selectedComplianceDate');
-      router.visit(route('req-testing.index') + `?date=${testDate}`);
-    },
-  });
-};
   const displayDate = (() => {
     try { return format(parseISO(resolvedDate), 'MMM dd, yyyy') }
     catch { return format(new Date(), 'MMM dd, yyyy') }
@@ -233,9 +243,14 @@ const handleSubmit = (e: React.FormEvent) => {
                       id="test_code"
                       placeholder="TEST-2025-001"
                       value={data.test_code}
-                      onChange={e => { setData('test_code', e.target.value.trim().toUpperCase()); if (errors.test_code) clearErrors('test_code') }}
+                      onChange={e => {
+                        setData('test_code', e.target.value.trim().toUpperCase())
+                        // Si l'utilisateur modifie manuellement, retire le badge auto
+                        setAutoFields(prev => { const s = new Set(prev); s.delete('test_code'); return s })
+                        if (errors.test_code) clearErrors('test_code')
+                      }}
                       className={cn('h-11 text-base transition-all', autoInputClass(isAuto('test_code')), errors.test_code && 'border-red-500')}
-                      maxLength={50}
+                      maxLength={80}
                     />
                     {errors.test_code && <p className="text-red-600 text-sm mt-1.5">{errors.test_code}</p>}
                   </div>

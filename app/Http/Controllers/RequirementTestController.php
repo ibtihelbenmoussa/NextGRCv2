@@ -450,7 +450,7 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
             $request->query('date', today()->format('Y-m-d'))
         )->startOfDay();
 
-        $requirement->load('framework', 'process', 'tags');
+        $requirement->load('framework', 'processes', 'tags');
 
         return Inertia::render('RequirementTests/Create', [
             'requirement'  => $requirement,
@@ -514,7 +514,7 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
         ]);
 
         if ($requirement->auto_validate) {
-            $this->advanceEffectiveDate($requirement);   // ← working days ✅
+            $this->advanceEffectiveDate($requirement);   
         }
 
         return redirect()

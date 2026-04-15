@@ -57,7 +57,7 @@ const data = {
                 /* { title: 'Predefined Tests', url: '/predefined-tests' }, */
             ],
         },
-        {
+ /*        {
             title: 'Audit Management',
             url: '/audit-missions',
             icon: Briefcase,
@@ -68,7 +68,7 @@ const data = {
                 { title: 'Closed', url: '/audit-missions?status=closed' },
                 { title: 'Documents', url: '/requested-documents' },
             ],
-        },
+        }, */
         {
             title: 'Compliance Management',
             url: '/compliance-management',
@@ -76,6 +76,7 @@ const data = {
             items: [
                 { title: 'Frameworks', url: '/frameworks' },
                 { title: 'Requirements', url: '/requirements' },
+                { title: 'Gap Assessment', url: '/gapassessment' },
                 //{ title: 'Predefined Tests', url: '/predefined-tests/requirement' },
                  { title: 'Requirement tests', url: '/req-testing' },
                 { title: 'Validation', url: '/requirement-tests/validation' },],

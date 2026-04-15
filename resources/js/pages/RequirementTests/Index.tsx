@@ -618,41 +618,43 @@ export default function RequirementTestsIndex({
       size: 48,
     },
 
-    // ─── Code ────────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'code',
-      header: ({ column }) => (
-        <div className="flex items-center gap-1.5">
-          <Key className="h-4 w-4 text-muted-foreground" />
-          <DataTableColumnHeader column={column} title="Code" />
-        </div>
-      ),
-      cell: ({ row }) => {
-        const req = row.original;
-        const missed = isMissedRow(req);
-        const due = isDueRow(req);
-        const selected = selectedIds.has(req.id);
+    // ─── Code ────────────────────────────────────────────────────────────────────
+{
+  accessorKey: 'code',
+  header: ({ column }) => (
+    <div className="flex items-center gap-1.5">
+      <Key className="h-4 w-4 text-muted-foreground" />
+      <DataTableColumnHeader column={column} title="Code" />
+    </div>
+  ),
+  cell: ({ row }) => {
+    const req      = row.original;
+    const missed   = isMissedRow(req);
+    const due      = isDueRow(req);
+    const selected = selectedIds.has(req.id);
 
-        return (
-          <div className="flex items-center gap-2">
-            {(missed || (due && selected)) && (
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${missed ? 'bg-red-500' : 'bg-amber-500'}`} />
-              </span>
-            )}
-            <div className={cn(
-              'font-mono font-medium',
-              missed && 'text-red-400',
-              selected && !missed && 'text-amber-400'
-            )}>
-              {row.getValue('code') || '—'}
-            </div>
-          </div>
-        );
-      },
-      size: 140,
-    },
+const composed = req.code ?? '—';
+
+    return (
+      <div className="flex items-center gap-2">
+        {(missed || (due && selected)) && (
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${missed ? 'bg-red-500' : 'bg-amber-500'}`} />
+          </span>
+        )}
+        <div className={cn(
+          'font-mono font-medium',
+          missed   && 'text-red-400',
+          selected && !missed && 'text-amber-400'
+        )}>
+          {composed}
+        </div>
+      </div>
+    );
+  },
+  size: 220,  
+},
 
     // ─── Title ───────────────────────────────────────────────────────────────
     {

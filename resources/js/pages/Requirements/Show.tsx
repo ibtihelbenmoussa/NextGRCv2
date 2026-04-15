@@ -14,7 +14,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 interface Framework { code: string; name: string }
-interface Process { name: string }
+interface Process { id: number; name: string; code?: string }
 interface TagItem { id: number; name: string }
 
 interface DocumentItem {
@@ -37,7 +37,7 @@ interface Requirement {
   priority: string
   frequency: string
   framework?: Framework | null
-  process?: Process | null
+  processes?: Process[] | null
   tags?: TagItem[] | null
   effective_date?: string | null
   completion_date?: string | null
@@ -65,21 +65,21 @@ const formatBytes = (bytes?: number): string => {
 }
 
 const getStatusColor = (status: string) => ({
-  active: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
-  draft: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
+  active:   'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
+  draft:    'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
   archived: 'bg-slate-500/10 text-slate-700 border-slate-500/30 dark:bg-slate-900/40 dark:text-slate-300',
 }[status.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
 
 const getPriorityColor = (priority: string) => ({
-  high: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
+  high:   'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
   medium: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300',
-  low: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
+  low:    'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
 }[priority.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
 
 const getComplianceColor = (level: string) => ({
-  mandatory: 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
+  mandatory:   'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-950/40 dark:text-red-300',
   recommended: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300',
-  optional: 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300',
+  optional:    'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300',
 }[level.toLowerCase()] ?? 'bg-gray-500/10 text-gray-700 border-gray-500/30')
 
 const getFileIcon = (mimeType?: string): React.ReactNode => {
@@ -98,8 +98,9 @@ export default function ShowRequirement() {
     .map(l => l.trim())
     .filter(l => l.startsWith('http'))
 
-  const tags = requirement.tags ?? []
+  const tags      = requirement.tags      ?? []
   const documents = requirement.documents ?? []
+  const processes = requirement.processes ?? []
 
   return (
     <AppLayout>
@@ -198,10 +199,12 @@ export default function ShowRequirement() {
                 </div>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Type</p>
                   <p className="font-medium capitalize">{requirement.type || '—'}</p>
                 </div>
+
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Framework</p>
                   <p className="font-medium">
@@ -210,16 +213,29 @@ export default function ShowRequirement() {
                       : '—'}
                   </p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Process</p>
-                  <p className="font-medium">{requirement.process?.name || '—'}</p>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <p className="text-sm font-medium text-muted-foreground">Processes</p>
+                  {processes.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {processes.map((p) => (
+                        <Badge key={p.id} variant="outline" className="font-mono text-xs">
+                          {p.code ? `${p.code} — ${p.name}` : p.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-medium">—</p>
+                  )}
                 </div>
+
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Frequency</p>
                   <p className="font-medium capitalize">
                     {requirement.frequency.replace('_', ' ') || '—'}
                   </p>
                 </div>
+
               </CardContent>
             </Card>
 
@@ -305,7 +321,7 @@ export default function ShowRequirement() {
                 ) : (
                   <div className="flex items-center gap-3 text-muted-foreground py-4">
                     <AlertCircle className="h-5 w-5" />
-                    <span>Aucune pièce jointe ajoutée</span>
+                    <span>No attachments added</span>
                   </div>
                 )}
               </CardContent>

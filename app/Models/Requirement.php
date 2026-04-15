@@ -30,10 +30,11 @@ class Requirement extends Model
         return $this->belongsTo(Framework::class);
     }
 
-    public function process()
-    {
-        return $this->belongsTo(Process::class);
-    }
+   public function processes(): BelongsToMany
+{
+    return $this->belongsToMany(Process::class, 'process_requirement')
+        ->withTimestamps();
+}
 
     public function tests()
     {
@@ -74,5 +75,9 @@ public function activeReservation(?string $date = null): HasOne
 public function documents()
 {
     return $this->morphMany(Document::class, 'documentable');
+}
+public function gapAssessments()
+{
+    return $this->hasMany(GapAssessment::class);
 }
 }
