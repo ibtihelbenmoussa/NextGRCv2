@@ -14,6 +14,7 @@ use App\Http\Controllers\TestResultController;
 use App\Http\Controllers\PredefinedTestRequirmentController;
 use App\Http\Controllers\RequirementTestReservationController;
 use App\Http\Controllers\GapAssessmentController;
+use App\Http\Controllers\ActionPlanController;
 
 
 
@@ -166,8 +167,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('frameworks/export', [FrameworkController::class, 'export'])->name('frameworks.export');
     Route::get('frameworks/{framework}/documents/{document}/download', [FrameworkController::class, 'downloadDocument'])
         ->name('frameworks.documents.download');
-        Route::delete('frameworks/{framework}/documents/{document}', [FrameworkController::class, 'destroyDocument'])
-    ->name('frameworks.documents.destroy');
+    Route::delete('frameworks/{framework}/documents/{document}', [FrameworkController::class, 'destroyDocument'])
+        ->name('frameworks.documents.destroy');
 
     Route::get('frameworks', [FrameworkController::class, 'index'])->name('frameworks.index');
     Route::get('frameworks/create', [FrameworkController::class, 'create'])->name('frameworks.create');
@@ -186,62 +187,79 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ================= REQUIREMENTS =================
 
-Route::get('requirements/export', [RequirementController::class, 'export'])
-    ->name('requirements.export');
+    Route::get('requirements/export', [RequirementController::class, 'export'])
+        ->name('requirements.export');
 
-Route::get('requirements/frameworks/{framework}/processes',
-    [RequirementController::class, 'getProcessesByFramework'])
-    ->name('requirements.processes-by-framework');
+    Route::get(
+        'requirements/frameworks/{framework}/processes',
+        [RequirementController::class, 'getProcessesByFramework']
+    )
+        ->name('requirements.processes-by-framework');
 
-Route::get('requirements/{requirement}/documents/{document}/download',
-    [RequirementController::class, 'downloadDocument'])
-    ->name('requirements.documents.download');
+    Route::get(
+        'requirements/{requirement}/documents/{document}/download',
+        [RequirementController::class, 'downloadDocument']
+    )
+        ->name('requirements.documents.download');
 
-Route::delete('requirements/{requirement}/documents/{document}',
-    [RequirementController::class, 'destroyDocument'])
-    ->name('requirements.documents.destroy');
+    Route::delete(
+        'requirements/{requirement}/documents/{document}',
+        [RequirementController::class, 'destroyDocument']
+    )
+        ->name('requirements.documents.destroy');
 
-Route::resource('requirements', RequirementController::class);
-   // ================= Gap Assessment =================
+    Route::resource('requirements', RequirementController::class);
+    // ================= Gap Assessment =================
 
-Route::get('/gapassessment', [GapAssessmentController::class, 'index'])
-    ->name('gapassessment.index');
+    Route::get('/gapassessment', [GapAssessmentController::class, 'index'])
+        ->name('gapassessment.index');
 
-Route::post('/gapassessment', [GapAssessmentController::class, 'store'])
-    ->name('gapassessment.store');
+    Route::post('/gapassessment', [GapAssessmentController::class, 'store'])
+        ->name('gapassessment.store');
 
-Route::get('/gapassessment/create', [GapAssessmentController::class, 'create'])
-    ->name('gapassessment.create');
-   // ================= REQUIREMENT TESTS =================
+    Route::get('/gapassessment/create', [GapAssessmentController::class, 'create'])
+        ->name('gapassessment.create');
+    Route::get('gapassessment/{gapassessment}/edit', [GapAssessmentController::class, 'edit'])->name('gapassessment.edit');
+    Route::put('gapassessment/{gapassessment}', [GapAssessmentController::class, 'update'])->name('gapassessment.update');
+    Route::delete('gapassessment/{gapassessment}', [GapAssessmentController::class, 'destroy'])->name('gapassessment.destroy');
+    Route::get('gapassessment/{gapassessment}', [GapAssessmentController::class, 'show']);
 
-// ✅ Routes statiques EN PREMIER
-Route::get('requirement-tests/validation', [RequirementTestController::class, 'validation'])
-    ->name('requirement-tests.validation');
+    // Action Plans
 
-Route::get('requirement-tests/export', [RequirementTestController::class, 'export'])
-    ->name('requirement-tests.export');
+    Route::resource('action-plans', ActionPlanController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
 
-Route::patch('requirement-tests/{requirementTest}/accept', [RequirementTestController::class, 'accept'])
-    ->name('requirement-tests.accept');
 
-Route::patch('requirement-tests/{requirementTest}/reject', [RequirementTestController::class, 'reject'])
-    ->name('requirement-tests.reject');
+    // ================= REQUIREMENT TESTS =================
 
-Route::get('req-testing', [RequirementController::class, 'getRequirementsForTesting'])
-    ->name('req-testing.index');
+    // ✅ Routes statiques EN PREMIER
+    Route::get('requirement-tests/validation', [RequirementTestController::class, 'validation'])
+        ->name('requirement-tests.validation');
 
-Route::get('requirements/{requirement}/test/create', [RequirementTestController::class, 'createForRequirement'])
-    ->name('requirements.test.create');
+    Route::get('requirement-tests/export', [RequirementTestController::class, 'export'])
+        ->name('requirement-tests.export');
 
-Route::post('requirements/{requirement}/test', [RequirementTestController::class, 'storeForRequirement'])
-    ->name('requirements.test.store');
+    Route::patch('requirement-tests/{requirementTest}/accept', [RequirementTestController::class, 'accept'])
+        ->name('requirement-tests.accept');
 
-// ✅ Resource EN DERNIER
-Route::resource('requirement-tests', RequirementTestController::class)
-    ->only(['index', 'edit', 'update', 'destroy']);
+    Route::patch('requirement-tests/{requirementTest}/reject', [RequirementTestController::class, 'reject'])
+        ->name('requirement-tests.reject');
 
-Route::get('requirement-tests/{requirementTest}', [RequirementTestController::class, 'show'])
-    ->name('requirement-tests.show');
+    Route::get('req-testing', [RequirementController::class, 'getRequirementsForTesting'])
+        ->name('req-testing.index');
+
+    Route::get('requirements/{requirement}/test/create', [RequirementTestController::class, 'createForRequirement'])
+        ->name('requirements.test.create');
+
+    Route::post('requirements/{requirement}/test', [RequirementTestController::class, 'storeForRequirement'])
+        ->name('requirements.test.store');
+
+    // ✅ Resource EN DERNIER
+    Route::resource('requirement-tests', RequirementTestController::class)
+        ->only(['index', 'edit', 'update', 'destroy']);
+
+    Route::get('requirement-tests/{requirementTest}', [RequirementTestController::class, 'show'])
+        ->name('requirement-tests.show');
 
     // ================= TEST RESULTS =================
     Route::post('test-results', [TestResultController::class, 'store'])

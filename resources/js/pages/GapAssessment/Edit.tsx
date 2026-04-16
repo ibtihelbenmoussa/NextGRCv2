@@ -23,8 +23,11 @@ import {
     AlertCircle,
     XCircle,
     ChevronRight,
+    Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Requirement {
     id: number;
@@ -32,14 +35,24 @@ interface Requirement {
     code?: string;
 }
 
+interface GapAssessment {
+    id: number;
+    requirement_id: number;
+    current_state: string | null;
+    expected_state: string | null;
+    gap_description: string | null;
+    compliance_level: string;
+    score: number | null;
+    recommendation: string | null;
+    requirement: Requirement;
+}
+
 interface Props {
+    gapAssessment: GapAssessment;
     requirements: Requirement[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Gap Assessment', href: '/gapassessment' },
-    { title: 'New Assessment', href: '/gapassessment/create' },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getComplianceFromScore = (score: number) => {
     if (score >= 75) return 'compliant';
@@ -80,7 +93,7 @@ const complianceConfig = {
     },
 };
 
-// ── Step indicator ────────────────────────────────────────────────────────────
+// ─── Shared sub-components ────────────────────────────────────────────────────
 
 function StepDivider({ label }: { label: string }) {
     return (
@@ -93,8 +106,6 @@ function StepDivider({ label }: { label: string }) {
         </div>
     );
 }
-
-// ── Field wrapper ─────────────────────────────────────────────────────────────
 
 function Field({
     label,
@@ -116,15 +127,11 @@ function Field({
                 {required && <span className="ml-1 text-red-500">*</span>}
             </Label>
             {children}
-            {hint && !error && (
-                <p className="text-xs text-muted-foreground">{hint}</p>
-            )}
+            {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
             {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
     );
 }
-
-// ── Section card ──────────────────────────────────────────────────────────────
 
 function Section({
     icon: Icon,
@@ -141,16 +148,12 @@ function Section({
 }) {
     return (
         <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
-            {/* Header strip */}
             <div className="flex items-start gap-3 px-5 py-4 border-b border-border bg-muted/30">
                 <div
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg mt-0.5"
                     style={{ backgroundColor: accent ? `${accent}18` : undefined }}
                 >
-                    <Icon
-                        className="h-4 w-4"
-                        style={{ color: accent ?? 'currentColor' }}
-                    />
+                    <Icon className="h-4 w-4" style={{ color: accent ?? 'currentColor' }} />
                 </div>
                 <div>
                     <p className="text-sm font-semibold text-foreground">{title}</p>
@@ -164,22 +167,28 @@ function Section({
     );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function Create({ requirements }: Props) {
-    const { data, setData, post, processing, errors } = useForm({
-        requirement_id: '',
-        current_state: '',
-        expected_state: '',
-        gap_description: '',
-        compliance_level: '',
-        score: '',
-        recommendation: '',
+export default function Edit({ gapAssessment, requirements }: Props) {
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Gap Assessment', href: '/gapassessment' },
+        { title: gapAssessment.requirement?.title ?? 'Assessment', href: `/gapassessment/${gapAssessment.id}` },
+        { title: 'Edit', href: `/gapassessment/${gapAssessment.id}/edit` },
+    ];
+
+    const { data, setData, put, processing, errors } = useForm({
+        requirement_id: String(gapAssessment.requirement_id),
+        current_state: gapAssessment.current_state ?? '',
+        expected_state: gapAssessment.expected_state ?? '',
+        gap_description: gapAssessment.gap_description ?? '',
+        compliance_level: gapAssessment.compliance_level ?? '',
+        score: gapAssessment.score !== null ? String(gapAssessment.score) : '',
+        recommendation: gapAssessment.recommendation ?? '',
     });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/gapassessment');
+        put(`/gapassessment/${gapAssessment.id}`);
     };
 
     const handleScoreChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -201,7 +210,7 @@ export default function Create({ requirements }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="New Gap Assessment" />
+            <Head title={`Edit – ${gapAssessment.requirement?.title ?? 'Assessment'}`} />
 
             <div className="space-y-6 p-4">
 
@@ -209,18 +218,23 @@ export default function Create({ requirements }: Props) {
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 shadow-sm">
-                            <ClipboardList className="h-6 w-6 text-primary" />
+                            <Pencil className="h-6 w-6 text-primary" />
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                                New Gap Assessment
+                                Edit Gap Assessment
                             </h1>
                             <p className="text-sm text-muted-foreground mt-0.5">
-                                Evaluate and document compliance gaps for a requirement
+                                {gapAssessment.requirement?.code && (
+                                    <span className="font-mono mr-1 text-muted-foreground/70">
+                                        [{gapAssessment.requirement.code}]
+                                    </span>
+                                )}
+                                {gapAssessment.requirement?.title}
                             </p>
                         </div>
                     </div>
-                    <Link href="/gapassessment">
+                    <Link href={`/gapassessment/${gapAssessment.id}`}>
                         <Button variant="outline" size="sm" className="gap-2 shrink-0">
                             <ArrowLeft className="h-4 w-4" />
                             Back
@@ -252,7 +266,9 @@ export default function Create({ requirements }: Props) {
                                         value={data.requirement_id}
                                         onValueChange={(val) => setData('requirement_id', val)}
                                     >
-                                        <SelectTrigger className={cn('h-10', errors.requirement_id && 'border-red-500 focus:ring-red-500')}>
+                                        <SelectTrigger
+                                            className={cn('h-10', errors.requirement_id && 'border-red-500 focus:ring-red-500')}
+                                        >
                                             <SelectValue placeholder="Select a requirement…" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -352,12 +368,7 @@ export default function Create({ requirements }: Props) {
                                 description="Score auto-determines the compliance level"
                                 accent="#10b981"
                             >
-                                {/* Score input */}
-                                <Field
-                                    label="Score (%)"
-                                    required
-                                    error={errors.score}
-                                >
+                                <Field label="Score (%)" required error={errors.score}>
                                     <div className="relative">
                                         <Input
                                             type="number"
@@ -390,8 +401,6 @@ export default function Create({ requirements }: Props) {
                                             }}
                                         />
                                     </div>
-
-                                    {/* Thresholds */}
                                     <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                                         <span>0</span>
                                         <span>40</span>
@@ -454,9 +463,9 @@ export default function Create({ requirements }: Props) {
                                     className="w-full h-11 gap-2 text-sm font-semibold shadow-sm"
                                 >
                                     <Save className="h-4 w-4" />
-                                    {processing ? 'Saving…' : 'Save Assessment'}
+                                    {processing ? 'Saving…' : 'Save Changes'}
                                 </Button>
-                                <Link href="/gapassessment" className="w-full">
+                                <Link href={`/gapassessment/${gapAssessment.id}`} className="w-full">
                                     <Button
                                         variant="ghost"
                                         type="button"
@@ -465,25 +474,6 @@ export default function Create({ requirements }: Props) {
                                         Cancel
                                     </Button>
                                 </Link>
-                            </div>
-
-                            {/* Tips */}
-                            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 flex flex-col gap-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                                    Tips
-                                </p>
-                                <ul className="flex flex-col gap-1.5">
-                                    {[
-                                        'Be specific about the gap description',
-                                        'Score reflects the current compliance level',
-                                        'Recommendations should be actionable',
-                                    ].map((tip) => (
-                                        <li key={tip} className="flex items-start gap-2 text-xs text-muted-foreground">
-                                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                                            {tip}
-                                        </li>
-                                    ))}
-                                </ul>
                             </div>
                         </div>
                     </div>

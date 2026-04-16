@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Requirement;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GapAssessment extends Model
 {
@@ -20,5 +22,9 @@ class GapAssessment extends Model
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);
+    }
+     public function actionPlans(): HasMany
+    {
+        return $this->hasMany(ActionPlan::class, 'gap_id');
     }
 }
