@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format, parseISO } from 'date-fns'
-import { CalendarIcon, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react'
+import { CalendarIcon, ChevronLeft, CheckCircle2, AlertCircle, FileText, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { CardUpload, type FileUploadItem } from '@/components/card-upload'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ interface Props {
   defaultDate?: string
 }
 
-// ─── AutoChip — chip ✦ auto inline dans le label ──────────────────────────────
+// ─── AutoChip ─────────────────────────────────────────────────────────────────
 
 function AutoChip({ show }: { show: boolean }) {
   if (!show) return null
@@ -43,14 +44,10 @@ function AutoChip({ show }: { show: boolean }) {
   )
 }
 
-// ─── autoClass — bordure verte si auto-rempli ─────────────────────────────────
-
 function autoInputClass(isAuto: boolean) {
   if (!isAuto) return ''
   return 'border-[#97C459] focus-visible:ring-[#97C459]/30 bg-[#EAF3DE]/10'
 }
-
-// ─── Helper : génère le test_code depuis requirement + framework + date ────────
 
 function buildTestCode(requirement: Requirement, dateStr?: string): string {
   const today = dateStr ?? format(new Date(), 'yyyy-MM-dd')
@@ -60,6 +57,10 @@ function buildTestCode(requirement: Requirement, dateStr?: string): string {
   parts.push(today)
   return parts.join('-')
 }
+
+// ─── EvidenceMode tab types ───────────────────────────────────────────────────
+
+type EvidenceMode = 'text' | 'files' | 'both'
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -71,8 +72,6 @@ export default function Create({ requirement, defaultDate }: Props) {
 
   const resolvedDate = savedDate ?? defaultDate ?? format(new Date(), 'yyyy-MM-dd')
   const isBackfill   = defaultDate !== undefined && defaultDate !== format(new Date(), 'yyyy-MM-dd')
-
-  // ← test_code pré-rempli dès l'init avec framework + requirement + date
   const initialTestCode = buildTestCode(requirement, resolvedDate)
 
   const { data, setData, post, processing, errors, setError, clearErrors, recentlySuccessful } = useForm({
@@ -84,6 +83,9 @@ export default function Create({ requirement, defaultDate }: Props) {
     result:         '',
     efficacy:       'effective',
     evidence:       '',
+    evidence_files:        [] as File[],
+    evidence_file_categories:   [] as (string | null)[],
+    evidence_file_descriptions: [] as (string | null)[],
     requirement_id: requirement.id,
     test_date:      resolvedDate,
     tested_at:      resolvedDate,
@@ -91,15 +93,12 @@ export default function Create({ requirement, defaultDate }: Props) {
     failure_reason: '',
   })
 
-  // Tracks which fields were auto-filled
-  // test_code est toujours auto-rempli au départ
   const [autoFields, setAutoFields] = useState<Set<string>>(new Set(['test_code']))
+  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('text')
 
   useEffect(() => {
     const savedDate = localStorage.getItem('selectedComplianceDate')
-
     if (savedDate) {
-      // Recalcule le test_code avec la date sauvegardée
       const updatedTestCode = buildTestCode(requirement, savedDate)
       setData(prev => ({
         ...prev,
@@ -111,44 +110,53 @@ export default function Create({ requirement, defaultDate }: Props) {
     }
   }, [])
 
-  useEffect(() => {
-    fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
-      .then(r => r.json())
-      .then(predefined => {
-        if (predefined && predefined.id) {
-          const filled = new Set<string>(autoFields)
-          const updates: Partial<typeof data> = {}
-
-          // test_code : on ne l'écrase PAS avec le predefined,
-          // on garde notre format framework-requirement-date
-          if (predefined.test_name) { updates.name      = predefined.test_name;  filled.add('name')      }
-          if (predefined.objective) { updates.objective  = predefined.objective;  filled.add('objective') }
-          if (predefined.procedure) { updates.procedure  = predefined.procedure;  filled.add('procedure') }
-
-          setData(prev => ({ ...prev, ...updates }))
-          setAutoFields(filled)
-        }
-      })
-      .catch(() => {})
-  }, [requirement.id])
+useEffect(() => {
+  fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
+    .then(r => r.json())
+    .then(predefined => {
+      if (predefined && predefined.id) {
+        setData(prev => {
+          const updates: Partial<typeof prev> = {}
+          if (predefined.test_name) updates.name      = predefined.test_name
+          if (predefined.objective) updates.objective = predefined.objective
+          if (predefined.procedure) updates.procedure = predefined.procedure
+          return { ...prev, ...updates }
+        })
+        setAutoFields(prev => {
+          const next = new Set(prev)
+          if (predefined.test_name) next.add('name')
+          if (predefined.objective) next.add('objective')
+          if (predefined.procedure) next.add('procedure')
+          return next
+        })
+      }
+    })
+    .catch(() => {})
+}, [requirement.id])
 
   const isAuto = (field: string) => autoFields.has(field)
+
+  const handleEvidenceFiles = (files: FileUploadItem[]) => {
+    setData(prev => ({
+      ...prev,
+      evidence_files:             files.map(f => f.file),
+      evidence_file_categories:   files.map(() => null),
+      evidence_file_descriptions: files.map(() => null),
+    }))
+  }
 
   const validateForm = () => {
     let isValid = true
     clearErrors()
-
     if (!data.test_code.trim()) { setError('test_code', 'Test Code is required'); isValid = false }
     if (!data.name.trim())      { setError('name', 'Name is required'); isValid = false }
     if (!data.objective.trim()) { setError('objective', 'Objective is required'); isValid = false }
     if (!data.procedure.trim()) { setError('procedure', 'Procedure is required'); isValid = false }
     if (!data.result)           { setError('result', 'Result is required'); isValid = false }
-
     if (data.result === 'non_compliant' && !data.failure_reason.trim()) {
       setError('failure_reason', 'Reason for failure is required when result is non-compliant')
       isValid = false
     }
-
     return isValid
   }
 
@@ -165,6 +173,7 @@ export default function Create({ requirement, defaultDate }: Props) {
       test_date: testDate,
       tested_at: testedAt,
     }, {
+      forceFormData: true,
       onSuccess: () => {
         localStorage.removeItem('selectedComplianceDate')
         router.visit(route('req-testing.index') + `?date=${testDate}`)
@@ -176,6 +185,12 @@ export default function Create({ requirement, defaultDate }: Props) {
     try { return format(parseISO(resolvedDate), 'MMM dd, yyyy') }
     catch { return format(new Date(), 'MMM dd, yyyy') }
   })()
+
+  const evidenceTabs: { mode: EvidenceMode; label: string; icon: React.ElementType }[] = [
+    { mode: 'text',  label: 'Text / Links', icon: FileText  },
+    { mode: 'files', label: 'Files',        icon: Paperclip },
+    { mode: 'both',  label: 'Both',         icon: Paperclip },
+  ]
 
   return (
     <AppLayout breadcrumbs={[
@@ -230,9 +245,7 @@ export default function Create({ requirement, defaultDate }: Props) {
               {/* Basic Information */}
               <div className="space-y-10">
                 <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Basic Information</h2>
-
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
                   {/* Test Code */}
                   <div className="space-y-2">
                     <Label htmlFor="test_code" className="text-sm font-medium flex items-center">
@@ -245,7 +258,6 @@ export default function Create({ requirement, defaultDate }: Props) {
                       value={data.test_code}
                       onChange={e => {
                         setData('test_code', e.target.value.trim().toUpperCase())
-                        // Si l'utilisateur modifie manuellement, retire le badge auto
                         setAutoFields(prev => { const s = new Set(prev); s.delete('test_code'); return s })
                         if (errors.test_code) clearErrors('test_code')
                       }}
@@ -276,7 +288,6 @@ export default function Create({ requirement, defaultDate }: Props) {
               {/* Test Details */}
               <div className="space-y-10">
                 <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Test Details</h2>
-
                 <div className="space-y-6">
 
                   {/* Objective */}
@@ -311,16 +322,76 @@ export default function Create({ requirement, defaultDate }: Props) {
                     {errors.procedure && <p className="text-red-600 text-sm mt-1.5">{errors.procedure}</p>}
                   </div>
 
-                  {/* Evidence */}
+                  {/* ── Evidence — tabs Text / Files / Both ── */}
                   <div className="space-y-3">
-                    <Label htmlFor="evidence" className="text-sm font-medium">Evidence / Proof</Label>
-                    <Textarea
-                      id="evidence"
-                      placeholder="Screenshots, logs, documents, links... (one per line if multiple)"
-                      value={data.evidence}
-                      onChange={e => setData('evidence', e.target.value)}
-                      className="min-h-[140px] resize-y"
-                    />
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium flex items-center gap-1.5">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Evidence / Proof
+                      </Label>
+
+                      {/* Mode tabs */}
+                      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-0.5">
+                        {evidenceTabs.map(({ mode, label, icon: Icon }) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setEvidenceMode(mode)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+                              evidenceMode === mode
+                                ? 'bg-background text-foreground shadow-sm border border-border/40'
+                                : 'text-muted-foreground hover:text-foreground'
+                            )}
+                          >
+                            <Icon className="h-3 w-3" />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Text area */}
+                    {(evidenceMode === 'text' || evidenceMode === 'both') && (
+                      <Textarea
+                        id="evidence"
+                        placeholder="Screenshots, logs, documents, links... (one per line if multiple)"
+                        value={data.evidence}
+                        onChange={e => setData('evidence', e.target.value)}
+                        className="min-h-[120px] resize-y"
+                      />
+                    )}
+
+                    {/* File upload */}
+                    {(evidenceMode === 'files' || evidenceMode === 'both') && (
+                      <div className={cn(evidenceMode === 'both' && 'mt-3')}>
+                        <CardUpload
+                          maxFiles={10}
+                          maxSize={10 * 1024 * 1024}
+                          accept="*"
+                          multiple
+                          simulateUpload
+                          onFilesChange={handleEvidenceFiles}
+                          labels={{
+                            dropzone: 'Drag & drop evidence files here, or click to select',
+                            browse: 'Browse files',
+                            maxSize: 'Max 10 MB per file',
+                            filesCount: 'files attached',
+                            addFiles: 'Add more files',
+                            removeAll: 'Remove all',
+                          }}
+                        />
+                        {errors.evidence_files && (
+                          <p className="text-red-600 text-sm mt-1.5">{errors.evidence_files}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      {evidenceMode === 'text'  && 'Enter URLs, references or descriptions as text.'}
+                      {evidenceMode === 'files' && 'Upload screenshots, PDFs, logs or any supporting files.'}
+                      {evidenceMode === 'both'  && 'Combine text references and file attachments.'}
+                    </p>
                   </div>
 
                   {/* Comment */}

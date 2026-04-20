@@ -43,6 +43,8 @@ import { DataTableViewOptions } from './server-data-table-view-options';
 import { EmptyState } from './ui/empty-state';
 
 import type { InitialTableState } from '@tanstack/react-table';
+import type { Row } from '@tanstack/react-table'
+
 
 export interface ServerDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
@@ -56,6 +58,8 @@ export interface ServerDataTableProps<TData, TValue> {
     initialState?: InitialTableState | undefined;
     onExport?: () => void;
     exportLoading?: boolean;
+      getRowClassName?: (row: Row<TData>) => string
+
 }
 
 // Params système exclus du traitement des filtres facettés

@@ -256,7 +256,7 @@ class PredefinedTestRequirmentController extends Controller
         }
 
         $test = PredefinedTestRequirment::where('requirement_id', $requirement->id)
-            ->select('id', 'test_code', 'test_name', 'objective', 'procedure')
+            ->select('id',  'test_name', 'objective', 'procedure')
             ->first();
 
         return response()->json($test ?? null);

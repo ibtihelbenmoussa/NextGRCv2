@@ -126,6 +126,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ================= PREDEFINED TEST REQUIREMENTS =================
     // ✅ Routes statiques EN PREMIER (avant tout {paramètre})
+     Route::get('requirements/{requirement}/predefined-tests/requirement', [PredefinedTestRequirmentController::class, 'forRequirement'])
+        ->name('predefinedTestReq.forRequirement');
     Route::get('predefined-tests/export', [PredefinedTestRequirmentController::class, 'export'])
         ->name('predefinedTestReq.export');
     Route::get('predefined-tests/requirement', [PredefinedTestRequirmentController::class, 'index'])
@@ -140,8 +142,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('predefinedTestReq.edit');
     Route::put('predefined-tests/requirement/{predefinedTest}', [PredefinedTestRequirmentController::class, 'update'])
         ->name('predefinedTestReq.update');
-    Route::get('requirements/{requirement}/predefined-tests/requirement', [PredefinedTestRequirmentController::class, 'forRequirement'])
-        ->name('predefinedTestReq.forRequirement');
+   
 
     // ✅ Routes avec {predefined_test} EN DERNIER
     Route::get('predefined-tests/{predefined_test}', [App\Http\Controllers\PredefindTestController::class, 'show'])
@@ -260,6 +261,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('requirement-tests/{requirementTest}', [RequirementTestController::class, 'show'])
         ->name('requirement-tests.show');
+        
 
     // ================= TEST RESULTS =================
     Route::post('test-results', [TestResultController::class, 'store'])

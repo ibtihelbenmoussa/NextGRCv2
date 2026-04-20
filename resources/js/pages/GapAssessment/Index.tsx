@@ -94,7 +94,6 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Compliance Management', href: '/compliance-management' },
   { title: 'Gap Assessment', href: '/gapassessment' },
 ]
 

@@ -45,7 +45,8 @@ class RequirementController extends Controller
         }
 
         if ($request->filled('filter.status')) {
-            $query->where('status', $request->input('filter.status'));
+            $statuses = explode(',', $request->input('filter.status'));
+            $query->whereIn('status', $statuses);
         }
 
         if ($request->filled('filter.type') && $request->input('filter.type') !== 'all') {
@@ -54,6 +55,11 @@ class RequirementController extends Controller
 
         if ($request->filled('filter.priority') && $request->input('filter.priority') !== 'all') {
             $query->where('priority', $request->input('filter.priority'));
+        }
+
+        if ($request->filled('filter.framework')) {
+            $codes = explode(',', $request->input('filter.framework'));
+            $query->whereHas('framework', fn($q) => $q->whereIn('code', $codes));
         }
 
         if ($request->filled('sort')) {
@@ -119,6 +125,10 @@ class RequirementController extends Controller
 
         return Inertia::render('Requirements/Index', [
             'requirements' => $requirements,
+            'frameworks'   => Framework::where('organization_id', $currentOrgId)
+                ->select('code', 'name')
+                ->orderBy('code')
+                ->get(),
             'stats' => [
                 'total'         => $total,
                 'lowCount'      => $lowCount,
@@ -232,7 +242,6 @@ class RequirementController extends Controller
         $pt = $request->input('predefined_test', []);
         if (!empty(array_filter($pt))) {
             $requirement->predefinedTests()->create([
-                'test_code' => $pt['test_code'] ?? null,
                 'test_name' => $pt['test_name'] ?? null,
                 'objective' => $pt['objective'] ?? null,
                 'procedure' => $pt['procedure'] ?? null,
@@ -472,6 +481,11 @@ class RequirementController extends Controller
                 $q->where('code', 'like', "%{$search}%")
                     ->orWhere('title', 'like', "%{$search}%");
             });
+        }
+
+        if ($request->filled('filter.framework')) {
+            $codes = explode(',', $request->input('filter.framework'));
+            $query->whereHas('framework', fn($q) => $q->whereIn('code', $codes));
         }
 
         $requirements = $query->get();

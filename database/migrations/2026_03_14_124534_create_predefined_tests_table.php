@@ -13,7 +13,7 @@ return new class extends Migration {
         Schema::create('predefined_tests_requirments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('requirement_id')->constrained()->cascadeOnDelete();
-            $table->string('test_code')->unique();
+           
             $table->string('test_name');
             $table->longText('objective');
             $table->longText('procedure');

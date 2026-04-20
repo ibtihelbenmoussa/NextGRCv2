@@ -63,6 +63,7 @@ import {
   GripVertical,
   ListFilter,
   CircleDot,
+  ShieldCheck,
 } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PaginatedData } from '@/types'
@@ -78,6 +79,11 @@ import { cn } from '@/lib/utils'
 
 interface TagItem {
   id: number
+  name: string
+}
+
+interface FrameworkOption {
+  code: string
   name: string
 }
 
@@ -103,60 +109,59 @@ interface Requirement {
 
 interface RequirementsIndexProps {
   requirements: PaginatedData<Requirement>
+  frameworks: FrameworkOption[]
 }
 
 type GroupBy = 'status' | 'priority'
 type ViewMode = 'table' | 'kanban'
 
-// ─── Style A : Soft filled pill avec dot ─────────────────────────────────────
-// Light : fond teinté clair  + texte dark du même ramp
-// Dark  : fond dark du ramp  + texte light du ramp   → auto via media query
+// ─── Style maps ───────────────────────────────────────────────────────────────
 
 const statusStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
   active: {
     pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot: 'bg-[#3B6D11]               dark:bg-[#97C459]',
-    kanbanBg: 'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
-    kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
-    kanbanText: 'text-[#27500A]             dark:text-[#C0DD97]',
+    dot: 'bg-[#3B6D11] dark:bg-[#97C459]',
+    kanbanBg: 'bg-[#EAF3DE]/60 dark:bg-[#27500A]/40',
+    kanbanBorder: 'border-[#97C459] dark:border-[#3B6D11]',
+    kanbanText: 'text-[#27500A] dark:text-[#C0DD97]',
   },
   draft: {
     pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot: 'bg-[#854F0B]               dark:bg-[#EF9F27]',
-    kanbanBg: 'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
-    kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
-    kanbanText: 'text-[#412402]             dark:text-[#FAC775]',
+    dot: 'bg-[#854F0B] dark:bg-[#EF9F27]',
+    kanbanBg: 'bg-[#FAEEDA]/60 dark:bg-[#412402]/40',
+    kanbanBorder: 'border-[#EF9F27] dark:border-[#854F0B]',
+    kanbanText: 'text-[#412402] dark:text-[#FAC775]',
   },
   archived: {
     pill: 'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
-    dot: 'bg-[#888780]               dark:bg-[#B4B2A9]',
-    kanbanBg: 'bg-[#F1EFE8]/60            dark:bg-[#444441]/40',
-    kanbanBorder: 'border-[#B4B2A9]           dark:border-[#5F5E5A]',
-    kanbanText: 'text-[#444441]             dark:text-[#D3D1C7]',
+    dot: 'bg-[#888780] dark:bg-[#B4B2A9]',
+    kanbanBg: 'bg-[#F1EFE8]/60 dark:bg-[#444441]/40',
+    kanbanBorder: 'border-[#B4B2A9] dark:border-[#5F5E5A]',
+    kanbanText: 'text-[#444441] dark:text-[#D3D1C7]',
   },
 }
 
 const priorityStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
   high: {
     pill: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-    dot: 'bg-[#A32D2D]               dark:bg-[#E24B4A]',
-    kanbanBg: 'bg-[#FCEBEB]/60            dark:bg-[#501313]/40',
-    kanbanBorder: 'border-[#E24B4A]           dark:border-[#A32D2D]',
-    kanbanText: 'text-[#501313]             dark:text-[#F7C1C1]',
+    dot: 'bg-[#A32D2D] dark:bg-[#E24B4A]',
+    kanbanBg: 'bg-[#FCEBEB]/60 dark:bg-[#501313]/40',
+    kanbanBorder: 'border-[#E24B4A] dark:border-[#A32D2D]',
+    kanbanText: 'text-[#501313] dark:text-[#F7C1C1]',
   },
   medium: {
     pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot: 'bg-[#854F0B]               dark:bg-[#EF9F27]',
-    kanbanBg: 'bg-[#FAEEDA]/60            dark:bg-[#412402]/40',
-    kanbanBorder: 'border-[#EF9F27]           dark:border-[#854F0B]',
-    kanbanText: 'text-[#412402]             dark:text-[#FAC775]',
+    dot: 'bg-[#854F0B] dark:bg-[#EF9F27]',
+    kanbanBg: 'bg-[#FAEEDA]/60 dark:bg-[#412402]/40',
+    kanbanBorder: 'border-[#EF9F27] dark:border-[#854F0B]',
+    kanbanText: 'text-[#412402] dark:text-[#FAC775]',
   },
   low: {
     pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot: 'bg-[#3B6D11]               dark:bg-[#97C459]',
-    kanbanBg: 'bg-[#EAF3DE]/60            dark:bg-[#27500A]/40',
-    kanbanBorder: 'border-[#97C459]           dark:border-[#3B6D11]',
-    kanbanText: 'text-[#27500A]             dark:text-[#C0DD97]',
+    dot: 'bg-[#3B6D11] dark:bg-[#97C459]',
+    kanbanBg: 'bg-[#EAF3DE]/60 dark:bg-[#27500A]/40',
+    kanbanBorder: 'border-[#97C459] dark:border-[#3B6D11]',
+    kanbanText: 'text-[#27500A] dark:text-[#C0DD97]',
   },
 }
 
@@ -168,7 +173,38 @@ const fallbackStyle = {
   kanbanText: 'text-muted-foreground',
 }
 
-// ─── StatusPill — badge Style A ───────────────────────────────────────────────
+// ─── Framework color palette (cycles for N frameworks) ────────────────────────
+
+const FRAMEWORK_COLORS = [
+  { bg: 'bg-[#E6F1FB]', text: 'text-[#0C447C]', darkBg: 'dark:bg-[#0C447C]', darkText: 'dark:text-[#B5D4F4]', dot: '#2563eb' },
+  { bg: 'bg-[#F0E9FB]', text: 'text-[#3B0764]', darkBg: 'dark:bg-[#3B0764]', darkText: 'dark:text-[#D8B4FE]', dot: '#9333ea' },
+  { bg: 'bg-[#FEF3C7]', text: 'text-[#78350F]', darkBg: 'dark:bg-[#78350F]', darkText: 'dark:text-[#FDE68A]', dot: '#d97706' },
+  { bg: 'bg-[#FCE7F3]', text: 'text-[#831843]', darkBg: 'dark:bg-[#831843]', darkText: 'dark:text-[#FBCFE8]', dot: '#db2777' },
+  { bg: 'bg-[#ECFDF5]', text: 'text-[#064E3B]', darkBg: 'dark:bg-[#064E3B]', darkText: 'dark:text-[#A7F3D0]', dot: '#10b981' },
+  { bg: 'bg-[#FFF7ED]', text: 'text-[#7C2D12]', darkBg: 'dark:bg-[#7C2D12]', darkText: 'dark:text-[#FED7AA]', dot: '#ea580c' },
+  { bg: 'bg-[#F0FDF4]', text: 'text-[#14532D]', darkBg: 'dark:bg-[#14532D]', darkText: 'dark:text-[#BBF7D0]', dot: '#16a34a' },
+  { bg: 'bg-[#FDF2F8]', text: 'text-[#701A75]', darkBg: 'dark:bg-[#701A75]', darkText: 'dark:text-[#F5D0FE]', dot: '#c026d3' },
+]
+
+// ─── FrameworkPill ────────────────────────────────────────────────────────────
+
+function FrameworkPill({ code, colorIndex }: { code: string; colorIndex: number }) {
+  const c = FRAMEWORK_COLORS[colorIndex % FRAMEWORK_COLORS.length]
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md tracking-wide',
+      c.bg, c.text, c.darkBg, c.darkText,
+    )}>
+      <span
+        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+        style={{ backgroundColor: c.dot }}
+      />
+      {code}
+    </span>
+  )
+}
+
+// ─── StatusPill ───────────────────────────────────────────────────────────────
 
 function StatusPill({ value, styleMap }: { value: string; styleMap: typeof statusStyles }) {
   const key = value?.toLowerCase() ?? ''
@@ -205,7 +241,7 @@ function useCountUp(target: number, duration = 900) {
   return value
 }
 
-// ─── KPI Card — animated + 3D tilt on hover ──────────────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
   label, value, sub, fillPercent, fillColor, icon, valueColor, delay = 0,
@@ -220,11 +256,9 @@ function KpiCard({
   delay?: number
 }) {
   const numericValue = typeof value === 'number' ? value : 0
-
   const [mounted, setMounted] = useState(false)
   const [barWidth, setBarWidth] = useState(0)
   const animatedValue = useCountUp(mounted ? numericValue : 0, 900)
-
   const cardRef = useRef<HTMLDivElement>(null)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
@@ -317,14 +351,114 @@ function KpiCard({
   )
 }
 
+// ─── FrameworkFilter — custom component visuel ────────────────────────────────
+
+function FrameworkFilter({ frameworks }: { frameworks: FrameworkOption[] }) {
+const [selected, setSelected] = useState<string[]>([])
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const val = params.get('filter[framework]')
+if (val) setSelected(val.split(','))
+  }, [])
+
+const toggle = (code: string) => {
+  let next: string[]
+
+  if (selected.includes(code)) {
+    next = selected.filter(c => c !== code)
+  } else {
+    next = [...selected, code]
+  }
+
+  setSelected(next)
+
+  const params = new URLSearchParams(window.location.search)
+
+  if (next.length > 0) {
+    params.set('filter[framework]', next.join(','))
+  } else {
+    params.delete('filter[framework]')
+  }
+
+  params.set('page', '1')
+
+  router.get(`${window.location.pathname}?${params.toString()}`, {}, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+  })
+}
+
+  const clearAll = () => {
+setSelected([])
+    const params = new URLSearchParams(window.location.search)
+    params.delete('filter[framework]')
+    params.set('page', '1')
+    router.get(`${window.location.pathname}?${params.toString()}`, {}, {
+      preserveState: true, preserveScroll: true, replace: true,
+    })
+  }
+
+  if (!frameworks.length) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium mr-1">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Framework
+      </span>
+      {frameworks.map((fw, idx) => {
+        const c = FRAMEWORK_COLORS[idx % FRAMEWORK_COLORS.length]
+const isActive = selected.includes(fw.code)
+        return (
+          <button
+            key={fw.code}
+            onClick={() => toggle(fw.code)}
+            title={fw.name}
+            className={cn(
+              'inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md tracking-wide border transition-all duration-150',
+              'hover:scale-105 active:scale-95',
+              isActive
+                ? cn(c.bg, c.text, c.darkBg, c.darkText, 'border-transparent shadow-sm ring-2 ring-offset-1')
+                : 'bg-muted/50 text-muted-foreground border-border hover:border-muted-foreground/40',
+            )}
+            style={isActive ? { '--tw-ring-color': c.dot } as React.CSSProperties : undefined}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0 transition-opacity"
+              style={{ backgroundColor: c.dot, opacity: isActive ? 1 : 0.4 }}
+            />
+            {fw.code}
+          </button>
+        )
+      })}
+{selected.length > 0 && (
+          <button
+          onClick={clearAll}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 ml-1 transition-colors"
+        >
+          clear
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RequirementsIndex({ requirements }: RequirementsIndexProps) {
+export default function RequirementsIndex({ requirements, frameworks }: RequirementsIndexProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [requirementToDelete, setRequirementToDelete] = useState<Requirement | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [groupBy, setGroupBy] = useState<GroupBy>('status')
+
+  // ── Framework color index map ─────────────────────────────────
+  const frameworkColorMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    frameworks.forEach((fw, idx) => { map[fw.code] = idx })
+    return map
+  }, [frameworks])
 
   // ── Stats ────────────────────────────────────────────────────
   const statusStats = useMemo(() => {
@@ -468,9 +602,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Status" />
         </div>
       ),
-      cell: ({ row }) => (
-        <StatusPill value={row.getValue('status')} styleMap={statusStyles} />
-      ),
+      cell: ({ row }) => <StatusPill value={row.getValue('status')} styleMap={statusStyles} />,
     },
     {
       accessorKey: 'priority',
@@ -480,9 +612,7 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
           <DataTableColumnHeader column={column} title="Priority" />
         </div>
       ),
-      cell: ({ row }) => (
-        <StatusPill value={row.getValue('priority')} styleMap={priorityStyles} />
-      ),
+      cell: ({ row }) => <StatusPill value={row.getValue('priority')} styleMap={priorityStyles} />,
     },
     {
       accessorKey: 'frequency',
@@ -512,9 +642,14 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
       ),
       cell: ({ row }) => {
         const fw = row.original.framework
-        return fw
-          ? <span className="text-xs text-muted-foreground">{fw.code} — {fw.name}</span>
-          : <span className="text-muted-foreground text-xs">—</span>
+        if (!fw) return <span className="text-muted-foreground text-xs">—</span>
+        const colorIdx = frameworkColorMap[fw.code] ?? 0
+        return (
+          <div className="flex items-center gap-1.5">
+            <FrameworkPill code={fw.code} colorIndex={colorIdx} />
+            <span className="text-xs text-muted-foreground hidden lg:inline">{fw.name}</span>
+          </div>
+        )
       },
     },
     {
@@ -643,10 +778,15 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
             onExport={handleExport}
             exportLoading={exportLoading}
             filters={
-              <>
-                <DataTableFacetedFilter filterKey="status" title="Status" options={statusOptions} />
-                <DataTableSelectFilter filterKey="priority" title="Priority" placeholder="All priorities" options={priorityOptions} />
-              </>
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex flex-wrap gap-2">
+                  <DataTableFacetedFilter filterKey="status" title="Status" options={statusOptions} />
+                  <DataTableSelectFilter filterKey="priority" title="Priority" placeholder="All priorities" options={priorityOptions} />
+                </div>
+                {frameworks.length > 0 && (
+                  <FrameworkFilter frameworks={frameworks} />
+                )}
+              </div>
             }
             initialState={{ columnPinning: { right: ['actions'] } }}
           />
@@ -687,7 +827,6 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
                               snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl'
                             )}
                           >
-                            {/* Column header */}
                             <div className={cn('px-5 py-4 rounded-t-xl border-b-2 font-medium text-lg flex items-center justify-between', s.kanbanBg, s.kanbanBorder)}>
                               <span className={s.kanbanText}>{getGroupTitle(key)}</span>
                               <span className={cn('inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border', s.kanbanBorder, s.kanbanText, 'bg-background/70')}>
@@ -731,6 +870,12 @@ export default function RequirementsIndex({ requirements }: RequirementsIndexPro
                                           <div className="flex flex-wrap gap-2 pt-2">
                                             <StatusPill value={req.status} styleMap={statusStyles} />
                                             <StatusPill value={req.priority} styleMap={priorityStyles} />
+                                            {req.framework && (
+                                              <FrameworkPill
+                                                code={req.framework.code}
+                                                colorIndex={frameworkColorMap[req.framework.code] ?? 0}
+                                              />
+                                            )}
                                             {req.frequency && (
                                               <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                                                 {req.frequency.replace('_', ' ')}
