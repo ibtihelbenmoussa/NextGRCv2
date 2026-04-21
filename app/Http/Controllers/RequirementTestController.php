@@ -462,63 +462,73 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
         ]);
     }
 
-    public function storeForRequirement(Request $request, Requirement $requirement)
-    {
-        $user         = Auth::user();
-        $currentOrgId = $user->current_organization_id;
+   public function storeForRequirement(Request $request, Requirement $requirement)
+{
+    $user         = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-        if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
-            abort(403, 'Unauthorized');
-        }
-
-        $validated = $request->validate([
-            'test_date'      => ['required', 'date'],
-            'tested_at'      => ['nullable', 'date'],
-            'status'         => ['nullable', 'in:compliant,non_compliant,partial,na,pending'],
-            'result'         => ['required', 'in:compliant,non_compliant'],
-            'comment'        => ['nullable', 'string', 'max:2000'],
-            'failure_reason' => ['nullable', 'string', 'max:2000'],
-            'evidence'       => ['nullable', 'string', 'max:5000'],
-            'test_code'      => ['nullable', 'string', 'max:100'],
-            'name'           => ['nullable', 'string', 'max:255'],
-            'objective'      => ['nullable', 'string', 'max:5000'],
-            'procedure'      => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        $targetDate = Carbon::parse($validated['test_date'])->startOfDay();
-
-        $alreadyExists = RequirementTest::query()
-            ->where('requirement_id', $requirement->id)
-            ->whereDate('test_date', $targetDate)
-            ->exists();
-
-        if ($alreadyExists) {
-            return back()->withErrors(['test_date' => 'Un test existe déjà pour ce requirement à cette date.']);
-        }
-
-        $comment = trim(
-            ($validated['comment'] ?? '') .
-            ($validated['failure_reason'] ? "\n\nRaison d'échec : " . $validated['failure_reason'] : '')
-        );
-
-        RequirementTest::create([
-            'requirement_id'    => $requirement->id,
-            'framework_id'      => $requirement->framework_id,
-            'user_id'           => Auth::id(),
-            'test_date'         => $targetDate->toDateString(),
-            'tested_at'         => now(),
-            'status'            => $validated['result'],
-            'validation_status' => $requirement->auto_validate ? 'accepted' : 'pending',
-            'comment'           => $comment ?: null,
-            'evidence'          => $validated['evidence'] ? [$validated['evidence']] : null,
-        ]);
-
-        if ($requirement->auto_validate) {
-            $this->advanceEffectiveDate($requirement);   
-        }
-
-        return redirect()
-            ->route('req-testing.index', ['date' => $targetDate->format('Y-m-d')])
-            ->with('success', 'Test créé avec succès.');
+    if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
+        abort(403, 'Unauthorized');
     }
+
+    $validated = $request->validate([
+        'test_date'      => ['required', 'date'],
+        'tested_at'      => ['nullable', 'date'],
+        'status'         => ['nullable', 'in:compliant,non_compliant,partial,na,pending'],
+        'result'         => ['required', 'in:compliant,non_compliant'],
+        'comment'        => ['nullable', 'string', 'max:2000'],
+        'failure_reason' => ['nullable', 'string', 'max:2000'],
+        'evidence'       => ['nullable', 'string', 'max:5000'],
+        'test_code'      => ['nullable', 'string', 'max:100'],
+        'name'           => ['nullable', 'string', 'max:255'],
+        'objective'      => ['nullable', 'string', 'max:5000'],
+        'procedure'      => ['nullable', 'string', 'max:5000'],
+    ]);
+
+    $targetDate = Carbon::parse($validated['test_date'])->startOfDay();
+
+    // ── 1. Chercher un test rejeté existant pour cette date ──────────────
+    $rejectedTest = RequirementTest::query()
+        ->where('requirement_id', $requirement->id)
+        ->whereDate('test_date', $targetDate)
+        ->where('validation_status', 'rejected')
+        ->first();
+
+    // ── 2. Bloquer seulement si un test NON-rejeté existe déjà ──────────
+    $alreadyExists = RequirementTest::query()
+        ->where('requirement_id', $requirement->id)
+        ->whereDate('test_date', $targetDate)
+        ->where('validation_status', '!=', 'rejected')
+        ->exists();
+
+    if ($alreadyExists) {
+        return back()->withErrors(['test_date' => 'Un test existe déjà pour ce requirement à cette date.']);
+    }
+
+    // ── 3. Supprimer l'ancien test rejeté avant de créer le nouveau ──────
+    $rejectedTest?->delete();
+
+    $comment = trim(
+        ($validated['comment'] ?? '') .
+        ($validated['failure_reason'] ? "\n\nRaison d'échec : " . $validated['failure_reason'] : '')
+    );
+
+    RequirementTest::create([
+        'requirement_id'    => $requirement->id,
+        'framework_id'      => $requirement->framework_id,
+        'user_id'           => Auth::id(),
+        'test_date'         => $targetDate->toDateString(),
+        'tested_at'         => now(),
+        'status'            => $validated['result'],
+        'validation_status' => 'pending',   // ← toujours pending après un rejet
+        'comment'           => $comment ?: null,
+        'evidence'          => $validated['evidence'] ? [$validated['evidence']] : null,
+    ]);
+
+    // auto_validate n'advance la date que si c'est une première soumission,
+    // pas après un rejet — le validateur humain doit re-approuver
+    return redirect()
+        ->route('req-testing.index', ['date' => $targetDate->format('Y-m-d')])
+        ->with('success', 'Test re-soumis avec succès. En attente de validation.');
+}
 }

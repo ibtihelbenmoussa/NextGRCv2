@@ -75,14 +75,14 @@ interface Requirement {
   code: string;
   title: string;
   frequency: string;
-  effective_date?: string | null;   // ← renommé depuis deadline
+  effective_date?: string | null;
   framework?: Framework | null;
   process?: Process | null;
   tags?: Tag[] | null;
   latest_test_status?: 'pending' | 'accepted' | 'rejected' | null;
   latest_test_comment?: string | null;
   latest_test_id?: number | null;
-  reservation_user_id?:   number | null;
+  reservation_user_id?: number | null;
   reservation_user_name?: string | null;
 }
 
@@ -442,7 +442,6 @@ export default function RequirementTestsIndex({
     router.visit(route('requirements.test.create', reqId) + `?date=${format(selectedDate, 'yyyy-MM-dd')}`);
   }, [selectedDate]);
 
-  // ← utilise effective_date au lieu de deadline
   const handleGoToOverdueDate = useCallback((req: Requirement) => {
     if (!req.effective_date) return;
     setOverdueModalOpen(false);
@@ -522,7 +521,6 @@ export default function RequirementTestsIndex({
     }
   };
 
-  // ← utilise effective_date au lieu de deadline
   const isOverdueRow = useCallback((req: Requirement): boolean => {
     if (req.latest_test_status === 'accepted' || req.latest_test_status === 'pending') return false;
     if (!req.effective_date) return false;
@@ -536,7 +534,6 @@ export default function RequirementTestsIndex({
     return req.latest_test_status === null || req.latest_test_status === 'rejected';
   }, [isPastDate]);
 
-  // ← utilise effective_date au lieu de deadline
   const isDueRow = useCallback((req: Requirement): boolean => {
     if (!req.effective_date) return false;
     if (!isToday) return false;
@@ -553,6 +550,7 @@ export default function RequirementTestsIndex({
   const safeTotal = kpi.total || 1;
 
   const columns = useMemo<ColumnDef<Requirement>[]>(() => [
+
     // ─── Colonne Checkbox Claim ──────────────────────────────────────────────
     {
       id: 'reservation',
@@ -618,43 +616,42 @@ export default function RequirementTestsIndex({
       size: 48,
     },
 
-    // ─── Code ────────────────────────────────────────────────────────────────────
-{
-  accessorKey: 'code',
-  header: ({ column }) => (
-    <div className="flex items-center gap-1.5">
-      <Key className="h-4 w-4 text-muted-foreground" />
-      <DataTableColumnHeader column={column} title="Code" />
-    </div>
-  ),
-  cell: ({ row }) => {
-    const req      = row.original;
-    const missed   = isMissedRow(req);
-    const due      = isDueRow(req);
-    const selected = selectedIds.has(req.id);
-
-const composed = req.code ?? '—';
-
-    return (
-      <div className="flex items-center gap-2">
-        {(missed || (due && selected)) && (
-          <span className="relative flex h-2 w-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${missed ? 'bg-red-500' : 'bg-amber-500'}`} />
-          </span>
-        )}
-        <div className={cn(
-          'font-mono font-medium',
-          missed   && 'text-red-400',
-          selected && !missed && 'text-amber-400'
-        )}>
-          {composed}
+    // ─── Code ────────────────────────────────────────────────────────────────
+    {
+      accessorKey: 'code',
+      header: ({ column }) => (
+        <div className="flex items-center gap-1.5">
+          <Key className="h-4 w-4 text-muted-foreground" />
+          <DataTableColumnHeader column={column} title="Code" />
         </div>
-      </div>
-    );
-  },
-  size: 220,  
-},
+      ),
+      cell: ({ row }) => {
+        const req      = row.original;
+        const missed   = isMissedRow(req);
+        const due      = isDueRow(req);
+        const selected = selectedIds.has(req.id);
+        const composed = req.code ?? '—';
+
+        return (
+          <div className="flex items-center gap-2">
+            {(missed || (due && selected)) && (
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${missed ? 'bg-red-500' : 'bg-amber-500'}`} />
+              </span>
+            )}
+            <div className={cn(
+              'font-mono font-medium',
+              missed   && 'text-red-400',
+              selected && !missed && 'text-amber-400'
+            )}>
+              {composed}
+            </div>
+          </div>
+        );
+      },
+      size: 220,
+    },
 
     // ─── Title ───────────────────────────────────────────────────────────────
     {
@@ -717,7 +714,7 @@ const composed = req.code ?? '—';
       },
     },
 
-    // ─── Effective Date (anciennement Deadline) ───────────────────────────────
+    // ─── Effective Date ───────────────────────────────────────────────────────
     {
       accessorKey: 'effective_date',
       header: ({ column }) => (
@@ -731,15 +728,15 @@ const composed = req.code ?? '—';
         const dl = req.effective_date;
         if (!dl) return <span className="text-muted-foreground">—</span>;
 
-        const missed  = isMissedRow(req);
-        const overdue = isOverdueRow(req);
-        const due     = isDueRow(req);
+        const missed   = isMissedRow(req);
+        const overdue  = isOverdueRow(req);
+        const due      = isDueRow(req);
         const selected = selectedIds.has(req.id);
 
         const dateFormatted = format(new Date(dl), 'MMM d, yyyy', { locale: enUS });
 
-        if (missed)  return <StatusPill type="missed"    label={dateFormatted} />;
-        if (overdue) return <StatusPill type="overdue"   label={dateFormatted} />;
+        if (missed)  return <StatusPill type="missed"   label={dateFormatted} />;
+        if (overdue) return <StatusPill type="overdue"  label={dateFormatted} />;
         if (due && selected) return <StatusPill type="due" label={dateFormatted} />;
         if (req.latest_test_status === 'accepted') return <StatusPill type="completed" label={dateFormatted} />;
 
@@ -758,7 +755,15 @@ const composed = req.code ?? '—';
         const missed = isMissedRow(req);
         const selected = selectedIds.has(req.id);
 
-        const isTakenByOther = !!req.reservation_user_id && req.reservation_user_id !== currentUserId;
+        const isMine         = req.reservation_user_id === currentUserId;
+        const isTakenByOther = !!req.reservation_user_id && !isMine;
+        const hasNoReservation = !req.reservation_user_id;
+
+        // ── Réservation obligatoire sauf si test déjà accepted/pending ──────
+        const needsReservation =
+          hasNoReservation &&
+          status !== 'accepted' &&
+          status !== 'pending';
 
         let config: {
           label: string;
@@ -769,24 +774,80 @@ const composed = req.code ?? '—';
         } = {
           label: 'Create Test',
           icon: <Plus className="h-4 w-4 mr-2" />,
-          disabled: isTakenByOther,
-          tooltip: isTakenByOther ? `Claimed by ${req.reservation_user_name}` : undefined,
-          className: isTakenByOther ? 'opacity-50 cursor-not-allowed' : undefined,
+          disabled: isTakenByOther || needsReservation,
+          tooltip: isTakenByOther
+            ? `Claimed by ${req.reservation_user_name}`
+            : needsReservation
+              ? 'Claim this test first before creating'
+              : undefined,
+          className: (isTakenByOther || needsReservation)
+            ? 'opacity-50 cursor-not-allowed'
+            : undefined,
         };
 
         if (isToday) {
           if (status === 'accepted') {
-            config = { label: 'Accepted', icon: <CheckCircle2 className="h-4 w-4 mr-2" />, className: 'bg-emerald-800/90 hover:bg-emerald-800 text-white cursor-not-allowed opacity-80', disabled: true, tooltip: 'Test already accepted for today' };
+            config = {
+              label: 'Accepted',
+              icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
+              className: 'bg-emerald-800/90 hover:bg-emerald-800 text-white cursor-not-allowed opacity-80',
+              disabled: true,
+              tooltip: 'Test already accepted for today',
+            };
           } else if (status === 'pending') {
-            config = { label: 'Pending', icon: <Clock className="h-4 w-4 mr-2" />, className: 'bg-amber-700/90 hover:bg-amber-700 text-white cursor-not-allowed opacity-80', disabled: true, tooltip: 'Test is awaiting validation' };
+            config = {
+              label: 'Pending',
+              icon: <Clock className="h-4 w-4 mr-2" />,
+              className: 'bg-amber-700/90 hover:bg-amber-700 text-white cursor-not-allowed opacity-80',
+              disabled: true,
+              tooltip: 'Test is awaiting validation',
+            };
           } else if (status === 'rejected') {
-            config = { label: 'Rejected – Retry', icon: <AlertTriangle className="h-4 w-4 mr-2" />, className: 'bg-orange-600 hover:bg-orange-700 text-white', disabled: isTakenByOther, tooltip: isTakenByOther ? `Claimed by ${req.reservation_user_name}` : (req.latest_test_comment || 'Previous test was rejected') };
+            config = {
+              label: 'Rejected – Retry',
+              icon: <AlertTriangle className="h-4 w-4 mr-2" />,
+              className: isMine
+                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                : 'opacity-50 cursor-not-allowed',
+              disabled: isTakenByOther || needsReservation,
+              tooltip: isTakenByOther
+                ? `Claimed by ${req.reservation_user_name}`
+                : needsReservation
+                  ? 'Claim this test first before retrying'
+                  : (req.latest_test_comment || 'Previous test was rejected'),
+            };
           }
         } else {
           if (status === 'accepted') {
-            config = { label: 'Accepted', icon: <CheckCircle2 className="h-4 w-4 mr-2" />, className: 'bg-emerald-800/90 hover:bg-emerald-800 text-white cursor-not-allowed opacity-80', disabled: true, tooltip: 'Test already accepted for this date' };
+            config = {
+              label: 'Accepted',
+              icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
+              className: 'bg-emerald-800/90 hover:bg-emerald-800 text-white cursor-not-allowed opacity-80',
+              disabled: true,
+              tooltip: 'Test already accepted for this date',
+            };
           } else if (status === 'pending') {
-            config = { label: 'Pending', icon: <Clock className="h-4 w-4 mr-2" />, className: 'bg-amber-700/90 hover:bg-amber-700 text-white cursor-not-allowed opacity-80', disabled: true, tooltip: 'Test is awaiting validation' };
+            config = {
+              label: 'Pending',
+              icon: <Clock className="h-4 w-4 mr-2" />,
+              className: 'bg-amber-700/90 hover:bg-amber-700 text-white cursor-not-allowed opacity-80',
+              disabled: true,
+              tooltip: 'Test is awaiting validation',
+            };
+          } else if (status === 'rejected') {
+            config = {
+              label: 'Rejected – Retry',
+              icon: <AlertTriangle className="h-4 w-4 mr-2" />,
+              className: isMine
+                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                : 'opacity-50 cursor-not-allowed',
+              disabled: isTakenByOther || needsReservation,
+              tooltip: isTakenByOther
+                ? `Claimed by ${req.reservation_user_name}`
+                : needsReservation
+                  ? 'Claim this test first before retrying'
+                  : (req.latest_test_comment || 'Previous test was rejected'),
+            };
           }
         }
 
@@ -814,7 +875,9 @@ const composed = req.code ?? '—';
                     className={cn(
                       'min-w-[155px] justify-center',
                       config.className,
-                      selected && !config.disabled && !missed ? 'bg-amber-600 hover:bg-amber-700 text-white border-0' : ''
+                      selected && !config.disabled && !missed
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white border-0'
+                        : ''
                     )}
                     onClick={() => {
                       if (config.disabled) return;
@@ -825,7 +888,9 @@ const composed = req.code ?? '—';
                     {config.icon}{config.label}
                   </Button>
                 </TooltipTrigger>
-                {config.tooltip && <TooltipContent side="top"><p>{config.tooltip}</p></TooltipContent>}
+                {config.tooltip && (
+                  <TooltipContent side="top"><p>{config.tooltip}</p></TooltipContent>
+                )}
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -844,6 +909,7 @@ const composed = req.code ?? '—';
       <Head title="Compliance Tests" />
 
       <div className="space-y-6 py-6 px-4">
+
         {/* Header + Date Picker */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
           <div>
@@ -852,7 +918,10 @@ const composed = req.code ?? '—';
           </div>
 
           <div className="flex items-center gap-2 bg-muted/40 border rounded-md px-2 py-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { const p = new Date(selectedDate); p.setDate(p.getDate() - 1); handleDateSelect(p); }}>
+            <Button
+              variant="ghost" size="icon" className="h-8 w-8"
+              onClick={() => { const p = new Date(selectedDate); p.setDate(p.getDate() - 1); handleDateSelect(p); }}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Popover>
@@ -866,7 +935,10 @@ const composed = req.code ?? '—';
                 <CalendarComponent mode="single" selected={selectedDate} onSelect={handleDateSelect} initialFocus />
               </PopoverContent>
             </Popover>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { const n = new Date(selectedDate); n.setDate(n.getDate() + 1); handleDateSelect(n); }}>
+            <Button
+              variant="ghost" size="icon" className="h-8 w-8"
+              onClick={() => { const n = new Date(selectedDate); n.setDate(n.getDate() + 1); handleDateSelect(n); }}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -874,10 +946,10 @@ const composed = req.code ?? '—';
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ perspective: '1200px' }}>
-          <KpiCard label="Total today" value={kpi.total} sub={`${kpi.completionRate}% of total`} fillPercent={kpi.completionRate} fillColor="#378add" valueColor="text-foreground" icon={<CircleDot className="h-4 w-4" />} delay={0} />
-          <KpiCard label="Completed" value={kpi.completed} sub={kpi.total > 0 ? `${Math.round((kpi.completed / safeTotal) * 100)}% completed` : '—'} fillPercent={kpi.total > 0 ? (kpi.completed / safeTotal) * 100 : 0} fillColor="#639922" valueColor="text-[#3B6D11] dark:text-[#97C459]" icon={<CheckCheck className="h-4 w-4" />} delay={80} />
-          <KpiCard label="Pending" value={kpi.pending} sub="awaiting validation" fillPercent={kpi.total > 0 ? (kpi.pending / safeTotal) * 100 : 0} fillColor="#ba7517" valueColor={kpi.pending > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground'} icon={<Clock className="h-4 w-4" />} delay={160} />
-          <KpiCard label="Overdue" value={kpi.overdue} sub="deadline missed" fillPercent={kpi.total > 0 ? (kpi.overdue / safeTotal) * 100 : 0} fillColor="#e24b4a" valueColor={kpi.overdue > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground'} icon={<AlertTriangle className="h-4 w-4" />} delay={240} />
+          <KpiCard label="Total today"  value={kpi.total}     sub={`${kpi.completionRate}% of total`}                                                fillPercent={kpi.completionRate}                                    fillColor="#378add" valueColor="text-foreground"                                     icon={<CircleDot      className="h-4 w-4" />} delay={0}   />
+          <KpiCard label="Completed"    value={kpi.completed} sub={kpi.total > 0 ? `${Math.round((kpi.completed / safeTotal) * 100)}% completed` : '—'} fillPercent={kpi.total > 0 ? (kpi.completed / safeTotal) * 100 : 0} fillColor="#639922" valueColor="text-[#3B6D11] dark:text-[#97C459]"           icon={<CheckCheck     className="h-4 w-4" />} delay={80}  />
+          <KpiCard label="Pending"      value={kpi.pending}   sub="awaiting validation"                                                                fillPercent={kpi.total > 0 ? (kpi.pending   / safeTotal) * 100 : 0} fillColor="#ba7517" valueColor={kpi.pending  > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground'} icon={<Clock          className="h-4 w-4" />} delay={160} />
+          <KpiCard label="Overdue"      value={kpi.overdue}   sub="deadline missed"                                                                    fillPercent={kpi.total > 0 ? (kpi.overdue   / safeTotal) * 100 : 0} fillColor="#e24b4a" valueColor={kpi.overdue  > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground'} icon={<AlertTriangle  className="h-4 w-4" />} delay={240} />
         </div>
 
         {/* Banners */}
@@ -922,7 +994,7 @@ const composed = req.code ?? '—';
                 {selectedIds.size} test{selectedIds.size > 1 ? 's' : ''} highlighted — complete them before end of day
               </p>
             </div>
-            <Button size="sm" variant="ghost" className="text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 h-7 w-7 p-0" onClick={clearSelection}>
+            <Button size="sm" variant="ghost" className="text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 h-7 w-7 p0" onClick={clearSelection}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -954,6 +1026,7 @@ const composed = req.code ?? '—';
         </div>
       </div>
 
+      {/* Overdue Modal */}
       <OverdueModal
         open={overdueModalOpen}
         onClose={() => setOverdueModalOpen(false)}
@@ -962,6 +1035,7 @@ const composed = req.code ?? '—';
         onGoToDate={handleGoToOverdueDate}
       />
 
+      {/* Past Date Confirm Dialog */}
       <AlertDialog open={pendingTestReqId !== null} onOpenChange={(open) => { if (!open) setPendingTestReqId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -985,7 +1059,7 @@ const composed = req.code ?? '—';
                 setPendingTestReqId(null);
               }}
             >
-              Yes, create for {format(selectedDate, 'MMM d', { locale: enUS })}
+              Yes, create for  {format(selectedDate, 'MMM d', { locale: enUS })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
