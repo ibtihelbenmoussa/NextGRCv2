@@ -15,6 +15,8 @@ use App\Http\Controllers\PredefinedTestRequirmentController;
 use App\Http\Controllers\RequirementTestReservationController;
 use App\Http\Controllers\GapAssessmentController;
 use App\Http\Controllers\ActionPlanController;
+use App\Http\Controllers\DocumentAnalysisController;
+
 
 
 
@@ -126,7 +128,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ================= PREDEFINED TEST REQUIREMENTS =================
     // ✅ Routes statiques EN PREMIER (avant tout {paramètre})
-     Route::get('requirements/{requirement}/predefined-tests/requirement', [PredefinedTestRequirmentController::class, 'forRequirement'])
+    Route::get('requirements/{requirement}/predefined-tests/requirement', [PredefinedTestRequirmentController::class, 'forRequirement'])
         ->name('predefinedTestReq.forRequirement');
     Route::get('predefined-tests/export', [PredefinedTestRequirmentController::class, 'export'])
         ->name('predefinedTestReq.export');
@@ -142,7 +144,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('predefinedTestReq.edit');
     Route::put('predefined-tests/requirement/{predefinedTest}', [PredefinedTestRequirmentController::class, 'update'])
         ->name('predefinedTestReq.update');
-   
+
 
     // ✅ Routes avec {predefined_test} EN DERNIER
     Route::get('predefined-tests/{predefined_test}', [App\Http\Controllers\PredefindTestController::class, 'show'])
@@ -208,6 +210,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         [RequirementController::class, 'destroyDocument']
     )
         ->name('requirements.documents.destroy');
+    Route::post('/ai/analyze-document', [DocumentAnalysisController::class, 'analyze'])->name('ai.analyze');
+    Route::post('/ai/import-requirements', [DocumentAnalysisController::class, 'import'])->name('ai.import');
 
     Route::resource('requirements', RequirementController::class);
     // ================= Gap Assessment =================
@@ -261,7 +265,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('requirement-tests/{requirementTest}', [RequirementTestController::class, 'show'])
         ->name('requirement-tests.show');
-        
+
 
     // ================= TEST RESULTS =================
     Route::post('test-results', [TestResultController::class, 'store'])

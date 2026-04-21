@@ -64,6 +64,7 @@ import {
   ListFilter,
   CircleDot,
   ShieldCheck,
+  Sparkles,        // ← NOUVEAU
 } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PaginatedData } from '@/types'
@@ -74,6 +75,7 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd'
 import { cn } from '@/lib/utils'
+import { ImportAIModal } from '@/components/ImportAIModal'   // ← NOUVEAU
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +85,13 @@ interface TagItem {
 }
 
 interface FrameworkOption {
+  code: string
+  name: string
+}
+
+// ← NOUVEAU : framework avec id pour l'import AI
+interface FrameworkForImport {
+  id: number
   code: string
   name: string
 }
@@ -110,6 +119,7 @@ interface Requirement {
 interface RequirementsIndexProps {
   requirements: PaginatedData<Requirement>
   frameworks: FrameworkOption[]
+  frameworksForImport: FrameworkForImport[]   // ← NOUVEAU
 }
 
 type GroupBy = 'status' | 'priority'
@@ -173,7 +183,7 @@ const fallbackStyle = {
   kanbanText: 'text-muted-foreground',
 }
 
-// ─── Framework color palette (cycles for N frameworks) ────────────────────────
+// ─── Framework color palette ──────────────────────────────────────────────────
 
 const FRAMEWORK_COLORS = [
   { bg: 'bg-[#E6F1FB]', text: 'text-[#0C447C]', darkBg: 'dark:bg-[#0C447C]', darkText: 'dark:text-[#B5D4F4]', dot: '#2563eb' },
@@ -195,10 +205,7 @@ function FrameworkPill({ code, colorIndex }: { code: string; colorIndex: number 
       'inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md tracking-wide',
       c.bg, c.text, c.darkBg, c.darkText,
     )}>
-      <span
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ backgroundColor: c.dot }}
-      />
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.dot }} />
       {code}
     </span>
   )
@@ -351,46 +358,38 @@ function KpiCard({
   )
 }
 
-// ─── FrameworkFilter — custom component visuel ────────────────────────────────
+// ─── FrameworkFilter ──────────────────────────────────────────────────────────
 
 function FrameworkFilter({ frameworks }: { frameworks: FrameworkOption[] }) {
-const [selected, setSelected] = useState<string[]>([])
+  const [selected, setSelected] = useState<string[]>([])
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const val = params.get('filter[framework]')
-if (val) setSelected(val.split(','))
+    if (val) setSelected(val.split(','))
   }, [])
 
-const toggle = (code: string) => {
-  let next: string[]
-
-  if (selected.includes(code)) {
-    next = selected.filter(c => c !== code)
-  } else {
-    next = [...selected, code]
+  const toggle = (code: string) => {
+    let next: string[]
+    if (selected.includes(code)) {
+      next = selected.filter(c => c !== code)
+    } else {
+      next = [...selected, code]
+    }
+    setSelected(next)
+    const params = new URLSearchParams(window.location.search)
+    if (next.length > 0) {
+      params.set('filter[framework]', next.join(','))
+    } else {
+      params.delete('filter[framework]')
+    }
+    params.set('page', '1')
+    router.get(`${window.location.pathname}?${params.toString()}`, {}, {
+      preserveState: true, preserveScroll: true, replace: true,
+    })
   }
-
-  setSelected(next)
-
-  const params = new URLSearchParams(window.location.search)
-
-  if (next.length > 0) {
-    params.set('filter[framework]', next.join(','))
-  } else {
-    params.delete('filter[framework]')
-  }
-
-  params.set('page', '1')
-
-  router.get(`${window.location.pathname}?${params.toString()}`, {}, {
-    preserveState: true,
-    preserveScroll: true,
-    replace: true,
-  })
-}
 
   const clearAll = () => {
-setSelected([])
+    setSelected([])
     const params = new URLSearchParams(window.location.search)
     params.delete('filter[framework]')
     params.set('page', '1')
@@ -409,7 +408,7 @@ setSelected([])
       </span>
       {frameworks.map((fw, idx) => {
         const c = FRAMEWORK_COLORS[idx % FRAMEWORK_COLORS.length]
-const isActive = selected.includes(fw.code)
+        const isActive = selected.includes(fw.code)
         return (
           <button
             key={fw.code}
@@ -432,8 +431,8 @@ const isActive = selected.includes(fw.code)
           </button>
         )
       })}
-{selected.length > 0 && (
-          <button
+      {selected.length > 0 && (
+        <button
           onClick={clearAll}
           className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 ml-1 transition-colors"
         >
@@ -446,12 +445,13 @@ const isActive = selected.includes(fw.code)
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RequirementsIndex({ requirements, frameworks }: RequirementsIndexProps) {
+export default function RequirementsIndex({ requirements, frameworks, frameworksForImport }: RequirementsIndexProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [requirementToDelete, setRequirementToDelete] = useState<Requirement | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [groupBy, setGroupBy] = useState<GroupBy>('status')
+  const [aiModalOpen, setAiModalOpen] = useState(false)   // ← NOUVEAU
 
   // ── Framework color index map ─────────────────────────────────
   const frameworkColorMap = useMemo(() => {
@@ -747,12 +747,27 @@ export default function RequirementsIndex({ requirements, frameworks }: Requirem
             <h1 className="text-3xl font-bold tracking-tight">Requirements</h1>
             <p className="text-muted-foreground mt-1.5">Track and manage your compliance requirements</p>
           </div>
+
+          {/* ── Boutons header ── */}
           <div className="flex flex-wrap items-center gap-3">
+
+            {/* ← NOUVEAU : Bouton Import with AI */}
+            <Button
+              variant="outline"
+              onClick={() => setAiModalOpen(true)}
+              className="gap-2 border-primary/40 text-primary hover:bg-primary/5"
+            >
+              <Sparkles className="h-4 w-4" />
+              Import with AI
+            </Button>
+
+            {/* Bouton existant */}
             <Button asChild>
               <Link href="/requirements/create">
                 <Plus className="mr-2 h-4 w-4" /> New Requirement
               </Link>
             </Button>
+
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="hidden sm:block">
               <TabsList className="grid w-44 grid-cols-2">
                 <TabsTrigger value="table"><TableIcon className="mr-2 h-4 w-4" />Table</TabsTrigger>
@@ -950,6 +965,14 @@ export default function RequirementsIndex({ requirements, frameworks }: Requirem
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ← NOUVEAU : Modal Import AI */}
+      <ImportAIModal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        frameworks={frameworksForImport}
+      />
+
     </AppLayout>
   )
 }

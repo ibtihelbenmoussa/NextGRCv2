@@ -123,23 +123,29 @@ class RequirementController extends Controller
             ];
         });
 
-        return Inertia::render('Requirements/Index', [
-            'requirements' => $requirements,
-            'frameworks'   => Framework::where('organization_id', $currentOrgId)
-                ->select('code', 'name')
-                ->orderBy('code')
-                ->get(),
-            'stats' => [
-                'total'         => $total,
-                'lowCount'      => $lowCount,
-                'mediumCount'   => $mediumCount,
-                'highCount'     => $highCount,
-                'lowPercent'    => $total > 0 ? round(($lowCount    / $total) * 100) : 0,
-                'mediumPercent' => $total > 0 ? round(($mediumCount / $total) * 100) : 0,
-                'highPercent'   => $total > 0 ? round(($highCount   / $total) * 100) : 0,
-            ],
-        ]);
-    }
+       return Inertia::render('Requirements/Index', [
+    'requirements' => $requirements,
+    'frameworks'   => Framework::where('organization_id', $currentOrgId)
+        ->select('code', 'name')
+        ->orderBy('code')
+        ->get(),
+    'stats' => [
+        'total'         => $total,
+        'lowCount'      => $lowCount,
+        'mediumCount'   => $mediumCount,
+        'highCount'     => $highCount,
+        'lowPercent'    => $total > 0 ? round(($lowCount    / $total) * 100) : 0,
+        'mediumPercent' => $total > 0 ? round(($mediumCount / $total) * 100) : 0,
+        'highPercent'   => $total > 0 ? round(($highCount   / $total) * 100) : 0,
+    ],
+
+    // ← AJOUTER UNIQUEMENT CETTE LIGNE
+    'frameworksForImport' => Framework::where('organization_id', $currentOrgId)
+        ->where('is_deleted', 0)
+        ->select('id', 'code', 'name')
+        ->orderBy('name')
+        ->get(),
+]);}
 
     public function create()
     {
@@ -749,4 +755,190 @@ class RequirementController extends Controller
             ],
         ]);
     }
+
+    /**
+ * Analyser un document et extraire les requirements via IA
+ */
+public function aiExtract(Request $request, \App\Services\TextExtractorService $textExtractor, \App\Services\RequirementExtractorService $requirementExtractor)
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
+
+    if (!$currentOrgId) {
+        return response()->json(['error' => 'No organization selected'], 403);
+    }
+
+    $request->validate([
+        'document' => 'required|file|mimes:pdf,doc,docx,xls,xlsx,txt|max:20480',
+        'framework_hint' => 'nullable|string|max:100',
+    ]);
+
+    try {
+        // 1. Extraire le texte du document
+        $text = $textExtractor->extract($request->file('document'));
+
+        if (strlen($text) < 50) {
+            return response()->json([
+                'error' => 'Could not extract text from document. The file may be empty or corrupted.'
+            ], 422);
+        }
+
+        // 2. Appeler l'IA pour extraire les requirements
+        $requirements = $requirementExtractor->extract($text, $request->input('framework_hint', ''));
+
+        // 3. Récupérer les frameworks et tags pour l'UI
+        $frameworks = Framework::where('organization_id', $currentOrgId)
+            ->where('is_deleted', 0)
+            ->select('id', 'code', 'name')
+            ->orderBy('name')
+            ->get();
+
+        $tags = Tag::where('organization_id', $currentOrgId)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'requirements' => $requirements,
+            'frameworks' => $frameworks,
+            'tags' => $tags,
+            'count' => count($requirements),
+            'chars_analyzed' => strlen($text),
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('AI Extraction failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'error' => 'Extraction failed: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Importer les requirements extraits par l'IA
+ */
+public function aiImport(Request $request)
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
+
+    if (!$currentOrgId) {
+        return response()->json(['error' => 'No organization selected'], 403);
+    }
+
+    $request->validate([
+        'requirements' => 'required|array|min:1',
+        'requirements.*.code' => 'required|string|max:255',
+        'requirements.*.title' => 'required|string|max:255',
+        'requirements.*.description' => 'nullable|string',
+        'requirements.*.type' => 'required|string|in:regulatory,technical,operational,contractual,internal',
+        'requirements.*.priority' => 'required|string|in:critical,high,medium,low',
+        'requirements.*.frequency' => 'required|string|in:daily,weekly,monthly,quarterly,yearly,one_time,continuous',
+        'requirements.*.compliance_level' => 'required|string|in:mandatory,recommended,optional',
+        'framework_id' => 'nullable|exists:frameworks,id',
+        'tag_ids' => 'nullable|array',
+        'tag_ids.*' => 'integer|exists:tags,id',
+    ]);
+
+    $created = [];
+    $errors = [];
+    $skipped = 0;
+
+    \DB::transaction(function () use ($request, $currentOrgId, $user, &$created, &$errors, &$skipped) {
+        foreach ($request->requirements as $reqData) {
+            // Vérifier si le code existe déjà
+            $existingCode = Requirement::where('organization_id', $currentOrgId)
+                ->where('code', $reqData['code'])
+                ->exists();
+
+            if ($existingCode) {
+                // Générer un code alternatif
+                $baseCode = $reqData['code'];
+                $counter = 1;
+                $newCode = $baseCode;
+                
+                while (Requirement::where('organization_id', $currentOrgId)
+                    ->where('code', $newCode)
+                    ->exists()
+                ) {
+                    $newCode = $baseCode . '-' . $counter++;
+                }
+                $reqData['code'] = $newCode;
+                $skipped++;
+            }
+
+            try {
+                // Convertir la priorité IA (critical/high/medium/low) vers ENUM BDD (high/medium/low)
+                $priorityMap = [
+                    'critical' => 'high',
+                    'high' => 'high',
+                    'medium' => 'medium',
+                    'low' => 'low',
+                ];
+                $priority = $priorityMap[strtolower($reqData['priority'])] ?? 'medium';
+
+                // Convertir le type IA vers type BDD
+                $typeMap = [
+                    'regulatory' => 'regulatory',
+                    'technical' => 'internal',
+                    'operational' => 'internal',
+                    'contractual' => 'contractual',
+                    'internal' => 'internal',
+                ];
+                $type = $typeMap[strtolower($reqData['type'])] ?? 'regulatory';
+
+                // Convertir le compliance_level (mandatory/recommended/optional) vers format BDD (Mandatory/Recommended/Optional)
+                $complianceMap = [
+                    'mandatory' => 'Mandatory',
+                    'recommended' => 'Recommended',
+                    'optional' => 'Optional',
+                ];
+                $complianceLevel = $complianceMap[strtolower($reqData['compliance_level'])] ?? 'Mandatory';
+
+                $requirement = Requirement::create([
+                    'code' => $reqData['code'],
+                    'title' => $reqData['title'],
+                    'description' => $reqData['description'] ?? null,
+                    'type' => $type,
+                    'status' => 'draft', // Les requirements importés sont en draft par défaut
+                    'priority' => $priority,
+                    'frequency' => $reqData['frequency'],
+                    'framework_id' => $request->framework_id,
+                    'owner_id' => $user->id,
+                    'effective_date' => now()->toDateString(),
+                    'compliance_level' => $complianceLevel,
+                    'organization_id' => $currentOrgId,
+                    'auto_validate' => false,
+                    'is_deleted' => 0,
+                ]);
+
+                if ($request->filled('tag_ids')) {
+                    $requirement->tags()->sync($request->tag_ids);
+                }
+
+                $created[] = $requirement;
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'code' => $reqData['code'],
+                    'title' => $reqData['title'],
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+    });
+
+    return response()->json([
+        'success' => true,
+        'created' => count($created),
+        'skipped' => $skipped,
+        'errors' => $errors,
+        'requirements' => $created,
+        'message' => count($created) . ' requirement(s) imported successfully.'
+    ]);
+}
 }
