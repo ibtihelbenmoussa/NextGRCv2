@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->command->info('🌱 Starting database seeding...');
         $this->command->newLine();
+   $this->call(GapQuestionSeeder::class);
 
         // Seed in dependency order
         $this->call([

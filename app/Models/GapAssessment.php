@@ -11,20 +11,18 @@ class GapAssessment extends Model
 {
     protected $fillable = [
         'requirement_id',
-        'current_state',
-        'expected_state',
-        'gap_description',
-        'compliance_level',
         'score',
-        'recommendation'
+        'maturity_level',
+        'answers',
+        'ai_feedback'
+    ];
+
+    protected $casts = [
+        'answers' => 'array',
     ];
 
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);
-    }
-     public function actionPlans(): HasMany
-    {
-        return $this->hasMany(ActionPlan::class, 'gap_id');
     }
 }

@@ -11,18 +11,24 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('gap_assessments', function (Blueprint $table) {
+      Schema::create('gap_assessments', function (Blueprint $table) {
     $table->id();
-    $table->foreignId('requirement_id')->constrained()->onDelete('cascade');
-    $table->text('current_state')->nullable();
-    $table->text('expected_state')->nullable();
-    $table->text('gap_description')->nullable();
-    $table->enum('compliance_level', ['compliant', 'partial', 'non_compliant']);
-    $table->integer('score')->nullable(); // %
-    $table->text('recommendation')->nullable();
+
+    $table->foreignId('requirement_id')
+        ->constrained()
+        ->onDelete('cascade');
+
+    $table->float('score')->default(0); // 0 → 100
+    $table->integer('maturity_level')->default(1); // 1 → 5
+
+    $table->json('answers')->nullable(); 
+    // example: {question_id: score}
+
+    $table->text('ai_feedback')->nullable(); 
+    // AI analysis later
+
     $table->timestamps();
-});
-    }
+});}
 
     /**
      * Reverse the migrations.

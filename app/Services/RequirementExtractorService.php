@@ -7,100 +7,342 @@ use Illuminate\Support\Facades\Log;
 
 class RequirementExtractorService
 {
+    // Pause entre chaque chunk (secondes)
+    private const CHUNK_DELAY = 12;
+
+    // Pause entre passe 1 et passe 2 pour vider la fenêtre TPM
+    private const INTER_PASS_DELAY = 30;
+
+    // Si le Retry-After dépasse ce seuil, on bascule sur un autre modèle
+    // plutôt que d'attendre (3846s = limite RPM journalière, inutile d'attendre)
+    private const MAX_WAIT_SECONDS = 60;
+
+    // Modèles Groq par ordre de préférence (qualité → légèreté)
+    // Chaque modèle a sa propre fenêtre TPM/RPM indépendante
+    private const MODEL_CHAIN = [
+        'llama-3.3-70b-versatile',  // meilleure qualité
+        'llama-3.1-70b-versatile',  // même famille, quota séparé
+        'llama3-70b-8192',          // ancienne version, quota séparé
+        'llama-3.1-8b-instant',     // modèle léger, très généreux en RPM
+    ];
+
     public function extract(string $documentText, string $frameworkHint = ''): array
     {
-        // Nettoyer le texte avant extraction
-        $cleanedText = $this->cleanText($documentText);
-        $truncated = mb_substr($cleanedText, 0, 60000);
+        // Désactiver le timeout PHP pour ce traitement long
+        set_time_limit(0);
 
-        // 1. Groq — modèle puissant
-        try {
-            $result = $this->extractWithGroq($truncated, $frameworkHint);
-            Log::info('RequirementExtractor: Groq used', ['count' => count($result)]);
-            return $result;
-        } catch (\Throwable $e) {
-            Log::warning('Groq failed', ['error' => $e->getMessage()]);
+        $hasAnnexA = str_contains($documentText, 'Annexe A')
+                  || str_contains($documentText, 'Annex A')
+                  || (str_contains($documentText, '5.1') && str_contains($documentText, 'Mesure de sécurité'));
+
+        Log::info('RequirementExtractor: start', [
+            'chars'     => strlen($documentText),
+            'hasAnnexA' => $hasAnnexA,
+        ]);
+
+        if ($hasAnnexA) {
+            return $this->extractInTwoPasses($documentText, $frameworkHint);
         }
 
-        // 2. Ollama local
-        try {
-            $result = $this->extractWithOllama($truncated, $frameworkHint);
-            Log::info('RequirementExtractor: Ollama used', ['count' => count($result)]);
-            return $result;
-        } catch (\Throwable $e) {
-            Log::warning('Ollama failed', ['error' => $e->getMessage()]);
+        return $this->extractSinglePass($documentText, $frameworkHint);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2 passes : clauses 4-10 puis Annexe A en chunks
+    // ─────────────────────────────────────────────────────────────────────────
+    private function extractInTwoPasses(string $text, string $hint): array
+    {
+        $annexePos = null;
+
+        $markers = [
+            'Annexe A', 'Annex A', 'ANNEXE A',
+            'Tableau A.1', '5.1 Politiques de sécurité', 'A.5.1',
+        ];
+
+        foreach ($markers as $marker) {
+            $pos = mb_strpos($text, $marker);
+            if ($pos !== false) {
+                $annexePos = $pos;
+                Log::info('Annexe A marker found', ['marker' => $marker, 'pos' => $pos]);
+                break;
+            }
         }
 
-        // 3. Regex local (dernier recours)
-        return $this->extractLocally($cleanedText, $frameworkHint);
+        if ($annexePos === null || $annexePos < 500) {
+            Log::warning('No Annexe A split found, using single pass');
+            return $this->extractSinglePass($text, $hint);
+        }
+
+        $mainClauses = mb_substr($text, 0, $annexePos);
+        $annexeA     = mb_substr($text, $annexePos);
+
+        Log::info('Split done', [
+            'main_chars'   => strlen($mainClauses),
+            'annexe_chars' => strlen($annexeA),
+        ]);
+
+        $results = [];
+
+        // ── Passe 1 : clauses 4-10 ───────────────────────────────────────────
+        $mainChunks = $this->chunkText($mainClauses, 8000);
+        Log::info('Main chunks', ['count' => count($mainChunks)]);
+
+        foreach ($mainChunks as $i => $chunk) {
+            try {
+                $pass    = $this->callWithModelRotation($chunk, $hint, 'clauses');
+                $results = array_merge($results, $pass);
+                Log::info("Main chunk {$i} OK", ['count' => count($pass)]);
+            } catch (\Throwable $e) {
+                Log::error("Main chunk {$i} failed", ['error' => $e->getMessage()]);
+            }
+
+            if ($i < count($mainChunks) - 1) {
+                $this->throttledSleep(self::CHUNK_DELAY);
+            }
+        }
+
+        // Pause longue entre passe 1 et passe 2 pour vider la fenêtre TPM
+        Log::info('Inter-pass delay before Annexe A', ['seconds' => self::INTER_PASS_DELAY]);
+        $this->throttledSleep(self::INTER_PASS_DELAY);
+
+        // ── Passe 2 : Annexe A ────────────────────────────────────────────────
+        $annexeChunks = $this->chunkText($annexeA, 8000);
+        Log::info('Annexe chunks', ['count' => count($annexeChunks)]);
+
+        foreach ($annexeChunks as $i => $chunk) {
+            try {
+                $pass    = $this->callWithModelRotation($chunk, $hint, 'annex');
+                $results = array_merge($results, $pass);
+                Log::info("Annex chunk {$i} OK", ['count' => count($pass)]);
+            } catch (\Throwable $e) {
+                Log::error("Annex chunk {$i} failed", ['error' => $e->getMessage()]);
+            }
+
+            if ($i < count($annexeChunks) - 1) {
+                $this->throttledSleep(self::CHUNK_DELAY);
+            }
+        }
+
+        $final = $this->deduplicateByCode($results);
+        Log::info('Two-pass complete', ['total' => count($final)]);
+
+        return $final;
     }
 
-    /**
-     * Nettoie le texte extrait du PDF
-     */
-    private function cleanText(string $text): string
+    // ─────────────────────────────────────────────────────────────────────────
+    // Rotation de modèles : tente chaque modèle de la chaîne
+    // Si Retry-After > MAX_WAIT_SECONDS → passe au modèle suivant immédiatement
+    // ─────────────────────────────────────────────────────────────────────────
+    private function callWithModelRotation(string $text, string $hint, string $mode): array
     {
-        // Supprimer les lignes de numéros parasites (pages 3, 26-27 du PDF)
-        $text = preg_replace('/^[0-9\s\.]+\s*$/m', '', $text);
-        
-        // Supprimer les caractères de contrôle et spéciaux
-        $text = preg_replace('/[\x00-\x1F\x7F-\x9F]/u', '', $text);
-        
-        // Supprimer les caractères répétés comme les lignes de tirets
-        $text = preg_replace('/[-ÿ]{10,}/', '', $text);
-        
-        // Supprimer les lignes de copyright et licences
-        $text = preg_replace('/Licensed to.*$/m', '', $text);
-        $text = preg_replace('/© ISO\/IEC.*$/m', '', $text);
-        
-        // Nettoyer les espaces multiples
-        $text = preg_replace('/\s+/', ' ', $text);
-        
-        // Restaurer les sauts de ligne après les phrases
-        $text = preg_replace('/([.!?])\s+(?=[A-ZÉÀÇÔÎ])/', "$1\n", $text);
-        
-        return trim($text);
+        $systemPrompt  = match ($mode) {
+            'clauses' => $this->buildClausesPrompt(),
+            'annex'   => $this->buildAnnexPrompt(),
+            default   => $this->buildSystemPrompt(),
+        };
+
+        $truncatedText = mb_substr($text, 0, 6000);
+        $lastError     = null;
+
+        foreach (self::MODEL_CHAIN as $modelIndex => $model) {
+            Log::info("Trying model [{$modelIndex}]: {$model}", ['mode' => $mode]);
+
+            try {
+                $result = $this->callGroqModel(
+                    $model,
+                    $truncatedText,
+                    $hint,
+                    $systemPrompt
+                );
+                Log::info("Model {$model} succeeded");
+                return $result;
+
+            } catch (RateLimitLongWaitException $e) {
+                // Retry-After trop long → on passe au modèle suivant sans attendre
+                Log::warning("Model {$model} rate-limited with long wait ({$e->getWaitSeconds()}s), switching model", [
+                    'next_model' => self::MODEL_CHAIN[$modelIndex + 1] ?? 'none',
+                ]);
+                $lastError = $e;
+                continue;
+
+            } catch (RateLimitShortWaitException $e) {
+                // Retry-After acceptable → on attend et on réessaie le même modèle
+                Log::warning("Model {$model} rate-limited, waiting {$e->getWaitSeconds()}s then retrying");
+                $this->throttledSleep($e->getWaitSeconds());
+
+                try {
+                    $result = $this->callGroqModel($model, $truncatedText, $hint, $systemPrompt);
+                    Log::info("Model {$model} succeeded after wait");
+                    return $result;
+                } catch (\Throwable $retryError) {
+                    Log::warning("Model {$model} failed after wait, switching model", ['error' => $retryError->getMessage()]);
+                    $lastError = $retryError;
+                    continue;
+                }
+
+            } catch (\Throwable $e) {
+                Log::warning("Model {$model} failed", ['error' => $e->getMessage()]);
+                $lastError = $e;
+                continue;
+            }
+        }
+
+        // Tous les modèles épuisés → fallback Ollama puis regex
+        Log::error('All Groq models exhausted, falling back to Ollama/regex');
+        throw new \RuntimeException('All models exhausted: ' . ($lastError?->getMessage() ?? 'unknown'));
     }
 
-    private function extractWithGroq(string $text, string $hint): array
-    {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Appel HTTP vers un modèle Groq spécifique
+    // Lance RateLimitLongWaitException ou RateLimitShortWaitException sur 429
+    // ─────────────────────────────────────────────────────────────────────────
+    private function callGroqModel(
+        string $model,
+        string $text,
+        string $hint,
+        string $systemPrompt
+    ): array {
+        $maxTokens = str_contains($model, '8b') ? 2000 : 4000;
+
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . config('services.groq.key'),
             'Content-Type'  => 'application/json',
-        ])->timeout(180)->post('https://api.groq.com/openai/v1/chat/completions', [
-            'model'       => 'llama-3.3-70b-versatile',
+        ])->timeout(120)->post('https://api.groq.com/openai/v1/chat/completions', [
+            'model'       => $model,
             'temperature' => 0.1,
-            'max_tokens'  => 8192,
+            'max_tokens'  => $maxTokens,
             'messages'    => [
-                [
-                    'role'    => 'system',
-                    'content' => $this->buildSystemPrompt(),
-                ],
-                [
-                    'role'    => 'user',
-                    'content' => $this->buildUserPrompt($text, $hint),
-                ],
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user',   'content' => ($hint ? "Framework: {$hint}\n\n" : '') . $text],
             ],
         ]);
 
-        if (!$response->successful()) {
-            throw new \RuntimeException('Groq error: ' . $response->status() . ' — ' . $response->body());
+        if ($response->successful()) {
+            return $this->parseAndValidate(
+                $response->json('choices.0.message.content', '')
+            );
         }
 
-        return $this->parseJson($response->json('choices.0.message.content', ''));
+        if ($response->status() === 429) {
+            $waitSeconds = $this->parseRetryAfter($response);
+
+            if ($waitSeconds > self::MAX_WAIT_SECONDS) {
+                throw new RateLimitLongWaitException($waitSeconds);
+            }
+
+            throw new RateLimitShortWaitException($waitSeconds);
+        }
+
+        if ($response->status() === 413) {
+            throw new \RuntimeException('Payload too large (413)');
+        }
+
+        throw new \RuntimeException(
+            "Groq error {$response->status()}: " . $response->body()
+        );
     }
 
-    private function extractWithOllama(string $text, string $hint): array
+    // ─────────────────────────────────────────────────────────────────────────
+    // Extraire le Retry-After depuis la réponse 429
+    // ─────────────────────────────────────────────────────────────────────────
+    private function parseRetryAfter(\Illuminate\Http\Client\Response $response): int
+    {
+        $header = $response->header('Retry-After');
+        if ($header && is_numeric($header)) {
+            return (int) ceil((float) $header) + 2;
+        }
+
+        $retryAfter = $response->json('error.retry_after');
+        if ($retryAfter && is_numeric($retryAfter)) {
+            return (int) ceil((float) $retryAfter) + 2;
+        }
+
+        $message = $response->json('error.message', '');
+        if (preg_match('/try again in\s+([\d.]+)s/i', $message, $matches)) {
+            return (int) ceil((float) $matches[1]) + 2;
+        }
+
+        return 35;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sleep avec log
+    // ─────────────────────────────────────────────────────────────────────────
+    private function throttledSleep(int $seconds): void
+    {
+        Log::info("Rate-limit throttle: sleeping {$seconds}s");
+        sleep($seconds);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Passe unique pour documents sans Annexe A
+    // ─────────────────────────────────────────────────────────────────────────
+    private function extractSinglePass(string $text, string $hint): array
+    {
+        try {
+            $result = $this->callWithModelRotation(mb_substr($text, 0, 60000), $hint, 'general');
+            Log::info('Single pass (Groq) OK', ['count' => count($result)]);
+            return $result;
+        } catch (\Throwable $e) {
+            Log::warning('All Groq models failed, trying Ollama', ['error' => $e->getMessage()]);
+        }
+
+        try {
+            $result = $this->callOllama(mb_substr($text, 0, 40000), $hint);
+            Log::info('Single pass (Ollama) OK', ['count' => count($result)]);
+            return $result;
+        } catch (\Throwable $e) {
+            Log::warning('Ollama failed, using regex', ['error' => $e->getMessage()]);
+        }
+
+        return $this->extractLocally($text, $hint);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Découper un texte long en chunks propres
+    // ─────────────────────────────────────────────────────────────────────────
+    private function chunkText(string $text, int $chunkSize): array
+    {
+        $chunks = [];
+        $len    = mb_strlen($text);
+
+        for ($offset = 0; $offset < $len; $offset += $chunkSize) {
+            $chunk = mb_substr($text, $offset, $chunkSize);
+
+            if ($offset + $chunkSize < $len) {
+                $lastPeriod = mb_strrpos($chunk, '.');
+                if ($lastPeriod !== false && $lastPeriod > (int)($chunkSize * 0.7)) {
+                    $chunk   = mb_substr($chunk, 0, $lastPeriod + 1);
+                    $offset -= ($chunkSize - mb_strlen($chunk));
+                }
+            }
+
+            if (trim($chunk) !== '') {
+                $chunks[] = $chunk;
+            }
+        }
+
+        return $chunks;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Appel Ollama local
+    // ─────────────────────────────────────────────────────────────────────────
+    private function callOllama(string $text, string $hint): array
     {
         $url   = config('services.ollama.url', 'http://localhost:11434');
         $model = config('services.ollama.model', 'llama3.2');
 
-        Http::timeout(3)->get("{$url}/api/tags");
+        try {
+            Http::timeout(3)->get("{$url}/api/tags");
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Ollama not reachable: ' . $e->getMessage());
+        }
 
         $response = Http::timeout(180)->post("{$url}/api/generate", [
-            'model'  => $model,
-            'prompt' => $this->buildSystemPrompt() . "\n\n" . $this->buildUserPrompt($text, $hint),
-            'stream' => false,
+            'model'   => $model,
+            'prompt'  => $this->buildSystemPrompt() . "\n\n" . $text,
+            'stream'  => false,
             'options' => ['temperature' => 0.1, 'num_predict' => 6000],
         ]);
 
@@ -108,322 +350,260 @@ class RequirementExtractorService
             throw new \RuntimeException('Ollama error: ' . $response->status());
         }
 
-        return $this->parseJson($response->json('response', ''));
+        return $this->parseAndValidate($response->json('response', ''));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Prompts
+    // ─────────────────────────────────────────────────────────────────────────
+    private function buildClausesPrompt(): string
+    {
+        return <<<SYSTEM
+You are a GRC expert analyzing ISO 27001:2022 main clauses (sections 4 to 10).
+
+Your task: extract EVERY "doit" / "shall" / "must" obligation from clauses 4, 5, 6, 7, 8, 9, 10.
+
+STRICT OUTPUT RULES:
+- Return ONLY a valid JSON array
+- Start with [ and end with ]
+- No markdown, no backticks, no explanation, no preamble
+
+Code format: ISO-4.1, ISO-4.2, ISO-5.1, ISO-5.2, ISO-5.3, ISO-6.1, ISO-6.1.2, ISO-6.2, ISO-7.1, ISO-7.2, ISO-8.1, ISO-9.1, ISO-9.2, ISO-10.1, etc.
+
+Each object must have exactly these fields:
+{
+  "code": "ISO-X.X",
+  "title": "concise title under 100 chars",
+  "description": "complete description of the obligation",
+  "type": "regulatory",
+  "priority": "critical",
+  "frequency": "yearly",
+  "compliance_level": "mandatory",
+  "source_text": "exact original sentence"
+}
+
+Priority: critical for clauses 4-6, high for clauses 7-10.
+Frequency: continuous for monitoring, yearly for audits/reviews, one_time for initial setup.
+SYSTEM;
+    }
+
+    private function buildAnnexPrompt(): string
+    {
+        return <<<SYSTEM
+You are a GRC expert analyzing ISO 27001:2022 Annex A security controls.
+
+Your task: extract ALL security controls listed in this section.
+
+STRICT OUTPUT RULES:
+- Return ONLY a valid JSON array
+- Start with [ and end with ]
+- No markdown, no backticks, no explanation, no preamble
+
+Code format: ISO-A.5.1, ISO-A.5.2, ISO-A.6.1, ISO-A.7.1, ISO-A.8.1, etc.
+
+Each object must have exactly these fields:
+{
+  "code": "ISO-A.X.X",
+  "title": "control name under 100 chars",
+  "description": "full control description",
+  "type": "operational",
+  "priority": "high",
+  "frequency": "yearly",
+  "compliance_level": "mandatory",
+  "source_text": "exact control text from document"
+}
+
+Type rules:
+- "technical" for section 8 controls (technological)
+- "operational" for sections 5, 6, 7 controls (organizational, people, physical)
+
+Extract EVERY control you find. Do not summarize or skip any.
+SYSTEM;
     }
 
     private function buildSystemPrompt(): string
     {
-        return <<<'SYSTEM'
-You are a senior GRC expert specialized in ISO 27001:2022 compliance requirements extraction.
+        return <<<SYSTEM
+You are a GRC expert. Extract ALL compliance obligations from the document.
 
-## YOUR TASK
-Extract EVERY compliance requirement from the ISO 27001:2022 document. A requirement is any statement containing "shall", "must", "doit", "doivent", "est tenu de", or an obligation.
-
-## CRITICAL OUTPUT RULES
+STRICT OUTPUT RULES:
 - Return ONLY a valid JSON array
-- NO markdown, NO backticks, NO explanations before or after the JSON
-- Start directly with [ and end with ]
-- Extract 50-70 requirements for a full ISO 27001 document
+- Start with [ and end with ]
+- No markdown, no backticks, no explanation
 
-## CODE FORMAT (CRITICAL - use these exact codes)
-For Clauses 4-10:
-- Clause 4.1 → "ISO-4.1" (Understand organization context)
-- Clause 4.2 → "ISO-4.2" (Understand stakeholder needs)
-- Clause 4.3 → "ISO-4.3" (Define ISMS scope)
-- Clause 4.4 → "ISO-4.4" (ISMS establishment)
-- Clause 5.1 → "ISO-5.1" (Leadership and commitment)
-- Clause 5.2 → "ISO-5.2" (Policy)
-- Clause 5.3 → "ISO-5.3" (Roles and responsibilities)
-- Clause 6.1.1 → "ISO-6.1.1" (Risk management general)
-- Clause 6.1.2 → "ISO-6.1.2" (Risk assessment)
-- Clause 6.1.3 → "ISO-6.1.3" (Risk treatment)
-- Clause 6.2 → "ISO-6.2" (Objectives)
-- Clause 6.3 → "ISO-6.3" (Change planning)
-- Clause 7.1 → "ISO-7.1" (Resources)
-- Clause 7.2 → "ISO-7.2" (Competence)
-- Clause 7.3 → "ISO-7.3" (Awareness)
-- Clause 7.4 → "ISO-7.4" (Communication)
-- Clause 7.5 → "ISO-7.5" (Documented information)
-- Clause 8.1 → "ISO-8.1" (Operational planning)
-- Clause 8.2 → "ISO-8.2" (Risk assessment execution)
-- Clause 8.3 → "ISO-8.3" (Risk treatment execution)
-- Clause 9.1 → "ISO-9.1" (Monitoring and measurement)
-- Clause 9.2 → "ISO-9.2" (Internal audit)
-- Clause 9.3 → "ISO-9.3" (Management review)
-- Clause 10.1 → "ISO-10.1" (Continual improvement)
-- Clause 10.2 → "ISO-10.2" (Nonconformity and corrective action)
-
-For Annex A controls (use these codes):
-- Section 5 (Organizational): ISO-A.5.1 to ISO-A.5.37
-- Section 6 (People): ISO-A.6.1 to ISO-A.6.8
-- Section 7 (Physical): ISO-A.7.1 to ISO-A.7.14
-- Section 8 (Technological): ISO-A.8.1 to ISO-A.8.34
-
-## TITLE FORMAT
-Extract the core obligation in under 100 characters, action-oriented:
-- GOOD: "Define and implement information security policies"
-- GOOD: "Establish risk assessment criteria"
-- BAD: "Regulatory requirement"
-- BAD: "ISO requirement clause 5.2"
-
-## DESCRIPTION FORMAT
-Provide the complete requirement text explaining what must be done, why, and any specific conditions.
-
-## TYPE MAPPING
-- "regulatory" → Clause 4,5,6,9,10 (management system requirements)
-- "operational" → Clause 7,8 (support and operation), Annex A sections 5,6,7
-- "technical" → Annex A section 8 (technological controls)
-
-## PRIORITY MAPPING
-- "critical" → Clauses 4,5,6,9,10 (core ISMS clauses)
-- "high" → Clauses 7,8 (support and operation), Annex A controls
-- "medium" → Recommended controls
-- "low" → Optional/advisory notes
-
-## FREQUENCY MAPPING
-- "continuous" → Clause 9.1 (monitoring), Clause 10.1 (continual improvement)
-- "yearly" → Clause 9.2 (internal audit), Clause 9.3 (management review)
-- "quarterly" → Risk assessment reviews
-- "monthly" → Access reviews, monitoring activities
-- "one_time" → Initial ISMS establishment, Statement of Applicability
-
-## OUTPUT EXAMPLE
-[
-  {
-    "code": "ISO-4.1",
-    "title": "Understand organization and its context",
-    "description": "The organization must determine external and internal issues relevant to its purpose and strategic direction that affect the ability to achieve intended outcome(s) of the information security management system.",
-    "type": "regulatory",
-    "priority": "critical",
-    "frequency": "yearly",
-    "compliance_level": "mandatory",
-    "source_text": "L'organisation doit déterminer les enjeux externes et internes pertinents compte tenu de sa mission et qui ont une incidence sur sa capacité à obtenir le(s) résultat(s) attendu(s) de son système de management de la sécurité de l'information."
-  },
-  {
-    "code": "ISO-A.5.1",
-    "title": "Establish information security policies",
-    "description": "Information security policy and topic-specific policies must be defined, approved by management, published, communicated, and acknowledged by relevant personnel and interested parties, and reviewed at planned intervals or when significant changes occur.",
-    "type": "operational",
-    "priority": "high",
-    "frequency": "yearly",
-    "compliance_level": "mandatory",
-    "source_text": "Une politique de sécurité de l'information et des politiques spécifiques à une thématique doivent être définies, approuvées par la direction, publiées, communiquées et demandée en confirmation au personnel et aux parties intéressées concernés, ainsi que révisées à intervalles planifiés et si des changements significatifs ont lieu."
-  }
-]
-
-## REMINDER
-Return ONLY the JSON array. No other text.
+Each object:
+{
+  "code": "unique code e.g. REQ-001",
+  "title": "concise title under 100 chars",
+  "description": "full obligation description",
+  "type": "regulatory|technical|operational|contractual|internal",
+  "priority": "critical|high|medium|low",
+  "frequency": "daily|weekly|monthly|quarterly|yearly|one_time|continuous",
+  "compliance_level": "mandatory|recommended|optional",
+  "source_text": "exact sentence from document"
+}
 SYSTEM;
     }
 
-    private function buildUserPrompt(string $text, string $hint): string
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parser JSON robuste
+    // ─────────────────────────────────────────────────────────────────────────
+    private function parseAndValidate(string $content): array
     {
-        $hintLine = $hint ? "Document type / Framework: {$hint}\n\n" : '';
-        
-        return $hintLine . "Extract ALL compliance requirements from this ISO 27001:2022 document.\n\n" . $text;
-    }
-
-    private function parseJson(string $content): array
-    {
-        // Nettoyer les backticks
         $content = preg_replace('/^```json\s*/i', '', trim($content));
-        $content = preg_replace('/^```\s*/', '', $content);
         $content = preg_replace('/\s*```$/m', '', $content);
         $content = trim($content);
 
-        // Extraire le tableau JSON
         if (!str_starts_with($content, '[')) {
             if (preg_match('/\[[\s\S]*\]/s', $content, $matches)) {
                 $content = $matches[0];
             }
         }
 
-        // Tenter le décodage direct
+        $content = preg_replace('/,(\s*[}\]])/m', '$1', $content);
+
         $data = json_decode($content, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            return $this->validateAndClean($data);
+
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+            Log::error('JSON parse failed', [
+                'error'   => json_last_error_msg(),
+                'preview' => mb_substr($content, 0, 300),
+            ]);
+            throw new \RuntimeException('JSON invalide: ' . json_last_error_msg());
         }
 
-        // Réparer les problèmes JSON courants
-        $content = preg_replace('/,\s*]/', ']', $content);
-        $content = preg_replace('/,\s*}/', '}', $content);
-        $content = preg_replace('/([{,])\s*([a-zA-Z0-9_]+)\s*:/', '$1"$2":', $content);
-        
-        $data = json_decode($content, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            return $this->validateAndClean($data);
-        }
-
-        Log::error('RequirementExtractor: JSON parse failed', [
-            'error' => json_last_error_msg(),
-            'preview' => mb_substr($content, 0, 500),
-        ]);
-
-        throw new \RuntimeException('Invalid JSON from AI: ' . json_last_error_msg());
-    }
-
-    private function validateAndClean(array $data): array
-    {
-        $validTypes = ['regulatory', 'technical', 'operational', 'contractual', 'internal'];
-        $validPriorities = ['critical', 'high', 'medium', 'low'];
-        $validFrequencies = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time', 'continuous'];
+        $validTypes  = ['regulatory', 'technical', 'operational', 'contractual', 'internal'];
+        $validPrios  = ['critical', 'high', 'medium', 'low'];
+        $validFreqs  = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time', 'continuous'];
         $validLevels = ['mandatory', 'recommended', 'optional'];
 
         $cleaned = [];
         foreach ($data as $item) {
-            if (!is_array($item)) continue;
-
-            if (empty($item['code']) || empty($item['title'])) continue;
-
-            // Améliorer les codes ISO manquants
-            $code = strtoupper(trim($item['code'] ?? ''));
-            if (str_starts_with($code, 'REQ-') && str_contains($item['description'] ?? '', 'ISO')) {
-                // Tentative d'extraction du code ISO depuis la description
-                if (preg_match('/[Cc]lause (\d+(?:\.\d+)?)/', $item['description'], $matches)) {
-                    $code = 'ISO-' . $matches[1];
-                } elseif (preg_match('/Annex A\.(\d+\.\d+)/', $item['description'], $matches)) {
-                    $code = 'ISO-A.' . $matches[1];
-                }
+            if (!is_array($item) || empty($item['code']) || empty($item['title'])) {
+                continue;
             }
 
             $cleaned[] = [
-                'code' => substr($code, 0, 50),
-                'title' => substr(trim($item['title'] ?? ''), 0, 100),
-                'description' => trim($item['description'] ?? $item['title'] ?? ''),
-                'type' => in_array($item['type'] ?? '', $validTypes) ? $item['type'] : 'regulatory',
-                'priority' => in_array($item['priority'] ?? '', $validPriorities) ? $item['priority'] : 'high',
-                'frequency' => in_array($item['frequency'] ?? '', $validFrequencies) ? $item['frequency'] : 'yearly',
+                'code'             => strtoupper(substr(trim($item['code']), 0, 50)),
+                'title'            => substr(trim($item['title']), 0, 100),
+                'description'      => trim($item['description'] ?? $item['title']),
+                'type'             => in_array($item['type'] ?? '', $validTypes)  ? $item['type']  : 'regulatory',
+                'priority'         => in_array($item['priority'] ?? '', $validPrios)  ? $item['priority']  : 'medium',
+                'frequency'        => in_array($item['frequency'] ?? '', $validFreqs) ? $item['frequency'] : 'yearly',
                 'compliance_level' => in_array($item['compliance_level'] ?? '', $validLevels) ? $item['compliance_level'] : 'mandatory',
-                'source_text' => substr(trim($item['source_text'] ?? $item['description'] ?? ''), 0, 500),
+                'source_text'      => substr(trim($item['source_text'] ?? ''), 0, 500),
             ];
         }
 
         if (empty($cleaned)) {
-            throw new \RuntimeException('AI returned 0 valid requirements after validation');
+            throw new \RuntimeException('0 requirements valides après validation');
         }
 
         return $cleaned;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Dédoublonner par code
+    // ─────────────────────────────────────────────────────────────────────────
+    private function deduplicateByCode(array $items): array
+    {
+        $seen   = [];
+        $result = [];
+
+        foreach ($items as $item) {
+            $key = strtoupper($item['code'] ?? '');
+            if ($key && !isset($seen[$key])) {
+                $seen[$key] = true;
+                $result[]   = $item;
+            }
+        }
+
+        return $result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Fallback regex local (sans internet)
+    // ─────────────────────────────────────────────────────────────────────────
     private function extractLocally(string $text, string $frameworkHint): array
     {
         $requirements = [];
-        $counter = 1;
-        
-        // Extraire les sections ISO spécifiques
-        $clausePatterns = [
-            '/(?:Clause|clause) (\d+(?:\.\d+(?:\.\d+)?)?)[:\s]+\"([^\"]+)\"/i',
-            '/(\d+(?:\.\d+(?:\.\d+)?)?)\s+(\w+)\s+(?:shall|must|doit)/i',
-            '/La direction doit faire preuve de leadership.*?(?=\.\.\.|\.\s+(?:L|D|E))/s',
-            '/L\'organisation doit (?:déterminer|établir|mettre en œuvre|tenir à jour|améliorer).*?(?=\.)/i',
+        $counter      = 1;
+        $prefix       = $frameworkHint
+            ? strtoupper(preg_replace('/[^A-Z0-9]/i', '', explode(' ', $frameworkHint)[0]))
+            : 'REQ';
+
+        $patterns = [
+            '/(?:shall|must|is required to)[^\.\n]{20,200}/i',
+            '/(?:doit|doivent|est tenu de)[^\.\n]{20,200}/i',
         ];
 
-        $found = [];
-        foreach ($clausePatterns as $pattern) {
+        $seen = [];
+        foreach ($patterns as $pattern) {
             preg_match_all($pattern, $text, $matches);
             foreach ($matches[0] as $match) {
                 $match = trim($match);
-                if (strlen($match) < 30 || in_array($match, $found)) continue;
-                $found[] = $match;
+                $key   = substr($match, 0, 40);
+                if (isset($seen[$key]) || strlen($match) < 20) {
+                    continue;
+                }
+                $seen[$key] = true;
 
                 $requirements[] = [
-                    'code' => 'ISO-' . ($matches[1][0] ?? $counter),
-                    'title' => $this->extractTitle($match),
-                    'description' => $match,
-                    'type' => $this->inferType($match),
-                    'priority' => $this->inferPriority($match),
-                    'frequency' => $this->inferFrequency($match),
+                    'code'             => sprintf('%s-%03d', $prefix, $counter++),
+                    'title'            => ucfirst(implode(' ', array_slice(explode(' ', $match), 0, 8))),
+                    'description'      => $match,
+                    'type'             => 'regulatory',
+                    'priority'         => 'medium',
+                    'frequency'        => 'yearly',
                     'compliance_level' => 'mandatory',
-                    'source_text' => $match,
+                    'source_text'      => $match,
+                    '_source'          => 'local_regex',
                 ];
-                $counter++;
+
+                if ($counter > 50) break 2;
             }
         }
 
-        return $requirements;
+        return $requirements ?: [[
+            'code'             => $prefix . '-001',
+            'title'            => 'General compliance requirement',
+            'description'      => 'Please review document manually.',
+            'type'             => 'regulatory',
+            'priority'         => 'medium',
+            'frequency'        => 'yearly',
+            'compliance_level' => 'mandatory',
+            'source_text'      => '',
+            '_source'          => 'local_regex',
+        ]];
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Exceptions internes pour la gestion du rate limiting
+// ─────────────────────────────────────────────────────────────────────────────
+
+class RateLimitLongWaitException extends \RuntimeException
+{
+    public function __construct(private int $waitSeconds)
+    {
+        parent::__construct("Rate limit with long wait: {$waitSeconds}s");
     }
 
-    private function extractTitle(string $text): string
+    public function getWaitSeconds(): int
     {
-        // Extraire l'action principale
-        $patterns = [
-            '/(?:doit|shall|must)\s+([^.!]+)/i',
-            '/(?:déterminer|établir|mettre en œuvre|définir|identifier|évaluer|traiter|surveiller|améliorer)([^.!]+)/i',
-        ];
-        
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $text, $matches)) {
-                $title = ucfirst(trim($matches[1]));
-                if (strlen($title) > 10 && strlen($title) < 100) {
-                    return $title;
-                }
-            }
-        }
-        
-        return substr($text, 0, 80);
+        return $this->waitSeconds;
+    }
+}
+
+class RateLimitShortWaitException extends \RuntimeException
+{
+    public function __construct(private int $waitSeconds)
+    {
+        parent::__construct("Rate limit with short wait: {$waitSeconds}s");
     }
 
-    private function inferType(string $text): string
+    public function getWaitSeconds(): int
     {
-        $textLower = strtolower($text);
-        
-        if (str_contains($textLower, 'annex a') || str_contains($textLower, 'mesure de sécurité')) {
-            if (preg_match('/(firewall|encryption|password|access|network|backup|crypto)/i', $textLower)) {
-                return 'technical';
-            }
-            return 'operational';
-        }
-        
-        if (preg_match('/(leadership|policy|management review|internal audit|continual improvement)/i', $textLower)) {
-            return 'regulatory';
-        }
-        
-        if (preg_match('/(training|awareness|competence|discipline)/i', $textLower)) {
-            return 'operational';
-        }
-        
-        return 'regulatory';
-    }
-
-    private function inferPriority(string $text): string
-    {
-        $textLower = strtolower($text);
-        
-        if (preg_match('/(leadership|policy|clause 4|clause 5|clause 6|clause 9|clause 10)/i', $textLower)) {
-            return 'critical';
-        }
-        
-        if (preg_match('/(clause 7|clause 8|annex a|shall|must|doit|obligatoire)/i', $textLower)) {
-            return 'high';
-        }
-        
-        if (str_contains($textLower, 'recommended')) {
-            return 'medium';
-        }
-        
-        return 'high';
-    }
-
-    private function inferFrequency(string $text): string
-    {
-        $textLower = strtolower($text);
-        
-        if (preg_match('/(continual improvement|continuously|surveillance|monitoring)/i', $textLower)) {
-            return 'continuous';
-        }
-        if (preg_match('/(internal audit|management review|reviewed|revisées|annuel)/i', $textLower)) {
-            return 'yearly';
-        }
-        if (preg_match('/(quarterly|trimestriel)/i', $textLower)) {
-            return 'quarterly';
-        }
-        if (preg_match('/(monthly|mensuel)/i', $textLower)) {
-            return 'monthly';
-        }
-        if (preg_match('/(establish|initial|setup|établir|initial)/i', $textLower)) {
-            return 'one_time';
-        }
-        
-        return 'yearly';
+        return $this->waitSeconds;
     }
 }

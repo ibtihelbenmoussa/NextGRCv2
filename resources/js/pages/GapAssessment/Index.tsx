@@ -1,566 +1,685 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
-import { Head, Link, router, useForm } from '@inertiajs/react'
-import AppLayout from '@/layouts/app-layout'
-import { type BreadcrumbItem, PaginatedData } from '@/types'
-import { ServerDataTable } from '@/components/server-data-table'
-import { DataTableColumnHeader } from '@/components/server-data-table-column-header'
-import {
-  DataTableFacetedFilter,
-  type FacetedFilterOption,
-} from '@/components/server-data-table-faceted-filter'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Separator } from '@/components/ui/separator'
-import {
-  ClipboardList,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
-  TrendingUp,
-  MoreHorizontal,
-  Eye,
-  Pencil,
-  Trash2,
-  Plus,
-  CircleDot,
-  ListTodo,
-} from 'lucide-react'
-import type { ColumnDef } from '@tanstack/react-table'
-import { cn } from '@/lib/utils'
+import { useState, useCallback } from 'react';
+import { router } from '@inertiajs/react';
+import AppLayout from '@/layouts/app-layout';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface User {
-  id: number
-  name: string
+interface Framework { code: string; name: string; }
+
+interface LastAssessment {
+    score: number;
+    maturity_level: number;
+    created_at: string;
 }
 
 interface Requirement {
-  id: number
-  title: string
-  code?: string
+    id: number;
+    code: string;
+    title: string;
+    priority: string;
+    framework: Framework | null;
+    last_assessment: LastAssessment | null;
 }
 
-interface GapAssessment {
-  id: number
-  requirement_id: number
-  current_state: string | null
-  expected_state: string | null
-  gap_description: string | null
-  compliance_level: 'compliant' | 'partial' | 'non_compliant'
-  score: number | null
-  recommendation: string | null
-  created_at: string
-  requirement: Requirement
+interface Question {
+    id: number;
+    text: string;
+    dimension: string;
+    weight: number;
+    order: number;
+}
+
+type Answer = 'YES' | 'PARTIAL' | 'NO';
+type Phase = 'list' | 'assess' | 'result';
+
+interface AssessmentResult {
+    assessment_id: number;
+    score: number;
+    maturity_level: number;
+    raw_level: number;
+    gate_capped: boolean;
+    gate_cap: number | null;
 }
 
 interface Props {
-  gapAssessments: PaginatedData<GapAssessment>
-  users: User[]
+    requirements: Requirement[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Gap Assessment', href: '/gapassessment' },
-]
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-// ─── Style maps ───────────────────────────────────────────────────────────────
+const LEVEL_LABELS = ['', 'Initial', 'Developing', 'Defined', 'Managed', 'Optimizing'];
+const LEVEL_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e'];
+const ANSWER_VALUES: Record<Answer, number> = { YES: 1.0, PARTIAL: 0.5, NO: 0.0 };
 
-const complianceStyles: Record<string, {
-  pill: string; dot: string
-}> = {
-  compliant: {
-    pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
-    dot: 'bg-[#3B6D11] dark:bg-[#97C459]',
-  },
-  partial: {
-    pill: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-    dot: 'bg-[#854F0B] dark:bg-[#EF9F27]',
-  },
-  non_compliant: {
-    pill: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-    dot: 'bg-[#A32D2D] dark:bg-[#E24B4A]',
-  },
-}
+const PRIORITY_BADGE: Record<string, string> = {
+    high:   'bg-red-500/15 text-red-400 border border-red-500/20',
+    medium: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20',
+    low:    'bg-blue-500/15 text-blue-400 border border-blue-500/20',
+};
 
-const fallbackStyle = {
-  pill: 'bg-[#F1EFE8] text-[#444441] dark:bg-[#444441] dark:text-[#D3D1C7]',
-  dot: 'bg-[#888780]',
-}
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-const complianceLabels: Record<string, string> = {
-  compliant: 'Compliant',
-  partial: 'Partial',
-  non_compliant: 'Non Compliant',
-}
+function ScoreRing({ score, size = 72 }: { score: number; size?: number }) {
+    const level  = getLevel(score);
+    const color  = LEVEL_COLORS[level];
+    const r      = (size - 8) / 2;
+    const circ   = 2 * Math.PI * r;
+    const dash   = (score / 100) * circ;
 
-// ─── StatusPill ───────────────────────────────────────────────────────────────
-
-function StatusPill({ value, styleMap, labelMap }: {
-  value: string
-  styleMap: typeof complianceStyles
-  labelMap?: Record<string, string>
-}) {
-  const key = value?.toLowerCase() ?? ''
-  const s = styleMap[key] ?? fallbackStyle
-  const label = labelMap?.[key] ?? (key.charAt(0).toUpperCase() + key.slice(1))
-  return (
-    <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full', s.pill)}>
-      <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', s.dot)} />
-      {label || '—'}
-    </span>
-  )
-}
-
-// ─── ScoreBar ─────────────────────────────────────────────────────────────────
-
-function ScoreBar({ score }: { score: number | null }) {
-  if (score === null) return <span className="text-muted-foreground text-xs">—</span>
-  const color = score >= 75 ? '#3B6D11' : score >= 40 ? '#854F0B' : '#A32D2D'
-  return (
-    <div className="flex items-center gap-2 min-w-[110px]">
-      <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(Math.max(score, 0), 100)}%`, backgroundColor: color }} />
-      </div>
-      <span className="text-xs font-medium tabular-nums w-9 text-right">{score}%</span>
-    </div>
-  )
-}
-
-// ─── useCountUp ───────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, duration = 900) {
-  const [value, setValue] = useState(0)
-  const rafRef = useRef<number | null>(null)
-  useEffect(() => {
-    if (target === 0) { setValue(0); return }
-    const start = performance.now()
-    const tick = (now: number) => {
-      const elapsed = now - start
-      const progress = Math.min(elapsed / duration, 1)
-      setValue(Math.round(target * (1 - Math.pow(1 - progress, 3))))
-      if (progress < 1) rafRef.current = requestAnimationFrame(tick)
-    }
-    rafRef.current = requestAnimationFrame(tick)
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-  }, [target, duration])
-  return value
-}
-
-// ─── KpiCard ──────────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub, fillPercent, fillColor, icon, valueColor, delay = 0 }: {
-  label: string; value: number | string; sub?: string
-  fillPercent?: number; fillColor: string; icon: React.ReactNode
-  valueColor?: string; delay?: number
-}) {
-  const numericValue = typeof value === 'number' ? value : 0
-  const [mounted, setMounted] = useState(false)
-  const [barWidth, setBarWidth] = useState(0)
-  const animatedValue = useCountUp(mounted ? numericValue : 0, 900)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const [tilt, setTilt] = useState({ x: 0, y: 0 })
-  const [isHovered, setIsHovered] = useState(false)
-  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 })
-
-  useEffect(() => {
-    const t1 = setTimeout(() => setMounted(true), delay)
-    const t2 = setTimeout(() => setBarWidth(fillPercent ?? 0), delay + 120)
-    return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, [delay, fillPercent])
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const card = cardRef.current; if (!card) return
-    const rect = card.getBoundingClientRect()
-    setTilt({ x: ((e.clientY - rect.top - rect.height / 2) / (rect.height / 2)) * -10, y: ((e.clientX - rect.left - rect.width / 2) / (rect.width / 2)) * 10 })
-    setGlowPos({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 })
-  }
-
-  const isH = isHovered
-  return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setTilt({ x: 0, y: 0 }); setIsHovered(false) }}
-      style={{
-        transform: isH ? `perspective(600px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(1.04) translateY(-3px)` : 'perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)',
-        transition: isH ? 'transform 0.1s ease-out, box-shadow 0.2s ease-out, opacity 0.5s ease-out' : 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.4s ease-out, opacity 0.5s ease-out',
-        boxShadow: isH ? `0 12px 32px -8px ${fillColor}40, 0 4px 16px -4px ${fillColor}25` : '0 1px 3px rgba(0,0,0,0.12)',
-        opacity: mounted ? 1 : 0,
-      }}
-      className="bg-muted/40 rounded-lg p-4 flex flex-col gap-1.5 cursor-default relative overflow-hidden"
-    >
-      {isH && <div className="pointer-events-none absolute inset-0 rounded-lg" style={{ background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${fillColor}18 0%, transparent 65%)` }} />}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-lg transition-opacity duration-300" style={{ background: `linear-gradient(90deg, transparent, ${fillColor}80, transparent)`, opacity: isH ? 1 : 0 }} />
-      <div className="flex items-center justify-between relative z-10">
-        <span className="text-xs text-muted-foreground font-mono tracking-wide uppercase">{label}</span>
-        <span className={cn('transition-all duration-300', isH ? 'text-foreground/80 scale-110' : 'text-muted-foreground/60')}>{icon}</span>
-      </div>
-      <div className={cn('text-2xl font-semibold leading-none tabular-nums relative z-10', valueColor, isH && 'scale-105 origin-left')}>
-        {typeof value === 'number' ? animatedValue : value}
-      </div>
-      {sub && <div className={cn('text-xs font-mono relative z-10 transition-opacity duration-500', mounted ? 'opacity-100' : 'opacity-0')} style={{ color: fillColor, transitionDelay: `${delay + 350}ms` }}>{sub}</div>}
-      <div className="h-0.5 rounded-full bg-border mt-1 overflow-hidden relative z-10">
-        <div className="h-0.5 rounded-full" style={{ width: `${Math.min(barWidth, 100)}%`, backgroundColor: fillColor, transition: isH ? 'width 0.3s ease-out' : `width 900ms cubic-bezier(0.4,0,0.2,1) ${delay + 150}ms`, filter: isH ? `drop-shadow(0 0 3px ${fillColor})` : 'none' }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── CreateActionForm (inside Sheet) ─────────────────────────────────────────
-
-function CreateActionSheet({ gap, users, open, onClose }: {
-  gap: GapAssessment | null
-  users: User[]
-  open: boolean
-  onClose: () => void
-}) {
-  const { data, setData, post, processing, errors, reset } = useForm({
-    gap_id: gap?.id ?? '',
-    title: '',
-    description: '',
-    assigned_to: '',
-    due_date: '',
-    status: 'open',
-  })
-
-  // sync gap_id when gap changes
-  useEffect(() => {
-    if (gap) setData('gap_id', gap.id)
-  }, [gap])
-
-  const submit = () => {
-    post('/action-plans', {
-      onSuccess: () => { reset(); onClose() },
-    })
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="mb-6">
-          <SheetTitle className="flex items-center gap-2">
-            <ListTodo className="h-5 w-5 text-primary" />
-            Create Action Plan
-          </SheetTitle>
-          {gap && (
-            <SheetDescription>
-              Linked to: <span className="font-medium text-foreground">{gap.requirement?.code} — {gap.requirement?.title}</span>
-            </SheetDescription>
-          )}
-        </SheetHeader>
-
-        <div className="space-y-5">
-          {/* Title */}
-          <div className="space-y-1.5">
-            <Label htmlFor="ap-title">Title <span className="text-destructive">*</span></Label>
-            <Input
-              id="ap-title"
-              value={data.title}
-              onChange={e => setData('title', e.target.value)}
-              placeholder="e.g. Implement access controls"
-            />
-            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="ap-desc">Description</Label>
-            <Textarea
-              id="ap-desc"
-              value={data.description}
-              onChange={e => setData('description', e.target.value)}
-              placeholder="Describe the corrective action..."
-              rows={3}
-            />
-          </div>
-
-          {/* Assigned To */}
-          <div className="space-y-1.5">
-            <Label>Assigned To <span className="text-destructive">*</span></Label>
-            <Select value={String(data.assigned_to)} onValueChange={v => setData('assigned_to', v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a user" />
-              </SelectTrigger>
-              <SelectContent>
-                {users?.map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.assigned_to && <p className="text-xs text-destructive">{errors.assigned_to}</p>}
-          </div>
-
-          {/* Due Date */}
-          <div className="space-y-1.5">
-            <Label htmlFor="ap-due">Due Date <span className="text-destructive">*</span></Label>
-            <Input
-              id="ap-due"
-              type="date"
-              value={data.due_date}
-              onChange={e => setData('due_date', e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
-            />
-            {errors.due_date && <p className="text-xs text-destructive">{errors.due_date}</p>}
-          </div>
-
-          <Separator />
-
-          <div className="flex gap-3 pt-1">
-            <Button variant="outline" className="flex-1" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={submit} disabled={processing}>
-              {processing ? 'Creating...' : 'Create Action'}
-            </Button>
-          </div>
+    return (
+        <div className="relative" style={{ width: size, height: size }}>
+            <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1f1f1f" strokeWidth={8} />
+                <circle
+                    cx={size/2} cy={size/2} r={r}
+                    fill="none" stroke={color} strokeWidth={8}
+                    strokeDasharray={`${dash} ${circ}`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="font-mono font-bold text-sm" style={{ color }}>
+                    {Math.round(score)}%
+                </span>
+            </div>
         </div>
-      </SheetContent>
-    </Sheet>
-  )
+    );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function GapAssessmentIndex({ gapAssessments, users }: Props) {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [assessmentToDelete, setAssessmentToDelete] = useState<GapAssessment | null>(null)
-  const [actionSheetOpen, setActionSheetOpen] = useState(false)
-  const [selectedGap, setSelectedGap] = useState<GapAssessment | null>(null)
-
-  // ── Stats ────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const data = gapAssessments.data
-    const total = data.length || 1
-    const compliant = data.filter(g => g.compliance_level === 'compliant').length
-    const partial = data.filter(g => g.compliance_level === 'partial').length
-    const nonCompliant = data.filter(g => g.compliance_level === 'non_compliant').length
-    const scores = data.filter(g => g.score !== null).map(g => g.score!)
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null
-    return {
-      total: data.length, compliant, partial, nonCompliant, avgScore,
-      compliantRate: Math.round((compliant / total) * 100),
-      partialRate: Math.round((partial / total) * 100),
-      nonCompliantRate: Math.round((nonCompliant / total) * 100),
-    }
-  }, [gapAssessments.data])
-
-  const kpiCards = [
-    { label: 'Total', value: stats.total, sub: `${gapAssessments.data.length} on page`, fillPercent: 100, fillColor: '#378add', icon: <CircleDot className="h-4 w-4" />, valueColor: 'text-foreground', delay: 0 },
-    { label: 'Compliant', value: stats.compliant, sub: `${stats.compliantRate}%`, fillPercent: stats.compliantRate, fillColor: '#639922', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: stats.compliant > 0 ? 'text-[#3B6D11] dark:text-[#97C459]' : 'text-foreground', delay: 80 },
-    { label: 'Partial', value: stats.partial, sub: `${stats.partialRate}%`, fillPercent: stats.partialRate, fillColor: '#ba7517', icon: <AlertCircle className="h-4 w-4" />, valueColor: stats.partial > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground', delay: 160 },
-    { label: 'Non Compliant', value: stats.nonCompliant, sub: `${stats.nonCompliantRate}%`, fillPercent: stats.nonCompliantRate, fillColor: '#e24b4a', icon: <XCircle className="h-4 w-4" />, valueColor: stats.nonCompliant > 0 ? 'text-[#A32D2D] dark:text-[#F09595]' : 'text-foreground', delay: 240 },
-    { label: 'Avg Score', value: stats.avgScore !== null ? stats.avgScore : '—', sub: stats.avgScore !== null ? 'out of 100' : 'no scores yet', fillPercent: stats.avgScore ?? 0, fillColor: '#378add', icon: <TrendingUp className="h-4 w-4" />, valueColor: 'text-foreground', delay: 320 },
-  ]
-
-  // ── Columns ──────────────────────────────────────────────────
-  const complianceOptions: FacetedFilterOption[] = [
-    { label: 'Compliant', value: 'compliant', icon: CheckCircle2 },
-    { label: 'Partial', value: 'partial', icon: AlertCircle },
-    { label: 'Non Compliant', value: 'non_compliant', icon: XCircle },
-  ]
-
-  const columns: ColumnDef<GapAssessment>[] = [
-    {
-      accessorKey: 'requirement.code',
-      header: ({ column }) => <div className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-muted-foreground" /><DataTableColumnHeader column={column} title="Code" /></div>,
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.requirement?.code ?? '—'}</span>,
-    },
-    {
-      accessorKey: 'requirement.title',
-      header: ({ column }) => <div className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-muted-foreground" /><DataTableColumnHeader column={column} title="Requirement" /></div>,
-      cell: ({ row }) => (
-        <Link href={`/gapassessment/${row.original.id}`} className="font-medium hover:underline">
-          {row.original.requirement?.title ?? '—'}
-        </Link>
-      ),
-    },
-    {
-      accessorKey: 'compliance_level',
-      header: ({ column }) => <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-muted-foreground" /><DataTableColumnHeader column={column} title="Compliance Level" /></div>,
-      cell: ({ row }) => <StatusPill value={row.getValue('compliance_level')} styleMap={complianceStyles} labelMap={complianceLabels} />,
-    },
-    {
-      accessorKey: 'score',
-      header: ({ column }) => <div className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-muted-foreground" /><DataTableColumnHeader column={column} title="Score" /></div>,
-      cell: ({ row }) => <ScoreBar score={row.getValue('score')} />,
-    },
-    {
-      accessorKey: 'gap_description',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Gap Description" />,
-      cell: ({ row }) => {
-        const desc = row.getValue('gap_description') as string | null
-        if (!desc) return <span className="text-muted-foreground text-xs">—</span>
-        return <p className="text-sm text-muted-foreground line-clamp-2 max-w-xs">{desc}</p>
-      },
-      enableSorting: false,
-    },
-    {
-      accessorKey: 'created_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Created At" />,
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {new Date(row.getValue('created_at')).toLocaleDateString('fr-TN', { year: 'numeric', month: 'short', day: 'numeric' })}
-        </span>
-      ),
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => {
-        const assessment = row.original
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => router.visit(`/gapassessment/${assessment.id}`)}>
-                <Eye className="mr-2 h-4 w-4" /> View
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.visit(`/gapassessment/${assessment.id}/edit`)}>
-                <Pencil className="mr-2 h-4 w-4" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {/* ── Bouton Create Action ── */}
-              <DropdownMenuItem
-                onClick={() => { setSelectedGap(assessment); setActionSheetOpen(true) }}
-                className="text-primary focus:bg-primary/10"
-              >
-                <ListTodo className="mr-2 h-4 w-4" /> Create Action
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:bg-destructive/10"
-                onClick={() => { setAssessmentToDelete(assessment); setDeleteDialogOpen(true) }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-    },
-  ]
-
-  const handleDeleteConfirm = () => {
-    if (assessmentToDelete) {
-      router.delete(`/gapassessment/${assessmentToDelete.id}`, {
-        onSuccess: () => { setDeleteDialogOpen(false); setAssessmentToDelete(null) },
-      })
-    }
-  }
-
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Gap Assessment" />
-
-      <div className="space-y-6 py-6 px-4">
-
-        {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Gap Assessment</h1>
-            <p className="text-muted-foreground mt-1.5">Track and manage compliance gaps across requirements</p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" asChild>
-              <Link href="/action-plans">
-                <ListTodo className="mr-2 h-4 w-4" /> Action Plans
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href="/gapassessment/create">
-                <Plus className="mr-2 h-4 w-4" /> New Assessment
-              </Link>
-            </Button>
-          </div>
+function MaturityBars({ level }: { level: number }) {
+    const color = LEVEL_COLORS[level];
+    return (
+        <div className="flex gap-1">
+            {[1,2,3,4,5].map(l => (
+                <div
+                    key={l}
+                    className="h-1.5 rounded-full transition-all duration-500"
+                    style={{
+                        width: 20,
+                        background: l <= level ? color : '#1f1f1f',
+                    }}
+                />
+            ))}
         </div>
+    );
+}
 
-        {/* ── KPI Cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" style={{ perspective: '1200px' }}>
-          {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
+function DimensionBar({
+    label, answered, value,
+}: { label: string; answered: boolean; value: number }) {
+    const color = value === 1 ? '#22c55e' : value === 0.5 ? '#eab308' : value === 0 ? '#ef4444' : '#1f1f1f';
+    const pct   = answered ? value * 100 : 0;
+    const text  = !answered ? null : value === 1 ? 'YES' : value === 0.5 ? 'PARTIAL' : 'NO';
+
+    return (
+        <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-500 w-24 shrink-0">{label}</span>
+            <div className="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, background: answered ? color : 'transparent' }}
+                />
+            </div>
+            {text && (
+                <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded w-14 text-center"
+                    style={{ background: color + '20', color }}
+                >
+                    {text}
+                </span>
+            )}
         </div>
+    );
+}
 
-        <Separator className="my-6" />
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-        {/* ── Table ── */}
-        <ServerDataTable
-          columns={columns}
-          data={gapAssessments}
-          searchPlaceholder="Search requirement title or code..."
-          filters={
-            <DataTableFacetedFilter
-              filterKey="compliance_level"
-              title="Compliance"
-              options={complianceOptions}
-            />
-          }
-          initialState={{ columnPinning: { right: ['actions'] } }}
-        />
-      </div>
+function getLevel(score: number): number {
+    if (score < 20) return 1;
+    if (score < 40) return 2;
+    if (score < 60) return 3;
+    if (score < 80) return 4;
+    return 5;
+}
 
-      {/* ── Create Action Sheet ── */}
-      <CreateActionSheet
-        gap={selectedGap}
-        users={users}
-        open={actionSheetOpen}
-        onClose={() => { setActionSheetOpen(false); setSelectedGap(null) }}
-      />
+function computeClientScore(questions: Question[], answers: Record<number, Answer>): number {
+    let total = 0, weights = 0;
+    for (const q of questions) {
+        const v = ANSWER_VALUES[answers[q.id]] ?? 0;
+        total   += v * q.weight;
+        weights += q.weight;
+    }
+    return weights > 0 ? (total / weights) * 100 : 0;
+}
 
-      {/* ── Delete Dialog ── */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Assessment</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this gap assessment for "{assessmentToDelete?.requirement?.title}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </AppLayout>
-  )
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function GapAssessmentIndex({ requirements }: Props) {
+    // Phase state
+    const [phase,     setPhase]     = useState<Phase>('list');
+    const [selected,  setSelected]  = useState<Requirement | null>(null);
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [qIdx,      setQIdx]      = useState(0);
+    const [answers,   setAnswers]   = useState<Record<number, Answer>>({});
+    const [gateCap,   setGateCap]   = useState<number | null>(null);
+    const [result,    setResult]    = useState<AssessmentResult | null>(null);
+    const [aiText,    setAiText]    = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [loading,   setLoading]   = useState(false);
+    const [animKey,   setAnimKey]   = useState(0);
+
+    // ── Start assessment ──────────────────────────────────────────────────────
+    const startAssessment = useCallback(async (req: Requirement) => {
+        setLoading(true);
+        try {
+            const res  = await fetch(`/gap-assessment/questions/${req.id}`);
+            const data = await res.json();
+            setSelected(req);
+            setQuestions(data.questions);
+            setAnswers({});
+            setQIdx(0);
+            setGateCap(null);
+            setResult(null);
+            setAiText('');
+            setPhase('assess');
+            setAnimKey(k => k + 1);
+        } catch {
+            alert('Failed to load questions. Please try again.');
+        }
+        setLoading(false);
+    }, []);
+
+    // ── Handle answer ─────────────────────────────────────────────────────────
+    const handleAnswer = useCallback(async (val: Answer) => {
+        const currentQ   = questions[qIdx];
+        const newAnswers = { ...answers, [currentQ.id]: val };
+        setAnswers(newAnswers);
+
+        // Gate check on Q1
+        let cap = gateCap;
+        if (currentQ.order === 1) {
+            if (val === 'NO')      { cap = 1; setGateCap(1); }
+            if (val === 'PARTIAL') { cap = 2; setGateCap(2); }
+        }
+
+        const isLast    = qIdx >= questions.length - 1;
+        const gateStop  = currentQ.order === 1 && val === 'NO';
+
+        if (isLast || gateStop) {
+            // Submit to backend
+            setLoading(true);
+            try {
+                const res = await fetch('/gap-assessments', {
+                    method:  'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    },
+                    body: JSON.stringify({
+                        requirement_id: selected!.id,
+                        answers:        newAnswers,
+                    }),
+                });
+                const data: AssessmentResult = await res.json();
+                setResult(data);
+                setPhase('result');
+                setAnimKey(k => k + 1);
+            } catch {
+                alert('Failed to save assessment.');
+            }
+            setLoading(false);
+        } else {
+            setAnimKey(k => k + 1);
+            setQIdx(i => i + 1);
+        }
+    }, [questions, qIdx, answers, gateCap, selected]);
+
+    // ── AI feedback ───────────────────────────────────────────────────────────
+    const generateAI = useCallback(async () => {
+        if (!result || !selected) return;
+        setAiLoading(true);
+
+        const answerSummary = questions.map(q =>
+            `${q.dimension}: ${answers[q.id] ?? 'NOT ANSWERED'}`
+        ).join(', ');
+
+        try {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model:      'claude-sonnet-4-20250514',
+                    max_tokens: 1000,
+                    system:     `You are a GRC compliance expert. Write a concise 3-sentence gap analysis narrative. Be specific and actionable. Return ONLY the paragraph, no headers or bullets.`,
+                    messages: [{
+                        role:    'user',
+                        content: `Requirement: ${selected.code} - ${selected.title}
+Maturity Level: ${result.maturity_level}/5 (${LEVEL_LABELS[result.maturity_level]})
+Score: ${result.score}%
+Answers: ${answerSummary}
+Gap to Level 5: ${5 - result.maturity_level} levels.
+Provide a professional gap analysis with 2-3 specific, prioritized improvement actions.`,
+                    }],
+                }),
+            });
+            const data = await res.json();
+            const text = data.content?.[0]?.text ?? 'Unable to generate analysis.';
+            setAiText(text);
+
+            // Save to backend
+            await fetch(`/gap-assessments/${result.assessment_id}/ai-feedback`, {
+                method:  'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                },
+                body: JSON.stringify({ feedback: text }),
+            });
+        } catch {
+            setAiText('AI analysis unavailable. Please check your connection.');
+        }
+        setAiLoading(false);
+    }, [result, selected, questions, answers]);
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
+    const currentQ      = questions[qIdx];
+    const answeredCount = Object.keys(answers).length;
+    const clientScore   = computeClientScore(questions, answers);
+    const finalLevel    = result
+        ? result.maturity_level
+        : (gateCap ? Math.min(getLevel(clientScore), gateCap) : getLevel(clientScore));
+
+    return (
+        <AppLayout breadcrumbs={[
+            { title: 'Compliance Management', href: '#' },
+            { title: 'Gap Assessment', href: '/gap-assessment' },
+        ]}>
+            <div className="px-8 py-8 max-w-5xl mx-auto">
+
+                {/* ── Header ─────────────────────────────────────────────── */}
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-white tracking-tight mb-1">
+                        Gap Assessment
+                    </h1>
+                    <p className="text-sm text-zinc-500">
+                        Evaluate compliance maturity through adaptive Yes/No questionnaires
+                    </p>
+                </div>
+
+                {/* ══ PHASE: LIST ══════════════════════════════════════════════ */}
+                {phase === 'list' && (
+                    <div>
+                        {/* Stats row */}
+                        <div className="grid grid-cols-3 gap-4 mb-8">
+                            {[
+                                { label: 'Total Requirements', value: requirements.length },
+                                { label: 'Assessed',           value: requirements.filter(r => r.last_assessment).length },
+                                { label: 'Pending Assessment', value: requirements.filter(r => !r.last_assessment).length },
+                            ].map(stat => (
+                                <div key={stat.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                                    <p className="text-xs text-zinc-500 mb-2">{stat.label}</p>
+                                    <p className="text-3xl font-bold text-white">{stat.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Requirements list */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+                                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                                    Requirements
+                                </span>
+                                <span className="text-xs text-zinc-600">
+                                    Click a row to start assessment
+                                </span>
+                            </div>
+
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-zinc-800/50">
+                                        {['Code', 'Title', 'Framework', 'Priority', 'Last Score', 'Maturity', ''].map(h => (
+                                            <th key={h} className="text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider px-5 py-3">
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {requirements.map((req, i) => {
+                                        const la    = req.last_assessment;
+                                        const color = la ? LEVEL_COLORS[la.maturity_level] : undefined;
+                                        return (
+                                            <tr
+                                                key={req.id}
+                                                className="border-b border-zinc-800/30 hover:bg-zinc-800/40 transition-colors cursor-pointer"
+                                                onClick={() => startAssessment(req)}
+                                            >
+                                                <td className="px-5 py-3.5">
+                                                    <span className="font-mono text-xs font-semibold text-zinc-300">
+                                                        {req.code}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5 max-w-xs">
+                                                    <span className="text-sm text-zinc-200 line-clamp-1">
+                                                        {req.title}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5">
+                                                    {req.framework && (
+                                                        <span className="text-xs text-zinc-500">
+                                                            {req.framework.code}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3.5">
+                                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${PRIORITY_BADGE[req.priority] ?? ''}`}>
+                                                        {req.priority}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5">
+                                                    {la ? (
+                                                        <span className="font-mono text-sm font-bold" style={{ color }}>
+                                                            {Math.round(la.score)}%
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-zinc-600">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3.5">
+                                                    {la ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-bold" style={{ color }}>
+                                                                L{la.maturity_level}
+                                                            </span>
+                                                            <MaturityBars level={la.maturity_level} />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-zinc-600">Not assessed</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-right">
+                                                    <button
+                                                        className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+                                                        onClick={e => { e.stopPropagation(); startAssessment(req); }}
+                                                    >
+                                                        {la ? 'Re-assess →' : 'Start →'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+
+                            {requirements.length === 0 && (
+                                <div className="py-16 text-center text-zinc-600 text-sm">
+                                    No active requirements found. Activate requirements first.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ══ PHASE: ASSESS ════════════════════════════════════════════ */}
+                {phase === 'assess' && currentQ && (
+                    <div key={`assess-${animKey}`} style={{ animation: 'fadeSlideIn 0.25s ease' }}>
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <span className="text-xs text-zinc-500 font-mono">{selected?.code}</span>
+                                <span className="text-xs text-zinc-600 mx-2">—</span>
+                                <span className="text-xs text-zinc-400">{selected?.title}</span>
+                            </div>
+                            <button
+                                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                                onClick={() => setPhase('list')}
+                            >
+                                ← Back to list
+                            </button>
+                        </div>
+
+                        {/* Progress */}
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="flex-1 h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-red-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+                                />
+                            </div>
+                            <span className="text-xs text-zinc-500 shrink-0">
+                                {qIdx + 1} / {questions.length}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-5">
+                            {/* Question card — left */}
+                            <div className="col-span-3 bg-zinc-900 border border-zinc-800 rounded-xl p-7">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">
+                                    Question {qIdx + 1} · {currentQ.dimension}
+                                </div>
+                                <p className="text-xl font-semibold text-white leading-relaxed mb-10">
+                                    {currentQ.text}
+                                </p>
+
+                                {/* Answer buttons */}
+                                <div className="flex gap-3">
+                                    {(['YES', 'PARTIAL', 'NO'] as Answer[]).map(val => {
+                                        const styles: Record<Answer, string> = {
+                                            YES:     'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500',
+                                            PARTIAL: 'border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500',
+                                            NO:      'border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500',
+                                        };
+                                        const labels: Record<Answer, string> = {
+                                            YES: '✓ Yes', PARTIAL: '~ Partial', NO: '✕ No',
+                                        };
+                                        return (
+                                            <button
+                                                key={val}
+                                                disabled={loading}
+                                                onClick={() => handleAnswer(val)}
+                                                className={`flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all duration-150 ${styles[val]} disabled:opacity-40`}
+                                            >
+                                                {labels[val]}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Live progress — right */}
+                            <div className="col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-5">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                                    Live Progress
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {questions.map(q => (
+                                        <DimensionBar
+                                            key={q.id}
+                                            label={q.dimension}
+                                            answered={answers[q.id] !== undefined}
+                                            value={ANSWER_VALUES[answers[q.id]] ?? 0}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Gate warning */}
+                                {gateCap && (
+                                    <div className="mt-auto p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                                        ⚠ Maturity capped at Level {gateCap}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ══ PHASE: RESULT ════════════════════════════════════════════ */}
+                {phase === 'result' && result && selected && (
+                    <div key={`result-${animKey}`} style={{ animation: 'fadeSlideIn 0.3s ease' }}>
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <span className="text-xs font-mono text-zinc-400">{selected.code}</span>
+                                <span className="mx-2 text-zinc-700">—</span>
+                                <span className="text-sm font-semibold text-white">{selected.title}</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                    onClick={() => setPhase('list')}
+                                >
+                                    ← All Requirements
+                                </button>
+                                <button
+                                    className="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 transition-colors"
+                                    onClick={() => startAssessment(selected)}
+                                >
+                                    Retake
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Result cards */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            {/* Score card */}
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-5">
+                                    Maturity Level
+                                </div>
+                                <div className="flex items-center gap-5 mb-6">
+                                    <ScoreRing score={result.score} size={88} />
+                                    <div>
+                                        <div className="flex items-baseline gap-1 mb-1">
+                                            <span className="text-5xl font-black" style={{ color: LEVEL_COLORS[result.maturity_level] }}>
+                                                {result.maturity_level}
+                                            </span>
+                                            <span className="text-xl text-zinc-700 font-light">/5</span>
+                                        </div>
+                                        <span className="text-sm font-semibold" style={{ color: LEVEL_COLORS[result.maturity_level] }}>
+                                            {LEVEL_LABELS[result.maturity_level]}
+                                        </span>
+                                        <div className="mt-2">
+                                            <MaturityBars level={result.maturity_level} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-zinc-800 pt-4 space-y-2.5">
+                                    {[
+                                        { label: 'Score',             value: `${Math.round(result.score)}%`,     color: undefined },
+                                        { label: 'Gap to Level 5',    value: `${5 - result.maturity_level} levels`, color: '#ef4444' },
+                                        { label: 'Questions answered', value: `${answeredCount} / ${questions.length}`, color: undefined },
+                                    ].map(row => (
+                                        <div key={row.label} className="flex justify-between">
+                                            <span className="text-xs text-zinc-500">{row.label}</span>
+                                            <span className="text-xs font-semibold" style={{ color: row.color ?? '#e5e5e5' }}>
+                                                {row.value}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {result.gate_capped && (
+                                        <div className="mt-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                                            ⚠ Capped at Level {result.gate_cap} — gate question failed
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Dimension breakdown */}
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-5">
+                                    Dimension Breakdown
+                                </div>
+                                <div className="flex flex-col gap-3 mb-5">
+                                    {questions.map(q => (
+                                        <DimensionBar
+                                            key={q.id}
+                                            label={q.dimension}
+                                            answered={answers[q.id] !== undefined}
+                                            value={ANSWER_VALUES[answers[q.id]] ?? 0}
+                                        />
+                                    ))}
+                                </div>
+
+                                <div className="border-t border-zinc-800 pt-4">
+                                    <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">
+                                        Answer Summary
+                                    </div>
+                                    {questions.map(q => {
+                                        const ans   = answers[q.id];
+                                        const color = ans === 'YES' ? '#22c55e' : ans === 'PARTIAL' ? '#eab308' : ans === 'NO' ? '#ef4444' : '#3f3f46';
+                                        return (
+                                            <div key={q.id} className="flex justify-between items-center py-1">
+                                                <span className="text-xs text-zinc-500">Q{q.order}: {q.dimension}</span>
+                                                <span
+                                                    className="text-[10px] font-bold px-2 py-0.5 rounded"
+                                                    style={{ background: color + '20', color }}
+                                                >
+                                                    {ans ?? '—'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* AI Analysis */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                                    ✦ AI Gap Analysis & Recommendations
+                                </div>
+                                {!aiText && (
+                                    <button
+                                        onClick={generateAI}
+                                        disabled={aiLoading}
+                                        className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                                    >
+                                        {aiLoading ? (
+                                            <>
+                                                <span className="animate-spin">⟳</span> Generating...
+                                            </>
+                                        ) : '✦ Generate Analysis'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {aiText ? (
+                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5">
+                                    <p className="text-sm text-zinc-400 leading-relaxed">{aiText}</p>
+                                </div>
+                            ) : (
+                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-10 text-center">
+                                    <div className="text-3xl mb-3 text-zinc-700">✦</div>
+                                    <p className="text-sm text-zinc-600">
+                                        Click "Generate Analysis" to get AI-powered recommendations
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Loading overlay */}
+                {loading && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-8 py-6 text-sm text-zinc-300 flex items-center gap-3">
+                            <span className="animate-spin text-red-500 text-xl">⟳</span>
+                            Processing...
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <style>{`
+                @keyframes fadeSlideIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
+        </AppLayout>
+    );
 }

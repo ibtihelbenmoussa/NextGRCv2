@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 use App\Models\Document;
+use App\Models\gapQuestions;
 
 
 
@@ -79,5 +81,9 @@ public function documents()
 public function gapAssessments()
 {
     return $this->hasMany(GapAssessment::class);
+}
+public function gapQuestions()
+{
+    return $this->hasMany(GapQuestion::class);
 }
 }

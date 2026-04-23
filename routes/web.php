@@ -214,21 +214,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/ai/import-requirements', [DocumentAnalysisController::class, 'import'])->name('ai.import');
 
     Route::resource('requirements', RequirementController::class);
-    // ================= Gap Assessment =================
+   // ================= Gap Assessment =================
+Route::get('/gap-assessment', [GapAssessmentController::class, 'index'])
+    ->name('gap-assessment.index');
 
-    Route::get('/gapassessment', [GapAssessmentController::class, 'index'])
-        ->name('gapassessment.index');
+Route::get('/gap-assessment/questions/{requirement}', [GapAssessmentController::class, 'getQuestions'])
+    ->name('gap-assessment.questions');
 
-    Route::post('/gapassessment', [GapAssessmentController::class, 'store'])
-        ->name('gapassessment.store');
+Route::post('/gap-assessments', [GapAssessmentController::class, 'store'])
+    ->name('gap-assessment.store');
 
-    Route::get('/gapassessment/create', [GapAssessmentController::class, 'create'])
-        ->name('gapassessment.create');
-    Route::get('gapassessment/{gapassessment}/edit', [GapAssessmentController::class, 'edit'])->name('gapassessment.edit');
-    Route::put('gapassessment/{gapassessment}', [GapAssessmentController::class, 'update'])->name('gapassessment.update');
-    Route::delete('gapassessment/{gapassessment}', [GapAssessmentController::class, 'destroy'])->name('gapassessment.destroy');
-    Route::get('gapassessment/{gapassessment}', [GapAssessmentController::class, 'show']);
+Route::post('/gap-assessments/{assessment}/ai-feedback', [GapAssessmentController::class, 'generateAiFeedback'])
+    ->name('gap-assessment.ai-feedback');
 
+Route::get('/gap-assessments/{id}', [GapAssessmentController::class, 'show'])
+    ->name('gap-assessment.show');
+
+Route::get('/requirements/{id}/assessments', [GapAssessmentController::class, 'byRequirement'])
+    ->name('gap-assessment.by-requirement');
     // Action Plans
 
     Route::resource('action-plans', ActionPlanController::class)
