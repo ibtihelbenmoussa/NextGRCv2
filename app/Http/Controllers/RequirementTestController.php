@@ -525,8 +525,7 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
         'evidence'          => $validated['evidence'] ? [$validated['evidence']] : null,
     ]);
 
-    // auto_validate n'advance la date que si c'est une première soumission,
-    // pas après un rejet — le validateur humain doit re-approuver
+    
     return redirect()
         ->route('req-testing.index', ['date' => $targetDate->format('Y-m-d')])
         ->with('success', 'Test re-soumis avec succès. En attente de validation.');

@@ -1,685 +1,488 @@
-import { useState, useCallback } from 'react';
-import { router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
+import { Head, router } from '@inertiajs/react'
+import AppLayout from '@/layouts/app-layout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { useState } from 'react'
+import {
+  Plus, Search, Calendar, FileText, ChevronRight, X,
+  ClipboardList, HelpCircle, CheckCircle2, Clock,
+  AlertCircle, BarChart3, ChevronDown,
+} from 'lucide-react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 
-interface Framework { code: string; name: string; }
-
-interface LastAssessment {
-    score: number;
-    maturity_level: number;
-    created_at: string;
+interface Framework {
+  id: number
+  code: string
+  name: string
 }
 
 interface Requirement {
-    id: number;
-    code: string;
-    title: string;
-    priority: string;
-    framework: Framework | null;
-    last_assessment: LastAssessment | null;
+  id: number
+  code: string
+  title: string
+  questions_count: number
 }
 
-interface Question {
-    id: number;
-    text: string;
-    dimension: string;
-    weight: number;
-    order: number;
-}
-
-type Answer = 'YES' | 'PARTIAL' | 'NO';
-type Phase = 'list' | 'assess' | 'result';
-
-interface AssessmentResult {
-    assessment_id: number;
-    score: number;
-    maturity_level: number;
-    raw_level: number;
-    gate_capped: boolean;
-    gate_cap: number | null;
+interface GapAssessment {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  start_date: string | null
+  end_date: string | null
+  framework: Framework
+  requirements: Requirement[]
+  requirements_count: number
+  questions_count: number
 }
 
 interface Props {
-    requirements: Requirement[];
+  assessments: GapAssessment[]
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
-const LEVEL_LABELS = ['', 'Initial', 'Developing', 'Defined', 'Managed', 'Optimizing'];
-const LEVEL_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e'];
-const ANSWER_VALUES: Record<Answer, number> = { YES: 1.0, PARTIAL: 0.5, NO: 0.0 };
+function getStatus(item: GapAssessment) {
+  const now = new Date()
+  const end = item.end_date ? new Date(item.end_date) : null
+  const start = item.start_date ? new Date(item.start_date) : null
+  if (end && end < now) return 'completed'
+  if (start && start > now) return 'upcoming'
+  return 'inprogress'
+}
 
-const PRIORITY_BADGE: Record<string, string> = {
-    high:   'bg-red-500/15 text-red-400 border border-red-500/20',
-    medium: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20',
-    low:    'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-};
+function StatusBadge({ item }: { item: GapAssessment }) {
+  const s = getStatus(item)
+  const map = {
+    completed:  { label: 'Completed',   className: 'bg-green-500/10 text-green-400 border-green-500/20' },
+    upcoming:   { label: 'Upcoming',    className: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    inprogress: { label: 'In Progress', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  }
+  const { label, className } = map[s]
+  return (
+    <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full border font-mono', className)}>
+      {label}
+    </span>
+  )
+}
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Stat Card
+// ─────────────────────────────────────────────
 
-function ScoreRing({ score, size = 72 }: { score: number; size?: number }) {
-    const level  = getLevel(score);
-    const color  = LEVEL_COLORS[level];
-    const r      = (size - 8) / 2;
-    const circ   = 2 * Math.PI * r;
-    const dash   = (score / 100) * circ;
+function StatCard({ icon, label, value, sub, color }: {
+  icon: React.ReactNode
+  label: string
+  value: number | string
+  sub: string
+  color: string
+}) {
+  return (
+    <div className="flex-1 min-w-[160px] bg-card border rounded-lg p-4 relative overflow-hidden">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">{label}</span>
+        <span className={cn('text-muted-foreground', color)}>{icon}</span>
+      </div>
+      <p className={cn('text-3xl font-bold font-mono', color)}>{value}</p>
+      <p className={cn('text-xs font-mono mt-1', color, 'opacity-70')}>{sub}</p>
+      <div className={cn('absolute bottom-0 left-0 right-0 h-0.5', color.replace('text-', 'bg-'))} />
+    </div>
+  )
+}
 
-    return (
-        <div className="relative" style={{ width: size, height: size }}>
-            <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-                <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1f1f1f" strokeWidth={8} />
-                <circle
-                    cx={size/2} cy={size/2} r={r}
-                    fill="none" stroke={color} strokeWidth={8}
-                    strokeDasharray={`${dash} ${circ}`}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dasharray 0.8s ease' }}
-                />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-mono font-bold text-sm" style={{ color }}>
-                    {Math.round(score)}%
+// ─────────────────────────────────────────────
+// Drawer
+// ─────────────────────────────────────────────
+
+function AssessmentDrawer({ item, onClose }: { item: GapAssessment; onClose: () => void }) {
+  const status = getStatus(item)
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-background border-l border-border z-50 flex flex-col">
+
+        {/* Header */}
+        <div className="p-5 border-b border-border">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-mono text-muted-foreground">{item.code}</p>
+              <h2 className="text-lg font-semibold mt-1">{item.name}</h2>
+              <div className="mt-2 flex items-center gap-2">
+                <StatusBadge item={item} />
+                <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  {item.framework.code}
                 </span>
+              </div>
             </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
-    );
-}
 
-function MaturityBars({ level }: { level: number }) {
-    const color = LEVEL_COLORS[level];
-    return (
-        <div className="flex gap-1">
-            {[1,2,3,4,5].map(l => (
-                <div
-                    key={l}
-                    className="h-1.5 rounded-full transition-all duration-500"
-                    style={{
-                        width: 20,
-                        background: l <= level ? color : '#1f1f1f',
-                    }}
-                />
-            ))}
-        </div>
-    );
-}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
 
-function DimensionBar({
-    label, answered, value,
-}: { label: string; answered: boolean; value: number }) {
-    const color = value === 1 ? '#22c55e' : value === 0.5 ? '#eab308' : value === 0 ? '#ef4444' : '#1f1f1f';
-    const pct   = answered ? value * 100 : 0;
-    const text  = !answered ? null : value === 1 ? 'YES' : value === 0.5 ? 'PARTIAL' : 'NO';
-
-    return (
-        <div className="flex items-center gap-3">
-            <span className="text-xs text-zinc-500 w-24 shrink-0">{label}</span>
-            <div className="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${pct}%`, background: answered ? color : 'transparent' }}
-                />
+          {/* Stats strip */}
+          <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
+            <div className="p-4 text-center">
+              <p className="text-2xl font-bold font-mono text-blue-400">{item.requirements_count}</p>
+              <p className="text-xs font-mono text-muted-foreground mt-1 uppercase tracking-wide">Requirements</p>
             </div>
-            {text && (
-                <span
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded w-14 text-center"
-                    style={{ background: color + '20', color }}
-                >
-                    {text}
+            <div className="p-4 text-center">
+              <p className="text-2xl font-bold font-mono text-purple-400">{item.questions_count}</p>
+              <p className="text-xs font-mono text-muted-foreground mt-1 uppercase tracking-wide">Questions</p>
+            </div>
+            <div className="p-4 text-center">
+              <p className={cn(
+                'text-2xl font-bold font-mono',
+                status === 'completed' ? 'text-green-400' : status === 'upcoming' ? 'text-blue-400' : 'text-amber-400'
+              )}>
+                {status === 'completed' ? '100%' : status === 'upcoming' ? '—' : '~'}
+              </p>
+              <p className="text-xs font-mono text-muted-foreground mt-1 uppercase tracking-wide">Progress</p>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-5">
+
+            {/* Framework */}
+            <div>
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Framework</p>
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+                <span className="text-xs font-mono font-bold px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  {item.framework.code}
                 </span>
+                <span className="text-sm text-blue-300">{item.framework.name}</span>
+              </div>
+            </div>
+
+            {/* Period */}
+            <div>
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Period</p>
+              <div className="flex items-center gap-2 text-sm font-mono text-foreground">
+                <Calendar size={13} className="text-muted-foreground" />
+                <span>{item.start_date ?? '—'}</span>
+                <span className="text-muted-foreground">→</span>
+                <span>{item.end_date ?? '—'}</span>
+              </div>
+            </div>
+
+            {/* Description */}
+            {item.description && (
+              <div>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Description</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+              </div>
             )}
+
+            {/* Requirements */}
+            <div>
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+                Requirements ({item.requirements_count})
+              </p>
+              <div className="space-y-2">
+                {item.requirements && item.requirements.length > 0 ? (
+                  item.requirements.map(r => (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors"
+                    >
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                        {r.code}
+                      </span>
+                      <span className="text-sm flex-1 min-w-0 truncate">{r.title}</span>
+                      <span className="text-xs font-mono text-muted-foreground shrink-0 flex items-center gap-1">
+                        <HelpCircle size={11} />{r.questions_count}Q
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-6">No requirements attached</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-    );
+
+        {/* Footer — deux boutons */}
+        <div className="p-4 border-t border-border flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={() => router.visit(`/gap-assessments/${item.id}`)}
+          >
+            <FileText size={15} /> Details
+          </Button>
+          <Button
+            className="flex-1 gap-2"
+            onClick={() => router.visit(`/gap-assessments/${item.id}/answer`)}
+          >
+            <ClipboardList size={15} /> Answer Questions
+          </Button>
+        </div>
+      </div>
+    </>
+  )
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Framework Row (expandable)
+// ─────────────────────────────────────────────
 
-function getLevel(score: number): number {
-    if (score < 20) return 1;
-    if (score < 40) return 2;
-    if (score < 60) return 3;
-    if (score < 80) return 4;
-    return 5;
+function FrameworkRow({
+  framework,
+  assessments,
+  onSelect,
+}: {
+  framework: Framework
+  assessments: GapAssessment[]
+  onSelect: (a: GapAssessment) => void
+}) {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      {/* Framework header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+      >
+        <ChevronDown
+          size={14}
+          className={cn('text-muted-foreground transition-transform shrink-0', !open && '-rotate-90')}
+        />
+        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          {framework.code}
+        </span>
+        <span className="text-sm font-medium">{framework.name}</span>
+        <span className="ml-auto text-xs font-mono text-muted-foreground">
+          {assessments.length} assessment{assessments.length !== 1 ? 's' : ''}
+        </span>
+      </button>
+
+      {/* Assessments table */}
+      {open && (
+        <div className="divide-y divide-border">
+          {/* Table header */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_80px_80px_110px_110px_32px] gap-3 px-4 py-2 bg-muted/20">
+            {['Name', 'Period', 'Code', 'Req.', 'Q.', 'Status', '', ''].map((h, i) => (
+              <span key={i} className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                {h}
+              </span>
+            ))}
+          </div>
+
+          {assessments.map(a => (
+            <div
+              key={a.id}
+              onClick={() => onSelect(a)}
+              className="grid grid-cols-[2fr_1fr_1fr_80px_80px_110px_110px_32px] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
+            >
+              {/* Name */}
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{a.name}</p>
+                {a.description && (
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{a.description}</p>
+                )}
+              </div>
+
+              {/* Period */}
+              <div className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                <Calendar size={11} />
+                <span className="truncate">{a.start_date ?? '—'}</span>
+              </div>
+
+              {/* Code */}
+              <span className="text-xs font-mono text-muted-foreground truncate">{a.code}</span>
+
+              {/* Req. */}
+              <span className="text-sm font-mono font-semibold text-center">{a.requirements_count}</span>
+
+              {/* Q. */}
+              <span className="text-sm font-mono font-semibold text-center">{a.questions_count}</span>
+
+              {/* Status */}
+              <StatusBadge item={a} />
+
+              {/* Answer Questions button */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1 px-2 w-full"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  router.visit(`/gap-assessments/${a.id}/answer`)
+                }}
+              >
+                <ClipboardList size={11} />
+                Answer
+              </Button>
+
+              {/* Chevron — ouvre le drawer */}
+              <ChevronRight
+                size={14}
+                className="text-muted-foreground justify-self-end"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
-function computeClientScore(questions: Question[], answers: Record<number, Answer>): number {
-    let total = 0, weights = 0;
-    for (const q of questions) {
-        const v = ANSWER_VALUES[answers[q.id]] ?? 0;
-        total   += v * q.weight;
-        weights += q.weight;
-    }
-    return weights > 0 ? (total / weights) * 100 : 0;
+// ─────────────────────────────────────────────
+// Empty State
+// ─────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
+        <FileText size={24} className="text-muted-foreground" />
+      </div>
+      <p className="text-base font-semibold">No gap assessments yet</p>
+      <p className="text-sm text-muted-foreground mt-1 mb-4">
+        Create your first assessment to start evaluating compliance
+      </p>
+      <Button onClick={() => router.visit('/gap-assessment/create')}>
+        <Plus size={16} className="mr-1.5" /> New Assessment
+      </Button>
+    </div>
+  )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────
 
-export default function GapAssessmentIndex({ requirements }: Props) {
-    // Phase state
-    const [phase,     setPhase]     = useState<Phase>('list');
-    const [selected,  setSelected]  = useState<Requirement | null>(null);
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [qIdx,      setQIdx]      = useState(0);
-    const [answers,   setAnswers]   = useState<Record<number, Answer>>({});
-    const [gateCap,   setGateCap]   = useState<number | null>(null);
-    const [result,    setResult]    = useState<AssessmentResult | null>(null);
-    const [aiText,    setAiText]    = useState('');
-    const [aiLoading, setAiLoading] = useState(false);
-    const [loading,   setLoading]   = useState(false);
-    const [animKey,   setAnimKey]   = useState(0);
+export default function GapAssessmentIndex({ assessments }: Props) {
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<GapAssessment | null>(null)
 
-    // ── Start assessment ──────────────────────────────────────────────────────
-    const startAssessment = useCallback(async (req: Requirement) => {
-        setLoading(true);
-        try {
-            const res  = await fetch(`/gap-assessment/questions/${req.id}`);
-            const data = await res.json();
-            setSelected(req);
-            setQuestions(data.questions);
-            setAnswers({});
-            setQIdx(0);
-            setGateCap(null);
-            setResult(null);
-            setAiText('');
-            setPhase('assess');
-            setAnimKey(k => k + 1);
-        } catch {
-            alert('Failed to load questions. Please try again.');
-        }
-        setLoading(false);
-    }, []);
+  const filtered = assessments.filter(a =>
+    !search ||
+    a.code.toLowerCase().includes(search.toLowerCase()) ||
+    a.name.toLowerCase().includes(search.toLowerCase()) ||
+    a.framework.code.toLowerCase().includes(search.toLowerCase()) ||
+    a.framework.name.toLowerCase().includes(search.toLowerCase())
+  )
 
-    // ── Handle answer ─────────────────────────────────────────────────────────
-    const handleAnswer = useCallback(async (val: Answer) => {
-        const currentQ   = questions[qIdx];
-        const newAnswers = { ...answers, [currentQ.id]: val };
-        setAnswers(newAnswers);
+  // Stats
+  const total      = assessments.length
+  const completed  = assessments.filter(a => getStatus(a) === 'completed').length
+  const inprogress = assessments.filter(a => getStatus(a) === 'inprogress').length
+  const upcoming   = assessments.filter(a => getStatus(a) === 'upcoming').length
+  const totalReqs  = assessments.reduce((s, a) => s + a.requirements_count, 0)
 
-        // Gate check on Q1
-        let cap = gateCap;
-        if (currentQ.order === 1) {
-            if (val === 'NO')      { cap = 1; setGateCap(1); }
-            if (val === 'PARTIAL') { cap = 2; setGateCap(2); }
-        }
+  // Group by framework
+  const byFramework = filtered.reduce<Record<number, { framework: Framework; assessments: GapAssessment[] }>>(
+    (acc, a) => {
+      if (!acc[a.framework.id]) acc[a.framework.id] = { framework: a.framework, assessments: [] }
+      acc[a.framework.id].assessments.push(a)
+      return acc
+    }, {}
+  )
 
-        const isLast    = qIdx >= questions.length - 1;
-        const gateStop  = currentQ.order === 1 && val === 'NO';
+  return (
+    <AppLayout breadcrumbs={[{ title: 'Gap Assessments', href: '/gap-assessment' }]}>
+      <Head title="Gap Assessments" />
 
-        if (isLast || gateStop) {
-            // Submit to backend
-            setLoading(true);
-            try {
-                const res = await fetch('/gap-assessments', {
-                    method:  'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
-                    },
-                    body: JSON.stringify({
-                        requirement_id: selected!.id,
-                        answers:        newAnswers,
-                    }),
-                });
-                const data: AssessmentResult = await res.json();
-                setResult(data);
-                setPhase('result');
-                setAnimKey(k => k + 1);
-            } catch {
-                alert('Failed to save assessment.');
-            }
-            setLoading(false);
-        } else {
-            setAnimKey(k => k + 1);
-            setQIdx(i => i + 1);
-        }
-    }, [questions, qIdx, answers, gateCap, selected]);
+      <div className="w-full px-6 py-6 space-y-6">
 
-    // ── AI feedback ───────────────────────────────────────────────────────────
-    const generateAI = useCallback(async () => {
-        if (!result || !selected) return;
-        setAiLoading(true);
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Gap Assessments</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Track and manage compliance gap evaluations
+            </p>
+          </div>
+          <Button onClick={() => router.visit('/gap-assessment/create')}>
+            <Plus size={16} className="mr-1.5" /> Add Gap Assessment
+          </Button>
+        </div>
 
-        const answerSummary = questions.map(q =>
-            `${q.dimension}: ${answers[q.id] ?? 'NOT ANSWERED'}`
-        ).join(', ');
+        {/* Stats */}
+        {assessments.length > 0 && (
+          <div className="flex flex-wrap gap-3">
+            <StatCard
+              icon={<BarChart3 size={16} />}
+              label="Total"
+              value={total}
+              sub={`${totalReqs} requirements`}
+              color="text-blue-400"
+            />
+            <StatCard
+              icon={<CheckCircle2 size={16} />}
+              label="Completed"
+              value={completed}
+              sub={`${total > 0 ? Math.round(completed / total * 100) : 0}% completed`}
+              color="text-green-400"
+            />
+            <StatCard
+              icon={<Clock size={16} />}
+              label="In Progress"
+              value={inprogress}
+              sub="active now"
+              color="text-amber-400"
+            />
+            <StatCard
+              icon={<AlertCircle size={16} />}
+              label="Upcoming"
+              value={upcoming}
+              sub="not started"
+              color="text-purple-400"
+            />
+          </div>
+        )}
 
-        try {
-            const res = await fetch('https://api.anthropic.com/v1/messages', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model:      'claude-sonnet-4-20250514',
-                    max_tokens: 1000,
-                    system:     `You are a GRC compliance expert. Write a concise 3-sentence gap analysis narrative. Be specific and actionable. Return ONLY the paragraph, no headers or bullets.`,
-                    messages: [{
-                        role:    'user',
-                        content: `Requirement: ${selected.code} - ${selected.title}
-Maturity Level: ${result.maturity_level}/5 (${LEVEL_LABELS[result.maturity_level]})
-Score: ${result.score}%
-Answers: ${answerSummary}
-Gap to Level 5: ${5 - result.maturity_level} levels.
-Provide a professional gap analysis with 2-3 specific, prioritized improvement actions.`,
-                    }],
-                }),
-            });
-            const data = await res.json();
-            const text = data.content?.[0]?.text ?? 'Unable to generate analysis.';
-            setAiText(text);
-
-            // Save to backend
-            await fetch(`/gap-assessments/${result.assessment_id}/ai-feedback`, {
-                method:  'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
-                },
-                body: JSON.stringify({ feedback: text }),
-            });
-        } catch {
-            setAiText('AI analysis unavailable. Please check your connection.');
-        }
-        setAiLoading(false);
-    }, [result, selected, questions, answers]);
-
-    // ── Render ────────────────────────────────────────────────────────────────
-
-    const currentQ      = questions[qIdx];
-    const answeredCount = Object.keys(answers).length;
-    const clientScore   = computeClientScore(questions, answers);
-    const finalLevel    = result
-        ? result.maturity_level
-        : (gateCap ? Math.min(getLevel(clientScore), gateCap) : getLevel(clientScore));
-
-    return (
-        <AppLayout breadcrumbs={[
-            { title: 'Compliance Management', href: '#' },
-            { title: 'Gap Assessment', href: '/gap-assessment' },
-        ]}>
-            <div className="px-8 py-8 max-w-5xl mx-auto">
-
-                {/* ── Header ─────────────────────────────────────────────── */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white tracking-tight mb-1">
-                        Gap Assessment
-                    </h1>
-                    <p className="text-sm text-zinc-500">
-                        Evaluate compliance maturity through adaptive Yes/No questionnaires
-                    </p>
-                </div>
-
-                {/* ══ PHASE: LIST ══════════════════════════════════════════════ */}
-                {phase === 'list' && (
-                    <div>
-                        {/* Stats row */}
-                        <div className="grid grid-cols-3 gap-4 mb-8">
-                            {[
-                                { label: 'Total Requirements', value: requirements.length },
-                                { label: 'Assessed',           value: requirements.filter(r => r.last_assessment).length },
-                                { label: 'Pending Assessment', value: requirements.filter(r => !r.last_assessment).length },
-                            ].map(stat => (
-                                <div key={stat.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-                                    <p className="text-xs text-zinc-500 mb-2">{stat.label}</p>
-                                    <p className="text-3xl font-bold text-white">{stat.value}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Requirements list */}
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-                                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                                    Requirements
-                                </span>
-                                <span className="text-xs text-zinc-600">
-                                    Click a row to start assessment
-                                </span>
-                            </div>
-
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-zinc-800/50">
-                                        {['Code', 'Title', 'Framework', 'Priority', 'Last Score', 'Maturity', ''].map(h => (
-                                            <th key={h} className="text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider px-5 py-3">
-                                                {h}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {requirements.map((req, i) => {
-                                        const la    = req.last_assessment;
-                                        const color = la ? LEVEL_COLORS[la.maturity_level] : undefined;
-                                        return (
-                                            <tr
-                                                key={req.id}
-                                                className="border-b border-zinc-800/30 hover:bg-zinc-800/40 transition-colors cursor-pointer"
-                                                onClick={() => startAssessment(req)}
-                                            >
-                                                <td className="px-5 py-3.5">
-                                                    <span className="font-mono text-xs font-semibold text-zinc-300">
-                                                        {req.code}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3.5 max-w-xs">
-                                                    <span className="text-sm text-zinc-200 line-clamp-1">
-                                                        {req.title}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3.5">
-                                                    {req.framework && (
-                                                        <span className="text-xs text-zinc-500">
-                                                            {req.framework.code}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-3.5">
-                                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${PRIORITY_BADGE[req.priority] ?? ''}`}>
-                                                        {req.priority}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3.5">
-                                                    {la ? (
-                                                        <span className="font-mono text-sm font-bold" style={{ color }}>
-                                                            {Math.round(la.score)}%
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-zinc-600">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-3.5">
-                                                    {la ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm font-bold" style={{ color }}>
-                                                                L{la.maturity_level}
-                                                            </span>
-                                                            <MaturityBars level={la.maturity_level} />
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-zinc-600">Not assessed</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-3.5 text-right">
-                                                    <button
-                                                        className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
-                                                        onClick={e => { e.stopPropagation(); startAssessment(req); }}
-                                                    >
-                                                        {la ? 'Re-assess →' : 'Start →'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-
-                            {requirements.length === 0 && (
-                                <div className="py-16 text-center text-zinc-600 text-sm">
-                                    No active requirements found. Activate requirements first.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* ══ PHASE: ASSESS ════════════════════════════════════════════ */}
-                {phase === 'assess' && currentQ && (
-                    <div key={`assess-${animKey}`} style={{ animation: 'fadeSlideIn 0.25s ease' }}>
-                        {/* Top bar */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div>
-                                <span className="text-xs text-zinc-500 font-mono">{selected?.code}</span>
-                                <span className="text-xs text-zinc-600 mx-2">—</span>
-                                <span className="text-xs text-zinc-400">{selected?.title}</span>
-                            </div>
-                            <button
-                                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-                                onClick={() => setPhase('list')}
-                            >
-                                ← Back to list
-                            </button>
-                        </div>
-
-                        {/* Progress */}
-                        <div className="flex items-center gap-3 mb-8">
-                            <div className="flex-1 h-0.5 bg-zinc-800 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-red-500 rounded-full transition-all duration-500"
-                                    style={{ width: `${(answeredCount / questions.length) * 100}%` }}
-                                />
-                            </div>
-                            <span className="text-xs text-zinc-500 shrink-0">
-                                {qIdx + 1} / {questions.length}
-                            </span>
-                        </div>
-
-                        <div className="grid grid-cols-5 gap-5">
-                            {/* Question card — left */}
-                            <div className="col-span-3 bg-zinc-900 border border-zinc-800 rounded-xl p-7">
-                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">
-                                    Question {qIdx + 1} · {currentQ.dimension}
-                                </div>
-                                <p className="text-xl font-semibold text-white leading-relaxed mb-10">
-                                    {currentQ.text}
-                                </p>
-
-                                {/* Answer buttons */}
-                                <div className="flex gap-3">
-                                    {(['YES', 'PARTIAL', 'NO'] as Answer[]).map(val => {
-                                        const styles: Record<Answer, string> = {
-                                            YES:     'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500',
-                                            PARTIAL: 'border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500',
-                                            NO:      'border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500',
-                                        };
-                                        const labels: Record<Answer, string> = {
-                                            YES: '✓ Yes', PARTIAL: '~ Partial', NO: '✕ No',
-                                        };
-                                        return (
-                                            <button
-                                                key={val}
-                                                disabled={loading}
-                                                onClick={() => handleAnswer(val)}
-                                                className={`flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all duration-150 ${styles[val]} disabled:opacity-40`}
-                                            >
-                                                {labels[val]}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Live progress — right */}
-                            <div className="col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-5">
-                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-                                    Live Progress
-                                </div>
-                                <div className="flex flex-col gap-3">
-                                    {questions.map(q => (
-                                        <DimensionBar
-                                            key={q.id}
-                                            label={q.dimension}
-                                            answered={answers[q.id] !== undefined}
-                                            value={ANSWER_VALUES[answers[q.id]] ?? 0}
-                                        />
-                                    ))}
-                                </div>
-
-                                {/* Gate warning */}
-                                {gateCap && (
-                                    <div className="mt-auto p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                                        ⚠ Maturity capped at Level {gateCap}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ══ PHASE: RESULT ════════════════════════════════════════════ */}
-                {phase === 'result' && result && selected && (
-                    <div key={`result-${animKey}`} style={{ animation: 'fadeSlideIn 0.3s ease' }}>
-                        {/* Top bar */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div>
-                                <span className="text-xs font-mono text-zinc-400">{selected.code}</span>
-                                <span className="mx-2 text-zinc-700">—</span>
-                                <span className="text-sm font-semibold text-white">{selected.title}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                                    onClick={() => setPhase('list')}
-                                >
-                                    ← All Requirements
-                                </button>
-                                <button
-                                    className="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 transition-colors"
-                                    onClick={() => startAssessment(selected)}
-                                >
-                                    Retake
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Result cards */}
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            {/* Score card */}
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-5">
-                                    Maturity Level
-                                </div>
-                                <div className="flex items-center gap-5 mb-6">
-                                    <ScoreRing score={result.score} size={88} />
-                                    <div>
-                                        <div className="flex items-baseline gap-1 mb-1">
-                                            <span className="text-5xl font-black" style={{ color: LEVEL_COLORS[result.maturity_level] }}>
-                                                {result.maturity_level}
-                                            </span>
-                                            <span className="text-xl text-zinc-700 font-light">/5</span>
-                                        </div>
-                                        <span className="text-sm font-semibold" style={{ color: LEVEL_COLORS[result.maturity_level] }}>
-                                            {LEVEL_LABELS[result.maturity_level]}
-                                        </span>
-                                        <div className="mt-2">
-                                            <MaturityBars level={result.maturity_level} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-zinc-800 pt-4 space-y-2.5">
-                                    {[
-                                        { label: 'Score',             value: `${Math.round(result.score)}%`,     color: undefined },
-                                        { label: 'Gap to Level 5',    value: `${5 - result.maturity_level} levels`, color: '#ef4444' },
-                                        { label: 'Questions answered', value: `${answeredCount} / ${questions.length}`, color: undefined },
-                                    ].map(row => (
-                                        <div key={row.label} className="flex justify-between">
-                                            <span className="text-xs text-zinc-500">{row.label}</span>
-                                            <span className="text-xs font-semibold" style={{ color: row.color ?? '#e5e5e5' }}>
-                                                {row.value}
-                                            </span>
-                                        </div>
-                                    ))}
-                                    {result.gate_capped && (
-                                        <div className="mt-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                                            ⚠ Capped at Level {result.gate_cap} — gate question failed
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Dimension breakdown */}
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-5">
-                                    Dimension Breakdown
-                                </div>
-                                <div className="flex flex-col gap-3 mb-5">
-                                    {questions.map(q => (
-                                        <DimensionBar
-                                            key={q.id}
-                                            label={q.dimension}
-                                            answered={answers[q.id] !== undefined}
-                                            value={ANSWER_VALUES[answers[q.id]] ?? 0}
-                                        />
-                                    ))}
-                                </div>
-
-                                <div className="border-t border-zinc-800 pt-4">
-                                    <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">
-                                        Answer Summary
-                                    </div>
-                                    {questions.map(q => {
-                                        const ans   = answers[q.id];
-                                        const color = ans === 'YES' ? '#22c55e' : ans === 'PARTIAL' ? '#eab308' : ans === 'NO' ? '#ef4444' : '#3f3f46';
-                                        return (
-                                            <div key={q.id} className="flex justify-between items-center py-1">
-                                                <span className="text-xs text-zinc-500">Q{q.order}: {q.dimension}</span>
-                                                <span
-                                                    className="text-[10px] font-bold px-2 py-0.5 rounded"
-                                                    style={{ background: color + '20', color }}
-                                                >
-                                                    {ans ?? '—'}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* AI Analysis */}
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-                                    ✦ AI Gap Analysis & Recommendations
-                                </div>
-                                {!aiText && (
-                                    <button
-                                        onClick={generateAI}
-                                        disabled={aiLoading}
-                                        className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
-                                    >
-                                        {aiLoading ? (
-                                            <>
-                                                <span className="animate-spin">⟳</span> Generating...
-                                            </>
-                                        ) : '✦ Generate Analysis'}
-                                    </button>
-                                )}
-                            </div>
-
-                            {aiText ? (
-                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5">
-                                    <p className="text-sm text-zinc-400 leading-relaxed">{aiText}</p>
-                                </div>
-                            ) : (
-                                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-10 text-center">
-                                    <div className="text-3xl mb-3 text-zinc-700">✦</div>
-                                    <p className="text-sm text-zinc-600">
-                                        Click "Generate Analysis" to get AI-powered recommendations
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Loading overlay */}
-                {loading && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-8 py-6 text-sm text-zinc-300 flex items-center gap-3">
-                            <span className="animate-spin text-red-500 text-xl">⟳</span>
-                            Processing...
-                        </div>
-                    </div>
-                )}
+        {assessments.length === 0 ? <EmptyState /> : (
+          <>
+            {/* Search */}
+            <div className="relative max-w-sm">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search assessments…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-8 h-9 text-sm"
+              />
             </div>
 
-            <style>{`
-                @keyframes fadeSlideIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to   { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
-        </AppLayout>
-    );
+            {filtered.length === 0 ? (
+              <p className="text-center py-16 text-sm text-muted-foreground">
+                No assessments match "<span className="font-medium">{search}</span>"
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {Object.values(byFramework).map(({ framework, assessments: fas }) => (
+                  <FrameworkRow
+                    key={framework.id}
+                    framework={framework}
+                    assessments={fas}
+                    onSelect={setSelected}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {selected && (
+        <AssessmentDrawer item={selected} onClose={() => setSelected(null)} />
+      )}
+    </AppLayout>
+  )
 }

@@ -1,0 +1,22 @@
+{
+  "feature_names": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "weighted_score",
+    "gate_violated",
+    "partial_count",
+    "yes_count",
+    "enforcement_gap"
+  ],
+  "classes": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "version": "1.0.0"
+}

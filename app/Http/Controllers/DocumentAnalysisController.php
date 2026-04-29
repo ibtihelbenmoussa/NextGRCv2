@@ -30,13 +30,13 @@ class DocumentAnalysisController extends Controller
         }
 
         $request->validate([
-            'file'           => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,txt'],
+'document' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,txt'],
             'framework_hint' => ['nullable', 'string', 'max:100'],
         ]);
 
         try {
             // 1. Extraire le texte
-            $text = $this->textExtractor->extract($request->file('file'));
+$text = $this->textExtractor->extract($request->file('document'));
 
             if (strlen($text) < 50) {
                 return response()->json([
@@ -108,24 +108,21 @@ class DocumentAnalysisController extends Controller
 
         // ── Maps de normalisation ─────────────────────────────────────────────
 
-        // type AI → type BDD (regulatory | internal | contractual)
-        $typeMap = [
-            'regulatory'  => 'regulatory',
-            'technical'   => 'internal',
-            'operational' => 'internal',
-            'contractual' => 'contractual',
-            'internal'    => 'internal',
-        ];
+      $typeMap = [
+    'regulatory'  => 'regulatory',
+    'technical'   => 'regulatory',  
+    'operational' => 'regulatory',  
+    'contractual' => 'contractual',
+    'internal'    => 'internal',
+];
 
-        // priority AI → priority BDD (low | medium | high)
-        $priorityMap = [
-            'critical' => 'high',
-            'high'     => 'high',
-            'medium'   => 'medium',
-            'low'      => 'low',
-        ];
+       $priorityMap = [
+    'critical' => 'high',   
+    'high'     => 'high',
+    'medium'   => 'medium',
+    'low'      => 'low',
+];
 
-        // frequency AI → frequency BDD exacte
         $frequencyMap = [
             'daily'      => 'daily',
             'weekly'     => 'weekly',
@@ -136,12 +133,11 @@ class DocumentAnalysisController extends Controller
             'continuous' => 'continuous',
         ];
 
-        // compliance_level AI → BDD (Mandatory | Recommended | Optional)
-        $complianceMap = [
-            'mandatory'   => 'Mandatory',
-            'recommended' => 'Recommended',
-            'optional'    => 'Optional',
-        ];
+    $complianceMap = [
+    'mandatory'   => 'Mandatory',   
+    'recommended' => 'Recommended', 
+    'optional'    => 'Optional',    
+];
 
         $created = 0;
         $skipped = 0;
@@ -165,7 +161,6 @@ class DocumentAnalysisController extends Controller
                 }
 
                 try {
-                    // Normaliser chaque valeur
                     $type      = $typeMap[strtolower($reqData['type'] ?? '')]             ?? 'internal';
                     $priority  = $priorityMap[strtolower($reqData['priority'] ?? '')]     ?? 'medium';
                     $frequency = $frequencyMap[strtolower($reqData['frequency'] ?? '')]   ?? 'yearly';
@@ -178,11 +173,11 @@ class DocumentAnalysisController extends Controller
                         'title'            => $reqData['title'],
                         'description'      => $reqData['description'] ?? null,
                         'type'             => $type,
-                        'status'           => 'draft',                   // draft par défaut
+                        'status'           => 'draft',                   
                         'priority'         => $priority,
                         'frequency'        => $frequency,
                         'compliance_level' => $compliance,
-                        'effective_date'   => now()->toDateString(),     // date du jour
+                        'effective_date'   => now()->toDateString(),     
                         'is_deleted'       => 0,
                         'owner_id'         => $user->id,
                         'auto_validate'    => false,

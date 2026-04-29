@@ -3,24 +3,40 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Requirement;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GapAssessment extends Model
 {
-    protected $fillable = [
-        'requirement_id',
-        'score',
-        'maturity_level',
-        'answers',
-        'ai_feedback'
-    ];
+    protected $guarded = []; // ← autorise tous les champs
 
     protected $casts = [
-        'answers' => 'array',
+        'answers'    => 'array',
+        'start_date' => 'date',
+        'end_date'   => 'date',
     ];
 
+    public function framework()
+    {
+        return $this->belongsTo(Framework::class);
+    }
+
+    public function assessmentRequirements()
+    {
+        return $this->hasMany(GapAssessmentRequirement::class);
+    }
+
+    public function requirements()
+    {
+        return $this->hasManyThrough(
+            Requirement::class,
+            GapAssessmentRequirement::class,
+            'gap_assessment_id',
+            'id',
+            'id',
+            'requirement_id'
+        );
+    }
+
+    // Gardé pour compatibilité
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);

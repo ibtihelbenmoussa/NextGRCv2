@@ -80,10 +80,14 @@ public function documents()
 }
 public function gapAssessments()
 {
-    return $this->hasMany(GapAssessment::class);
+    return $this->hasMany(GapAssessmentRequirement::class);
 }
 public function gapQuestions()
 {
     return $this->hasMany(GapQuestion::class);
+}
+public function gapAssessmentRequirements()
+{
+    return $this->hasMany(GapAssessmentRequirement::class);
 }
 }

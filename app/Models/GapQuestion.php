@@ -14,13 +14,15 @@ class GapQuestion extends Model
     protected $fillable = [
         'requirement_id',
         'text',
-        'dimension',
-        'weight',
-        'order'
+        
     ];
 
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);
     }
+    public function answers()
+{
+    return $this->hasMany(GapAssessmentAnswer::class, 'gap_question_id');
+}
 }

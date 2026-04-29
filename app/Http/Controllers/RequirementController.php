@@ -83,69 +83,70 @@ class RequirementController extends Controller
             ->pluck('count', 'priority')
             ->toArray();
 
-        $total       = array_sum($statsQuery);
-        $lowCount    = $statsQuery['low']    ?? 0;
+        $total = array_sum($statsQuery);
+        $lowCount = $statsQuery['low'] ?? 0;
         $mediumCount = $statsQuery['medium'] ?? 0;
-        $highCount   = $statsQuery['high']   ?? 0;
+        $highCount = $statsQuery['high'] ?? 0;
 
         $requirements->through(function (Requirement $req) {
             return [
-                'id'               => $req->id,
-                'code'             => $req->code,
-                'title'            => $req->title,
-                'description'      => $req->description,
-                'type'             => $req->type,
-                'status'           => $req->status,
-                'priority'         => $req->priority,
-                'frequency'        => $req->frequency,
-                'effective_date'   => $req->effective_date,
-                'completion_date'  => $req->completion_date,
+                'id' => $req->id,
+                'code' => $req->code,
+                'title' => $req->title,
+                'description' => $req->description,
+                'type' => $req->type,
+                'status' => $req->status,
+                'priority' => $req->priority,
+                'frequency' => $req->frequency,
+                'effective_date' => $req->effective_date,
+                'completion_date' => $req->completion_date,
                 'compliance_level' => $req->compliance_level,
-                'auto_validate'    => $req->auto_validate,
-                'attachments'      => $req->attachments,
-                'owner_id'         => $req->owner_id,
-                'created_at'       => $req->created_at,
-                'updated_at'       => $req->updated_at,
-                'framework'        => $req->framework ? [
-                    'id'   => $req->framework->id,
+                'auto_validate' => $req->auto_validate,
+                'attachments' => $req->attachments,
+                'owner_id' => $req->owner_id,
+                'created_at' => $req->created_at,
+                'updated_at' => $req->updated_at,
+                'framework' => $req->framework ? [
+                    'id' => $req->framework->id,
                     'code' => $req->framework->code,
                     'name' => $req->framework->name,
                 ] : null,
-                'processes'        => $req->processes->map(fn($p) => [
-                    'id'   => $p->id,
+                'processes' => $req->processes->map(fn($p) => [
+                    'id' => $p->id,
                     'name' => $p->name,
                     'code' => $p->code,
                 ]),
-                'tags'             => $req->tags->map(fn($tag) => [
-                    'id'   => $tag->id,
+                'tags' => $req->tags->map(fn($tag) => [
+                    'id' => $tag->id,
                     'name' => $tag->name,
                 ]),
             ];
         });
 
-       return Inertia::render('Requirements/Index', [
-    'requirements' => $requirements,
-    'frameworks'   => Framework::where('organization_id', $currentOrgId)
-        ->select('code', 'name')
-        ->orderBy('code')
-        ->get(),
-    'stats' => [
-        'total'         => $total,
-        'lowCount'      => $lowCount,
-        'mediumCount'   => $mediumCount,
-        'highCount'     => $highCount,
-        'lowPercent'    => $total > 0 ? round(($lowCount    / $total) * 100) : 0,
-        'mediumPercent' => $total > 0 ? round(($mediumCount / $total) * 100) : 0,
-        'highPercent'   => $total > 0 ? round(($highCount   / $total) * 100) : 0,
-    ],
+        return Inertia::render('Requirements/Index', [
+            'requirements' => $requirements,
+            'frameworks' => Framework::where('organization_id', $currentOrgId)
+                ->select('code', 'name')
+                ->orderBy('code')
+                ->get(),
+            'stats' => [
+                'total' => $total,
+                'lowCount' => $lowCount,
+                'mediumCount' => $mediumCount,
+                'highCount' => $highCount,
+                'lowPercent' => $total > 0 ? round(($lowCount / $total) * 100) : 0,
+                'mediumPercent' => $total > 0 ? round(($mediumCount / $total) * 100) : 0,
+                'highPercent' => $total > 0 ? round(($highCount / $total) * 100) : 0,
+            ],
 
-    // ← AJOUTER UNIQUEMENT CETTE LIGNE
-    'frameworksForImport' => Framework::where('organization_id', $currentOrgId)
-        ->where('is_deleted', 0)
-        ->select('id', 'code', 'name')
-        ->orderBy('name')
-        ->get(),
-]);}
+            // ← AJOUTER UNIQUEMENT CETTE LIGNE
+            'frameworksForImport' => Framework::where('organization_id', $currentOrgId)
+                ->where('is_deleted', 0)
+                ->select('id', 'code', 'name')
+                ->orderBy('name')
+                ->get(),
+        ]);
+    }
 
     public function create()
     {
@@ -195,56 +196,71 @@ class RequirementController extends Controller
         }
 
         $validated = $request->validate([
-            'code'                    => 'required|string|max:255|unique:requirements,code',
-            'title'                   => 'required|string|max:255',
-            'description'             => 'nullable|string',
-            'type'                    => 'required|in:regulatory,internal,contractual',
-            'status'                  => 'required|in:active,draft,archived',
-            'priority'                => 'required|in:low,medium,high',
-            'frequency'               => 'required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
-            'framework_id'            => 'required|exists:frameworks,id',
-            'process_ids'             => 'nullable|array',
-            'process_ids.*'           => 'integer|exists:processes,id',
-            'effective_date'          => 'nullable|date',
-            'completion_date'         => 'nullable|date',
-            'compliance_level'        => 'required|in:Mandatory,Recommended,Optional',
-            'attachments'             => 'nullable|string',
-            'tags'                    => 'nullable|array',
-            'tags.*'                  => 'integer|exists:tags,id',
-            'auto_validate'           => 'boolean',
-            'documents'               => 'nullable|array|max:10',
-            'documents.*'             => 'file|max:10240',
-            'document_categories'     => 'nullable|array',
-            'document_categories.*'   => 'nullable|string|max:100',
-            'document_descriptions'   => 'nullable|array',
+            'code' => 'required|string|max:255|unique:requirements,code',
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'type' => 'required|in:regulatory,internal,contractual',
+            'status' => 'required|in:active,draft,archived',
+            'priority' => 'required|in:low,medium,high',
+            'frequency' => 'required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
+            'framework_id' => 'required|exists:frameworks,id',
+            'process_ids' => 'nullable|array',
+            'process_ids.*' => 'integer|exists:processes,id',
+            'effective_date' => 'nullable|date',
+            'completion_date' => 'nullable|date',
+            'compliance_level' => 'required|in:Mandatory,Recommended,Optional',
+            'attachments' => 'nullable|string',
+            'tags' => 'nullable|array',
+            'tags.*' => 'integer|exists:tags,id',
+            'auto_validate' => 'boolean',
+            'documents' => 'nullable|array|max:10',
+            'documents.*' => 'file|max:10240',
+            'document_categories' => 'nullable|array',
+            'document_categories.*' => 'nullable|string|max:100',
+            'document_descriptions' => 'nullable|array',
             'document_descriptions.*' => 'nullable|string|max:500',
             'predefined_test.test_code' => 'nullable|string|max:100',
             'predefined_test.test_name' => 'nullable|string|max:255',
             'predefined_test.objective' => 'nullable|string|max:5000',
             'predefined_test.procedure' => 'nullable|string|max:5000',
+            'gap_questions' => 'nullable|string', // ✅ JSON string
         ]);
 
         $requirement = Requirement::create([
-            'code'             => $validated['code'],
-            'title'            => $validated['title'],
-            'description'      => $validated['description'] ?? null,
-            'type'             => $validated['type'],
-            'status'           => $validated['status'],
-            'priority'         => $validated['priority'],
-            'frequency'        => $validated['frequency'],
-            'framework_id'     => $validated['framework_id'],
-            'owner_id'         => $user->id,
-            'effective_date'   => $validated['effective_date'] ?? now()->toDateString(),
-            'completion_date'  => $validated['completion_date'] ?? null,
+            'code' => $validated['code'],
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'type' => $validated['type'],
+            'status' => $validated['status'],
+            'priority' => $validated['priority'],
+            'frequency' => $validated['frequency'],
+            'framework_id' => $validated['framework_id'],
+            'owner_id' => $user->id,
+            'effective_date' => $validated['effective_date'] ?? now()->toDateString(),
+            'completion_date' => $validated['completion_date'] ?? null,
             'compliance_level' => $validated['compliance_level'],
-            'attachments'      => $validated['attachments'] ?? null,
-            'organization_id'  => $currentOrgId,
-            'auto_validate'    => $validated['auto_validate'] ?? false,
+            'attachments' => $validated['attachments'] ?? null,
+            'organization_id' => $currentOrgId,
+            'auto_validate' => $validated['auto_validate'] ?? false,
         ]);
 
         $requirement->tags()->sync($validated['tags'] ?? []);
         $requirement->processes()->sync($validated['process_ids'] ?? []);
 
+        // ✅ Gap Questions — JSON decode
+        $rawGapQuestions = $request->input('gap_questions', '[]');
+        $gapQuestions = is_string($rawGapQuestions)
+            ? (json_decode($rawGapQuestions, true) ?? [])
+            : (is_array($rawGapQuestions) ? $rawGapQuestions : []);
+
+        foreach ($gapQuestions as $q) {
+            $text = trim(is_array($q) ? ($q['text'] ?? '') : '');
+            if (empty($text))
+                continue;
+            $requirement->gapQuestions()->create(['text' => $text]);
+        }
+
+        // Predefined Test
         $pt = $request->input('predefined_test', []);
         if (!empty(array_filter($pt))) {
             $requirement->predefinedTests()->create([
@@ -254,23 +270,20 @@ class RequirementController extends Controller
             ]);
         }
 
+        // Documents
         if ($request->hasFile('documents')) {
             foreach ($request->file('documents') as $index => $file) {
-                if (!$file->isValid()) continue;
-
-                $path = $file->store(
-                    "requirements/{$requirement->id}/documents",
-                    'public'
-                );
-
+                if (!$file->isValid())
+                    continue;
+                $path = $file->store("requirements/{$requirement->id}/documents", 'public');
                 $requirement->documents()->create([
-                    'name'        => $file->getClientOriginalName(),
-                    'file_path'   => $path,
-                    'file_name'   => $file->getClientOriginalName(),
-                    'mime_type'   => $file->getMimeType(),
-                    'file_size'   => $file->getSize(),
-                    'disk'        => 'public',
-                    'category'    => $validated['document_categories'][$index] ?? null,
+                    'name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'disk' => 'public',
+                    'category' => $validated['document_categories'][$index] ?? null,
                     'description' => $validated['document_descriptions'][$index] ?? null,
                     'uploaded_by' => $user->id,
                 ]);
@@ -280,7 +293,6 @@ class RequirementController extends Controller
         return redirect()->route('requirements.index')
             ->with('success', 'Requirement created successfully.');
     }
-
     public function show(Requirement $requirement)
     {
         $user = Auth::user();
@@ -329,13 +341,13 @@ class RequirementController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        $requirement->load('tags', 'processes', 'documents');
+        $requirement->load('tags', 'processes', 'documents', 'gapQuestions');
 
         return Inertia::render('Requirements/Edit', [
             'requirement' => $requirement,
-            'frameworks'  => Framework::where('organization_id', $currentOrgId)
+            'frameworks' => Framework::where('organization_id', $currentOrgId)
                 ->select('id', 'code', 'name')->get(),
-            'processes'   => $requirement->framework
+            'processes' => $requirement->framework
                 ? $requirement->framework->processes()
                     ->where('is_active', true)
                     ->whereNull('deleted_at')
@@ -343,12 +355,13 @@ class RequirementController extends Controller
                     ->orderBy('processes.name')
                     ->get()
                 : [],
-            'tags'                => Tag::where('organization_id', $currentOrgId)
+            'tags' => Tag::where('organization_id', $currentOrgId)
                 ->select('id', 'name')->get(),
-            'selectedTagIds'      => $requirement->tags->pluck('id')
+            'selectedTagIds' => $requirement->tags->pluck('id')
                 ->map(fn($id) => (string) $id)->toArray(),
-            'selectedProcessIds'  => $requirement->processes->pluck('id')
+            'selectedProcessIds' => $requirement->processes->pluck('id')
                 ->map(fn($id) => (string) $id)->toArray(),
+                'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
         ]);
     }
 
@@ -384,51 +397,69 @@ class RequirementController extends Controller
         }
 
         $validated = $request->validate([
-            'code'                    => 'sometimes|required|string|max:255|unique:requirements,code,' . $requirement->id,
-            'title'                   => 'sometimes|required|string|max:255',
-            'description'             => 'nullable|string',
-            'type'                    => 'sometimes|required|in:regulatory,internal,contractual',
-            'status'                  => 'sometimes|required|in:active,draft,archived',
-            'priority'                => 'sometimes|required|in:low,medium,high',
-            'frequency'               => 'sometimes|required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
-            'framework_id'            => 'sometimes|required|exists:frameworks,id',
-            'process_ids'             => 'sometimes|nullable|array',
-            'process_ids.*'           => 'integer|exists:processes,id',
-            'effective_date'          => 'sometimes|nullable|date',
-            'completion_date'         => 'sometimes|nullable|date',
-            'compliance_level'        => 'sometimes|required|in:Mandatory,Recommended,Optional',
-            'attachments'             => 'sometimes|nullable|string',
-            'tags'                    => 'sometimes|nullable|array',
-            'tags.*'                  => 'integer|exists:tags,id',
-            'auto_validate'           => 'sometimes|boolean',
-            'documents'               => 'nullable|array|max:10',
-            'documents.*'             => 'file|max:10240',
-            'document_categories'     => 'nullable|array',
-            'document_categories.*'   => 'nullable|string|max:100',
-            'document_descriptions'   => 'nullable|array',
+            'code' => 'sometimes|required|string|max:255|unique:requirements,code,' . $requirement->id,
+            'title' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'type' => 'sometimes|required|in:regulatory,internal,contractual',
+            'status' => 'sometimes|required|in:active,draft,archived',
+            'priority' => 'sometimes|required|in:low,medium,high',
+            'frequency' => 'sometimes|required|in:one_time,daily,weekly,monthly,quarterly,yearly,continuous',
+            'framework_id' => 'sometimes|required|exists:frameworks,id',
+            'process_ids' => 'sometimes|nullable|array',
+            'process_ids.*' => 'integer|exists:processes,id',
+            'effective_date' => 'sometimes|nullable|date',
+            'completion_date' => 'sometimes|nullable|date',
+            'compliance_level' => 'sometimes|required|in:Mandatory,Recommended,Optional',
+            'attachments' => 'sometimes|nullable|string',
+            'tags' => 'sometimes|nullable|array',
+            'tags.*' => 'integer|exists:tags,id',
+            'auto_validate' => 'sometimes|boolean',
+            'documents' => 'nullable|array|max:10',
+            'documents.*' => 'file|max:10240',
+            'document_categories' => 'nullable|array',
+            'document_categories.*' => 'nullable|string|max:100',
+            'document_descriptions' => 'nullable|array',
             'document_descriptions.*' => 'nullable|string|max:500',
+            'gap_questions' => 'nullable|string',
         ]);
 
-        $tags       = $validated['tags']        ?? [];
+        $tags = $validated['tags'] ?? [];
         $processIds = $validated['process_ids'] ?? [];
         unset(
             $validated['tags'],
             $validated['process_ids'],
             $validated['documents'],
             $validated['document_categories'],
-            $validated['document_descriptions']
+            $validated['document_descriptions'],
+            $validated['gap_questions'],
         );
 
         $requirement->update($validated);
         $requirement->tags()->sync($tags);
         $requirement->processes()->sync($processIds);
+        if ($request->has('gap_questions')) {
+            $rawGapQuestions = $request->input('gap_questions', '[]');
+            $gapQuestions = is_string($rawGapQuestions)
+                ? (json_decode($rawGapQuestions, true) ?? [])
+                : (is_array($rawGapQuestions) ? $rawGapQuestions : []);
+
+            $requirement->gapQuestions()->delete();
+
+            foreach ($gapQuestions as $q) {
+                $text = trim(is_array($q) ? ($q['text'] ?? '') : '');
+                if (empty($text))
+                    continue;
+                $requirement->gapQuestions()->create(['text' => $text]);
+            }
+        }
 
         if ($request->hasFile('documents')) {
-            $categories   = $request->input('document_categories', []);
+            $categories = $request->input('document_categories', []);
             $descriptions = $request->input('document_descriptions', []);
 
             foreach ($request->file('documents') as $index => $file) {
-                if (!$file->isValid()) continue;
+                if (!$file->isValid())
+                    continue;
 
                 $path = $file->store(
                     "requirements/{$requirement->id}/documents",
@@ -436,13 +467,13 @@ class RequirementController extends Controller
                 );
 
                 $requirement->documents()->create([
-                    'name'        => $file->getClientOriginalName(),
-                    'file_path'   => $path,
-                    'file_name'   => $file->getClientOriginalName(),
-                    'mime_type'   => $file->getMimeType(),
-                    'file_size'   => $file->getSize(),
-                    'disk'        => 'public',
-                    'category'    => $categories[$index] ?? null,
+                    'name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'disk' => 'public',
+                    'category' => $categories[$index] ?? null,
                     'description' => $descriptions[$index] ?? null,
                     'uploaded_by' => $user->id,
                 ]);
@@ -496,7 +527,7 @@ class RequirementController extends Controller
 
         $requirements = $query->get();
         $requirements->each(function ($req) {
-            $req->tags_names     = $req->tags->pluck('name')->toArray();
+            $req->tags_names = $req->tags->pluck('name')->toArray();
             $req->processes_names = $req->processes->pluck('name')->toArray();
         });
 
@@ -538,7 +569,7 @@ class RequirementController extends Controller
     private function computeKpisForDate(int $orgId, Carbon $date): array
     {
         $reqIds = $this->getRequirementIdsForDate($orgId, $date);
-        $total  = $reqIds->count();
+        $total = $reqIds->count();
 
         $testCounts = $total > 0
             ? RequirementTest::whereIn('requirement_id', $reqIds)
@@ -550,7 +581,7 @@ class RequirementController extends Controller
             : [];
 
         $completed = (int) ($testCounts['accepted'] ?? 0);
-        $pending   = (int) ($testCounts['pending']  ?? 0);
+        $pending = (int) ($testCounts['pending'] ?? 0);
 
         $missed = Requirement::where('organization_id', $orgId)
             ->where('is_deleted', 0)
@@ -566,12 +597,12 @@ class RequirementController extends Controller
             ->count();
 
         return [
-            'reqIds'         => $reqIds,
-            'total'          => $total,
-            'completed'      => $completed,
-            'pending'        => $pending,
-            'missed'         => $missed,
-            'due'            => $due,
+            'reqIds' => $reqIds,
+            'total' => $total,
+            'completed' => $completed,
+            'pending' => $pending,
+            'missed' => $missed,
+            'due' => $due,
             'completionRate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
         ];
     }
@@ -597,7 +628,7 @@ class RequirementController extends Controller
 
         $perPage = (int) $request->input('per_page', 15);
         $perPage = in_array($perPage, [10, 15, 20, 30, 50]) ? $perPage : 15;
-        $search  = trim($request->query('search', ''));
+        $search = trim($request->query('search', ''));
 
         $query = Requirement::query()
             ->where('organization_id', $currentOrgId)
@@ -611,8 +642,12 @@ class RequirementController extends Controller
                         ->latest('created_at')
                         ->limit(1)
                         ->select([
-                            'id', 'requirement_id', 'validation_status',
-                            'validation_comment', 'test_date', 'created_at',
+                            'id',
+                            'requirement_id',
+                            'validation_status',
+                            'validation_comment',
+                            'test_date',
+                            'created_at',
                         ]);
                 },
             ])
@@ -624,48 +659,57 @@ class RequirementController extends Controller
                         ->whereDate('effective_date', $targetDate))
                     ->when($isWorkingDay, function ($q2) use ($targetDate) {
                         $q2->orWhere(fn($q3) => $q3
-                                ->where('frequency', 'daily')
-                                ->where(fn($q4) => $q4
+                            ->where('frequency', 'daily')
+                            ->where(
+                                fn($q4) => $q4
                                     ->whereNull('effective_date')
                                     ->orWhereDate('effective_date', '<=', $targetDate)
-                                ))
+                            ))
                             ->orWhere(fn($q3) => $q3
                                 ->where('frequency', 'weekly')
-                                ->where(fn($q4) => $q4
-                                    ->whereNull('effective_date')
-                                    ->orWhere(fn($q5) => $q5
-                                        ->whereRaw('DAYOFWEEK(effective_date) = ?', [$targetDate->dayOfWeek + 1])
-                                        ->whereDate('effective_date', '<=', $targetDate)
-                                    )
+                                ->where(
+                                    fn($q4) => $q4
+                                        ->whereNull('effective_date')
+                                        ->orWhere(
+                                            fn($q5) => $q5
+                                                ->whereRaw('DAYOFWEEK(effective_date) = ?', [$targetDate->dayOfWeek + 1])
+                                                ->whereDate('effective_date', '<=', $targetDate)
+                                        )
                                 ))
                             ->orWhere(fn($q3) => $q3
                                 ->where('frequency', 'monthly')
-                                ->where(fn($q4) => $q4
-                                    ->whereNull('effective_date')
-                                    ->orWhere(fn($q5) => $q5
-                                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                        ->whereDate('effective_date', '<=', $targetDate)
-                                    )
+                                ->where(
+                                    fn($q4) => $q4
+                                        ->whereNull('effective_date')
+                                        ->orWhere(
+                                            fn($q5) => $q5
+                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                                ->whereDate('effective_date', '<=', $targetDate)
+                                        )
                                 ))
                             ->orWhere(fn($q3) => $q3
                                 ->where('frequency', 'quarterly')
-                                ->where(fn($q4) => $q4
-                                    ->whereNull('effective_date')
-                                    ->orWhere(fn($q5) => $q5
-                                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                        ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$targetDate->month])
-                                        ->whereDate('effective_date', '<=', $targetDate)
-                                    )
+                                ->where(
+                                    fn($q4) => $q4
+                                        ->whereNull('effective_date')
+                                        ->orWhere(
+                                            fn($q5) => $q5
+                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                                ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$targetDate->month])
+                                                ->whereDate('effective_date', '<=', $targetDate)
+                                        )
                                 ))
                             ->orWhere(fn($q3) => $q3
                                 ->where('frequency', 'yearly')
-                                ->where(fn($q4) => $q4
-                                    ->whereNull('effective_date')
-                                    ->orWhere(fn($q5) => $q5
-                                        ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                        ->whereRaw('MONTH(effective_date) = ?', [$targetDate->month])
-                                        ->whereDate('effective_date', '<=', $targetDate)
-                                    )
+                                ->where(
+                                    fn($q4) => $q4
+                                        ->whereNull('effective_date')
+                                        ->orWhere(
+                                            fn($q5) => $q5
+                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                                ->whereRaw('MONTH(effective_date) = ?', [$targetDate->month])
+                                                ->whereDate('effective_date', '<=', $targetDate)
+                                        )
                                 ))
                             ->orWhere('frequency', 'continuous');
                     });
@@ -679,10 +723,10 @@ class RequirementController extends Controller
         }
 
         if ($request->filled('sort')) {
-            $sort      = $request->sort;
+            $sort = $request->sort;
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-            $column    = ltrim($sort, '-');
-            $allowed   = ['code', 'title', 'frequency', 'effective_date'];
+            $column = ltrim($sort, '-');
+            $allowed = ['code', 'title', 'frequency', 'effective_date'];
             $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
         } else {
             $query->orderBy('code');
@@ -697,248 +741,249 @@ class RequirementController extends Controller
 
         $requirements->through(function (Requirement $req) use ($reservations) {
             $latestTest = $req->tests->first();
-            $res        = $reservations->get($req->id);
+            $res = $reservations->get($req->id);
 
             return [
-                'id'                    => $req->id,
-                'code'                  => $req->code,
-                'title'                 => $req->title,
-                'description'           => $req->description,
-                'type'                  => $req->type,
-                'status'                => $req->status,
-                'priority'              => $req->priority,
-                'frequency'             => $req->frequency,
-                'effective_date'        => $req->effective_date,
-                'completion_date'       => $req->completion_date,
-                'compliance_level'      => $req->compliance_level,
-                'auto_validate'         => $req->auto_validate,
-                'owner_id'              => $req->owner_id,
-                'framework'             => $req->framework ? [
-                    'id'   => $req->framework->id,
+                'id' => $req->id,
+                'code' => $req->code,
+                'title' => $req->title,
+                'description' => $req->description,
+                'type' => $req->type,
+                'status' => $req->status,
+                'priority' => $req->priority,
+                'frequency' => $req->frequency,
+                'effective_date' => $req->effective_date,
+                'completion_date' => $req->completion_date,
+                'compliance_level' => $req->compliance_level,
+                'auto_validate' => $req->auto_validate,
+                'owner_id' => $req->owner_id,
+                'framework' => $req->framework ? [
+                    'id' => $req->framework->id,
                     'code' => $req->framework->code,
                     'name' => $req->framework->name,
                 ] : null,
-                'processes'             => $req->processes->map(fn($p) => [
-                    'id'   => $p->id,
+                'processes' => $req->processes->map(fn($p) => [
+                    'id' => $p->id,
                     'name' => $p->name,
                     'code' => $p->code,
                 ]),
-                'tags'                  => $req->tags->map(fn($tag) => [
-                    'id'   => $tag->id,
+                'tags' => $req->tags->map(fn($tag) => [
+                    'id' => $tag->id,
                     'name' => $tag->name,
                 ]),
-                'latest_test_status'    => $latestTest?->validation_status  ?? null,
-                'latest_test_comment'   => $latestTest?->validation_comment ?? null,
-                'latest_test_id'        => $latestTest?->id                 ?? null,
-                'reservation_user_id'   => $res?->user_id                   ?? null,
-                'reservation_user_name' => $res?->user?->name               ?? null,
+                'latest_test_status' => $latestTest?->validation_status ?? null,
+                'latest_test_comment' => $latestTest?->validation_comment ?? null,
+                'latest_test_id' => $latestTest?->id ?? null,
+                'reservation_user_id' => $res?->user_id ?? null,
+                'reservation_user_name' => $res?->user?->name ?? null,
             ];
         });
 
         $kpis = $this->computeKpisForDate($currentOrgId, $targetDate);
 
         return Inertia::render('RequirementTests/Index', [
-            'requirements'  => $requirements,
-            'date'          => $targetDate->format('Y-m-d'),
-            'isToday'       => $targetDate->isToday(),
-            'isWorkingDay'  => $isWorkingDay,
-            'filters'       => $request->only(['search', 'date']),
-            'missedToday'   => $kpis['missed'],
-            'dueToday'      => $kpis['due'],
+            'requirements' => $requirements,
+            'date' => $targetDate->format('Y-m-d'),
+            'isToday' => $targetDate->isToday(),
+            'isWorkingDay' => $isWorkingDay,
+            'filters' => $request->only(['search', 'date']),
+            'missedToday' => $kpis['missed'],
+            'dueToday' => $kpis['due'],
             'currentUserId' => Auth::id(),
             'kpi' => [
-                'total'          => $kpis['total'],
-                'completed'      => $kpis['completed'],
-                'pending'        => $kpis['pending'],
-                'overdue'        => $kpis['missed'],
+                'total' => $kpis['total'],
+                'completed' => $kpis['completed'],
+                'pending' => $kpis['pending'],
+                'overdue' => $kpis['missed'],
                 'completionRate' => $kpis['completionRate'],
             ],
         ]);
     }
 
     /**
- * Analyser un document et extraire les requirements via IA
- */
-public function aiExtract(Request $request, \App\Services\TextExtractorService $textExtractor, \App\Services\RequirementExtractorService $requirementExtractor)
-{
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
+     * Analyser un document et extraire les requirements via IA
+     */
+    public function aiExtract(Request $request, \App\Services\TextExtractorService $textExtractor, \App\Services\RequirementExtractorService $requirementExtractor)
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
 
-    if (!$currentOrgId) {
-        return response()->json(['error' => 'No organization selected'], 403);
-    }
-
-    $request->validate([
-        'document' => 'required|file|mimes:pdf,doc,docx,xls,xlsx,txt|max:20480',
-        'framework_hint' => 'nullable|string|max:100',
-    ]);
-
-    try {
-        // 1. Extraire le texte du document
-        $text = $textExtractor->extract($request->file('document'));
-
-        if (strlen($text) < 50) {
-            return response()->json([
-                'error' => 'Could not extract text from document. The file may be empty or corrupted.'
-            ], 422);
+        if (!$currentOrgId) {
+            return response()->json(['error' => 'No organization selected'], 403);
         }
 
-        // 2. Appeler l'IA pour extraire les requirements
-        $requirements = $requirementExtractor->extract($text, $request->input('framework_hint', ''));
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,doc,docx,xls,xlsx,txt|max:20480',
+            'framework_hint' => 'nullable|string|max:100',
+        ]);
 
-        // 3. Récupérer les frameworks et tags pour l'UI
-        $frameworks = Framework::where('organization_id', $currentOrgId)
-            ->where('is_deleted', 0)
-            ->select('id', 'code', 'name')
-            ->orderBy('name')
-            ->get();
+        try {
+            // 1. Extraire le texte du document
+            $text = $textExtractor->extract($request->file('document'));
 
-        $tags = Tag::where('organization_id', $currentOrgId)
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
+            if (strlen($text) < 50) {
+                return response()->json([
+                    'error' => 'Could not extract text from document. The file may be empty or corrupted.'
+                ], 422);
+            }
+
+            // 2. Appeler l'IA pour extraire les requirements
+            $requirements = $requirementExtractor->extract($text, $request->input('framework_hint', ''));
+
+            // 3. Récupérer les frameworks et tags pour l'UI
+            $frameworks = Framework::where('organization_id', $currentOrgId)
+                ->where('is_deleted', 0)
+                ->select('id', 'code', 'name')
+                ->orderBy('name')
+                ->get();
+
+            $tags = Tag::where('organization_id', $currentOrgId)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'requirements' => $requirements,
+                'frameworks' => $frameworks,
+                'tags' => $tags,
+                'count' => count($requirements),
+                'chars_analyzed' => strlen($text),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('AI Extraction failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Extraction failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Importer les requirements extraits par l'IA
+     */
+    public function aiImport(Request $request)
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
+
+        if (!$currentOrgId) {
+            return response()->json(['error' => 'No organization selected'], 403);
+        }
+
+        $request->validate([
+            'requirements' => 'required|array|min:1',
+            'requirements.*.code' => 'required|string|max:255',
+            'requirements.*.title' => 'required|string|max:255',
+            'requirements.*.description' => 'nullable|string',
+            'requirements.*.type' => 'required|string|in:regulatory,technical,operational,contractual,internal',
+            'requirements.*.priority' => 'required|string|in:critical,high,medium,low',
+            'requirements.*.frequency' => 'required|string|in:daily,weekly,monthly,quarterly,yearly,one_time,continuous',
+            'requirements.*.compliance_level' => 'required|string|in:mandatory,recommended,optional',
+            'framework_id' => 'nullable|exists:frameworks,id',
+            'tag_ids' => 'nullable|array',
+            'tag_ids.*' => 'integer|exists:tags,id',
+        ]);
+
+        $created = [];
+        $errors = [];
+        $skipped = 0;
+
+        \DB::transaction(function () use ($request, $currentOrgId, $user, &$created, &$errors, &$skipped) {
+            foreach ($request->requirements as $reqData) {
+                // Vérifier si le code existe déjà
+                $existingCode = Requirement::where('organization_id', $currentOrgId)
+                    ->where('code', $reqData['code'])
+                    ->exists();
+
+                if ($existingCode) {
+                    // Générer un code alternatif
+                    $baseCode = $reqData['code'];
+                    $counter = 1;
+                    $newCode = $baseCode;
+
+                    while (
+                        Requirement::where('organization_id', $currentOrgId)
+                            ->where('code', $newCode)
+                            ->exists()
+                    ) {
+                        $newCode = $baseCode . '-' . $counter++;
+                    }
+                    $reqData['code'] = $newCode;
+                    $skipped++;
+                }
+
+                try {
+                    // Convertir la priorité IA (critical/high/medium/low) vers ENUM BDD (high/medium/low)
+                    $priorityMap = [
+                        'critical' => 'high',
+                        'high' => 'high',
+                        'medium' => 'medium',
+                        'low' => 'low',
+                    ];
+                    $priority = $priorityMap[strtolower($reqData['priority'])] ?? 'medium';
+
+                    // Convertir le type IA vers type BDD
+                    $typeMap = [
+                        'regulatory' => 'regulatory',
+                        'technical' => 'internal',
+                        'operational' => 'internal',
+                        'contractual' => 'contractual',
+                        'internal' => 'internal',
+                    ];
+                    $type = $typeMap[strtolower($reqData['type'])] ?? 'regulatory';
+
+                    // Convertir le compliance_level (mandatory/recommended/optional) vers format BDD (Mandatory/Recommended/Optional)
+                    $complianceMap = [
+                        'mandatory' => 'Mandatory',
+                        'recommended' => 'Recommended',
+                        'optional' => 'Optional',
+                    ];
+                    $complianceLevel = $complianceMap[strtolower($reqData['compliance_level'])] ?? 'Mandatory';
+
+                    $requirement = Requirement::create([
+                        'code' => $reqData['code'],
+                        'title' => $reqData['title'],
+                        'description' => $reqData['description'] ?? null,
+                        'type' => $type,
+                        'status' => 'draft', // Les requirements importés sont en draft par défaut
+                        'priority' => $priority,
+                        'frequency' => $reqData['frequency'],
+                        'framework_id' => $request->framework_id,
+                        'owner_id' => $user->id,
+                        'effective_date' => now()->toDateString(),
+                        'compliance_level' => $complianceLevel,
+                        'organization_id' => $currentOrgId,
+                        'auto_validate' => false,
+                        'is_deleted' => 0,
+                    ]);
+
+                    if ($request->filled('tag_ids')) {
+                        $requirement->tags()->sync($request->tag_ids);
+                    }
+
+                    $created[] = $requirement;
+                } catch (\Exception $e) {
+                    $errors[] = [
+                        'code' => $reqData['code'],
+                        'title' => $reqData['title'],
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+        });
 
         return response()->json([
             'success' => true,
-            'requirements' => $requirements,
-            'frameworks' => $frameworks,
-            'tags' => $tags,
-            'count' => count($requirements),
-            'chars_analyzed' => strlen($text),
+            'created' => count($created),
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'requirements' => $created,
+            'message' => count($created) . ' requirement(s) imported successfully.'
         ]);
-
-    } catch (\Exception $e) {
-        \Log::error('AI Extraction failed', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-
-        return response()->json([
-            'error' => 'Extraction failed: ' . $e->getMessage()
-        ], 500);
     }
-}
-
-/**
- * Importer les requirements extraits par l'IA
- */
-public function aiImport(Request $request)
-{
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
-
-    if (!$currentOrgId) {
-        return response()->json(['error' => 'No organization selected'], 403);
-    }
-
-    $request->validate([
-        'requirements' => 'required|array|min:1',
-        'requirements.*.code' => 'required|string|max:255',
-        'requirements.*.title' => 'required|string|max:255',
-        'requirements.*.description' => 'nullable|string',
-        'requirements.*.type' => 'required|string|in:regulatory,technical,operational,contractual,internal',
-        'requirements.*.priority' => 'required|string|in:critical,high,medium,low',
-        'requirements.*.frequency' => 'required|string|in:daily,weekly,monthly,quarterly,yearly,one_time,continuous',
-        'requirements.*.compliance_level' => 'required|string|in:mandatory,recommended,optional',
-        'framework_id' => 'nullable|exists:frameworks,id',
-        'tag_ids' => 'nullable|array',
-        'tag_ids.*' => 'integer|exists:tags,id',
-    ]);
-
-    $created = [];
-    $errors = [];
-    $skipped = 0;
-
-    \DB::transaction(function () use ($request, $currentOrgId, $user, &$created, &$errors, &$skipped) {
-        foreach ($request->requirements as $reqData) {
-            // Vérifier si le code existe déjà
-            $existingCode = Requirement::where('organization_id', $currentOrgId)
-                ->where('code', $reqData['code'])
-                ->exists();
-
-            if ($existingCode) {
-                // Générer un code alternatif
-                $baseCode = $reqData['code'];
-                $counter = 1;
-                $newCode = $baseCode;
-                
-                while (Requirement::where('organization_id', $currentOrgId)
-                    ->where('code', $newCode)
-                    ->exists()
-                ) {
-                    $newCode = $baseCode . '-' . $counter++;
-                }
-                $reqData['code'] = $newCode;
-                $skipped++;
-            }
-
-            try {
-                // Convertir la priorité IA (critical/high/medium/low) vers ENUM BDD (high/medium/low)
-                $priorityMap = [
-                    'critical' => 'high',
-                    'high' => 'high',
-                    'medium' => 'medium',
-                    'low' => 'low',
-                ];
-                $priority = $priorityMap[strtolower($reqData['priority'])] ?? 'medium';
-
-                // Convertir le type IA vers type BDD
-                $typeMap = [
-                    'regulatory' => 'regulatory',
-                    'technical' => 'internal',
-                    'operational' => 'internal',
-                    'contractual' => 'contractual',
-                    'internal' => 'internal',
-                ];
-                $type = $typeMap[strtolower($reqData['type'])] ?? 'regulatory';
-
-                // Convertir le compliance_level (mandatory/recommended/optional) vers format BDD (Mandatory/Recommended/Optional)
-                $complianceMap = [
-                    'mandatory' => 'Mandatory',
-                    'recommended' => 'Recommended',
-                    'optional' => 'Optional',
-                ];
-                $complianceLevel = $complianceMap[strtolower($reqData['compliance_level'])] ?? 'Mandatory';
-
-                $requirement = Requirement::create([
-                    'code' => $reqData['code'],
-                    'title' => $reqData['title'],
-                    'description' => $reqData['description'] ?? null,
-                    'type' => $type,
-                    'status' => 'draft', // Les requirements importés sont en draft par défaut
-                    'priority' => $priority,
-                    'frequency' => $reqData['frequency'],
-                    'framework_id' => $request->framework_id,
-                    'owner_id' => $user->id,
-                    'effective_date' => now()->toDateString(),
-                    'compliance_level' => $complianceLevel,
-                    'organization_id' => $currentOrgId,
-                    'auto_validate' => false,
-                    'is_deleted' => 0,
-                ]);
-
-                if ($request->filled('tag_ids')) {
-                    $requirement->tags()->sync($request->tag_ids);
-                }
-
-                $created[] = $requirement;
-            } catch (\Exception $e) {
-                $errors[] = [
-                    'code' => $reqData['code'],
-                    'title' => $reqData['title'],
-                    'error' => $e->getMessage()
-                ];
-            }
-        }
-    });
-
-    return response()->json([
-        'success' => true,
-        'created' => count($created),
-        'skipped' => $skipped,
-        'errors' => $errors,
-        'requirements' => $created,
-        'message' => count($created) . ' requirement(s) imported successfully.'
-    ]);
-}
 }

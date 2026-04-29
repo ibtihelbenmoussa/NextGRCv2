@@ -11,18 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-     Schema::create('gap_questions', function (Blueprint $table) {
-    $table->id();
-
-    $table->foreignId('requirement_id')
-          ->constrained()
-          ->onDelete('cascade');
-
-    $table->text('text');
-   
-
-    $table->timestamps();
-});
+        Schema::table('gap_assessments', function (Blueprint $table) {
+            $table->date('start_date')->nullable();
+$table->date('end_date')->nullable();
+        });
     }
 
     /**
@@ -30,6 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('gap_questions');
+        Schema::table('gap_assessments', function (Blueprint $table) {
+            //
+        });
     }
 };

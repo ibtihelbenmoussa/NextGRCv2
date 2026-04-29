@@ -337,12 +337,19 @@ export default function CreateRequirement() {
       objective: '',
       procedure: '',
     },
+    gap_questions: [] as { text: string }[],
+
   })
 
   const [processes, setProcesses] = useState<Process[]>([])
   const [loadingProcesses, setLoadingProcesses] = useState(false)
   const [showPredefinedTest, setShowPredefinedTest] = useState(false)
   const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)
+
+  const [gapQuestions, setGapQuestions] = useState<{
+    text: string
+
+  }[]>([])
 
   // Helper : framework actuellement sélectionné
   const selectedFw = frameworks.find(fw => fw.id.toString() === data.framework_id) ?? null
@@ -396,30 +403,67 @@ export default function CreateRequirement() {
       }
     )
   }, [data.framework_id])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!data.code.trim()) { setError('code', 'Code is required'); return }
-    if (!data.title.trim()) { setError('title', 'Title is required'); return }
-    if (!data.type) { setError('type', 'Type is required'); return }
-    if (!data.status) { setError('status', 'Status is required'); return }
-    if (!data.priority) { setError('priority', 'Priority is required'); return }
-    if (!data.frequency) { setError('frequency', 'Frequency is required'); return }
-    if (!data.framework_id) { setError('framework_id', 'Framework is required'); return }
-    if (!data.compliance_level) { setError('compliance_level', 'Compliance level is required'); return }
-
-    // Validation : la date ne peut pas être antérieure à celle du framework
-    if (fwEffectiveDate && data.effective_date < fwEffectiveDate) {
-      setError('effective_date', `Date must be on or after the framework effective date (${fwEffectiveDate})`)
-      return
-    }
-
-    post(route('requirements.store'), {
-      forceFormData: true,
-      onSuccess: () => reset(),
-      onError: (errs) => console.error('Validation errors:', errs),
-    })
+  const addGapQuestion = () => {
+    setGapQuestions(prev => [...prev, { text: '' }])
   }
+
+  const removeGapQuestion = (index: number) => {
+    setGapQuestions(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateGapQuestion = (index: number, value: string) => {
+    setGapQuestions(prev => prev.map((q, i) => i === index ? { ...q, text: value } : q))
+  }
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault()
+  if (!data.code.trim()) { setError('code', 'Code is required'); return }
+  if (!data.title.trim()) { setError('title', 'Title is required'); return }
+  if (!data.type) { setError('type', 'Type is required'); return }
+  if (!data.status) { setError('status', 'Status is required'); return }
+  if (!data.priority) { setError('priority', 'Priority is required'); return }
+  if (!data.frequency) { setError('frequency', 'Frequency is required'); return }
+  if (!data.framework_id) { setError('framework_id', 'Framework is required'); return }
+  if (!data.compliance_level) { setError('compliance_level', 'Compliance level is required'); return }
+
+  if (fwEffectiveDate && data.effective_date < fwEffectiveDate) {
+    setError('effective_date', `Date must be on or after the framework effective date (${fwEffectiveDate})`)
+    return
+  }
+
+  const formData = new FormData()
+
+  formData.append('code', data.code)
+  formData.append('title', data.title)
+  formData.append('description', data.description ?? '')
+  formData.append('type', data.type)
+  formData.append('status', data.status)
+  formData.append('priority', data.priority)
+  formData.append('frequency', data.frequency)
+  formData.append('framework_id', data.framework_id)
+  formData.append('effective_date', data.effective_date ?? '')
+  formData.append('completion_date', data.completion_date ?? '')
+  formData.append('compliance_level', data.compliance_level)
+  formData.append('attachments', data.attachments ?? '')
+  formData.append('auto_validate', data.auto_validate ? '1' : '0')
+
+  data.tags.forEach(t => formData.append('tags[]', t))
+
+  data.process_ids.forEach(p => formData.append('process_ids[]', p))
+
+  formData.append('predefined_test[test_name]', data.predefined_test.test_name ?? '')
+  formData.append('predefined_test[objective]', data.predefined_test.objective ?? '')
+  formData.append('predefined_test[procedure]', data.predefined_test.procedure ?? '')
+
+  // Documents
+  data.documents.forEach(file => formData.append('documents[]', file))
+
+  formData.append('gap_questions', JSON.stringify(gapQuestions))
+
+  router.post(route('requirements.store'), formData, {
+    onSuccess: () => reset(),
+    onError: (errs) => console.error('Validation errors:', errs),
+  })
+}
 
   const steps = [
     { label: 'Basic info', icon: ListTodo },
@@ -866,6 +910,64 @@ export default function CreateRequirement() {
                 </div>
               </CardContent>
             )}
+          </Card>
+          {/* ── SECTION 5 — Gap Questions ── */}
+          <Card className={PINK_CARD}>
+            <CardHeader className="pb-2 border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <ListTodo className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Gap Assessment Questions</CardTitle>
+                    <CardDescription className="text-xs">
+                      Define the questions used to evaluate maturity for this requirement
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addGapQuestion}>
+                  + Add Question
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-6 space-y-4">
+              {gapQuestions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed border-border/60 rounded-xl">
+                  <ListTodo className="h-8 w-8 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm text-muted-foreground">No questions yet</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Click "Add Question" to define gap assessment questions
+                  </p>
+                </div>
+              ) : (
+                gapQuestions.map((q, index) => (
+                  <div key={index} className="relative rounded-xl border border-border/60 bg-muted/20 p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Question {index + 1}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeGapQuestion(index)}
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                    <Textarea
+                      placeholder="e.g. Are access controls formally documented and reviewed?"
+                      value={q.text}
+                      onChange={(e) => updateGapQuestion(index, e.target.value)}
+                      className="min-h-[80px] resize-y"
+                    />
+                  </div>
+                ))
+              )}
+            </CardContent>
           </Card>
 
           {/* Action buttons */}

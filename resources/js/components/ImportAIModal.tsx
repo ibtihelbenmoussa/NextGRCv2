@@ -35,13 +35,13 @@ interface Props {
 }
 
 function StepDot({ step, current, label }: { step: number; current: number; label: string }) {
-  const done   = current > step
+  const done = current > step
   const active = current === step
   return (
     <div className="flex items-center gap-2">
       <div className={cn(
         'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all',
-        done   && 'bg-emerald-600 text-white',
+        done && 'bg-emerald-600 text-white',
         active && 'bg-primary text-primary-foreground ring-2 ring-primary/30',
         !done && !active && 'bg-muted text-muted-foreground',
       )}>
@@ -56,21 +56,21 @@ function StepDot({ step, current, label }: { step: number; current: number; labe
 
 const priorityColors: Record<string, string> = {
   critical: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-  high:     'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
-  medium:   'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
-  low:      'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
+  high: 'bg-[#FCEBEB] text-[#501313] dark:bg-[#501313] dark:text-[#F7C1C1]',
+  medium: 'bg-[#FAEEDA] text-[#412402] dark:bg-[#412402] dark:text-[#FAC775]',
+  low: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
 }
 
 export function ImportAIModal({ open, onClose, frameworks }: Props) {
-  const [step,         setStep]         = useState(1)
-  const [file,         setFile]         = useState<File | null>(null)
-  const [frameworkHint,setFrameworkHint]= useState('')
-  const [frameworkId,  setFrameworkId]  = useState<string>('')
-  const [dragging,     setDragging]     = useState(false)
-  const [analyzing,    setAnalyzing]    = useState(false)
-  const [error,        setError]        = useState<string | null>(null)
+  const [step, setStep] = useState(1)
+  const [file, setFile] = useState<File | null>(null)
+  const [frameworkHint, setFrameworkHint] = useState('')
+  const [frameworkId, setFrameworkId] = useState<string>('')
+  const [dragging, setDragging] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [requirements, setRequirements] = useState<ExtractedRequirement[]>([])
-  const [importing,    setImporting]    = useState(false)
+  const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -93,7 +93,8 @@ export function ImportAIModal({ open, onClose, frameworks }: Props) {
     if (!file) return
     setAnalyzing(true); setError(null); setStep(2)
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('document', file)
+
     if (frameworkHint) formData.append('framework_hint', frameworkHint)
 
     try {
@@ -111,7 +112,7 @@ export function ImportAIModal({ open, onClose, frameworks }: Props) {
   }
 
   const toggleAll = (val: boolean) => setRequirements(prev => prev.map(r => ({ ...r, selected: val })))
-  const toggleOne = (idx: number)  => setRequirements(prev => prev.map((r, i) => i === idx ? { ...r, selected: !r.selected } : r))
+  const toggleOne = (idx: number) => setRequirements(prev => prev.map((r, i) => i === idx ? { ...r, selected: !r.selected } : r))
 
   const handleImport = async () => {
     if (!frameworkId) { setError('Sélectionne un framework'); return }
@@ -176,8 +177,8 @@ export function ImportAIModal({ open, onClose, frameworks }: Props) {
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
                   'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all',
-                  dragging  && 'border-primary bg-primary/5 scale-[1.01]',
-                  file      && 'border-emerald-500/60 bg-emerald-500/5',
+                  dragging && 'border-primary bg-primary/5 scale-[1.01]',
+                  file && 'border-emerald-500/60 bg-emerald-500/5',
                   !dragging && !file && 'border-border/60 hover:border-border hover:bg-muted/20',
                 )}
               >
@@ -281,7 +282,7 @@ export function ImportAIModal({ open, onClose, frameworks }: Props) {
 
               <div className="rounded-xl border border-border/60 overflow-hidden">
                 <div className="grid grid-cols-[28px_110px_1fr_100px_80px_100px] gap-3 px-4 py-2.5 bg-muted/40 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  <span/><span>Code</span><span>Title</span><span>Type</span><span>Priority</span><span>Frequency</span>
+                  <span /><span>Code</span><span>Title</span><span>Type</span><span>Priority</span><span>Frequency</span>
                 </div>
                 <div className="divide-y divide-border/40 max-h-[400px] overflow-y-auto">
                   {requirements.map((req, idx) => (

@@ -21,6 +21,7 @@
         "smalot/pdfparser": "^2.12",
         "spatie/laravel-permission": "^6.21",
         "spatie/laravel-query-builder": "^6.4",
+        "spatie/pdf-to-text": "^1.54",
         "tightenco/ziggy": "^2.6"
     },
     "require-dev": {

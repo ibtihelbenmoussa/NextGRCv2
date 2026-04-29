@@ -33,8 +33,9 @@ return new class extends Migration {
                 'continuous'
             ]);
 
-            $table->unsignedBigInteger('framework_id');
-            $table->unsignedBigInteger('process_id');
+            // APRÈS
+$table->unsignedBigInteger('framework_id')->nullable();
+$table->unsignedBigInteger('process_id')->nullable();
             $table->text('owner_id')->nullable();
 
        

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Document;
+use App\Models\Requirement;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 
 class Framework extends Model
@@ -54,6 +56,10 @@ public function processes()
 public function documents()
 {
     return $this->morphMany(Document::class, 'documentable');
+}
+public function requirements(): HasMany
+{
+    return $this->hasMany(Requirement::class);
 }
 }
 
