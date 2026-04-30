@@ -8,16 +8,31 @@ use Illuminate\Support\Facades\Log;
 
 class GapAssessmentService
 {
-    private const ANSWER_VALUES = [
-        'YES'     => 1.0,
-        'PARTIAL' => 0.5,
-        'NO'      => 0.0,
-    ];
-
     private const ML_URL = 'http://localhost:5000';
 
-    // ─── Scoring ──────────────────────────────────────────────────────────────
+    /**
+     * Frontend sends 0..4 (int) — we map to 0.0..1.0 (float) for ML.
+     *
+     * 0 → 0.0  (Initial   — NO equivalent)
+     * 1 → 0.25 (Basic     — between NO and PARTIAL)
+     * 2 → 0.5  (Defined   — PARTIAL equivalent)
+     * 3 → 0.75 (Managed   — between PARTIAL and YES)
+     * 4 → 1.0  (Optimized — YES equivalent)
+     */
+    private const SCALE_TO_FLOAT = [
+        0 => 0.0,
+        1 => 0.25,
+        2 => 0.5,
+        3 => 0.75,
+        4 => 1.0,
+    ];
 
+    // ─── Main Entry Point ─────────────────────────────────────────────────────
+
+    /**
+     * @param  Requirement  $requirement
+     * @param  array        $answers     [ question_id => int 0..4 ]
+     */
     public function calculate(Requirement $requirement, array $answers): array
     {
         $questions = $requirement->gapQuestions()->orderBy('order')->get();
@@ -33,28 +48,35 @@ class GapAssessmentService
             ];
         }
 
-        // Gate check — Q1 determines ceiling
-        $firstQuestion = $questions->first();
-        $firstAnswer   = $answers[$firstQuestion->id] ?? 'NO';
+        // ── Normalize answers: int 0..4 → float 0.0..1.0 ──────────────────
+        $normalized = [];
+        foreach ($questions as $q) {
+            $raw = isset($answers[$q->id]) ? (int) $answers[$q->id] : 0;
+            $raw = max(0, min(4, $raw)); // clamp safety
+            $normalized[$q->id] = self::SCALE_TO_FLOAT[$raw];
+        }
 
-        $gateCap = match($firstAnswer) {
-            'NO'      => 1,
-            'PARTIAL' => 2,
-            default   => null,
+        // ── Gate check: first question determines ceiling ───────────────────
+        $firstQuestion = $questions->first();
+        $firstFloat    = $normalized[$firstQuestion->id];
+
+        $gateCap = match (true) {
+            $firstFloat === 0.0             => 1,
+            $firstFloat > 0.0 && $firstFloat <= 0.5 => 2,
+            default                         => null,
         };
 
-        // Weighted score
-        $total        = 0;
-        $totalWeights = 0;
+        // ── Weighted score (0..100) ─────────────────────────────────────────
+        $total        = 0.0;
+        $totalWeights = 0.0;
         foreach ($questions as $q) {
-            $val           = self::ANSWER_VALUES[$answers[$q->id] ?? 'NO'] ?? 0.0;
-            $total        += $val * $q->weight;
+            $total        += $normalized[$q->id] * $q->weight;
             $totalWeights += $q->weight;
         }
         $score = $totalWeights > 0 ? round(($total / $totalWeights) * 100, 2) : 0;
 
-        // Try ML model first
-        $mlResult = $this->callMLPredict($answers, $questions);
+        // ── Call ML (pass normalized floats directly) ───────────────────────
+        $mlResult = $this->callMLPredict($normalized, $questions);
 
         $rawLevel   = $mlResult ? $mlResult['maturity_level'] : $this->mapLevel($score);
         $finalLevel = $gateCap  ? min($rawLevel, $gateCap)    : $rawLevel;
@@ -63,7 +85,7 @@ class GapAssessmentService
             'score'          => $mlResult['weighted_score'] ?? $score,
             'maturity_level' => $finalLevel,
             'raw_level'      => $rawLevel,
-            'gate_capped'    => $gateCap !== null,
+            'gate_capped'    => $gateCap !== null && $rawLevel > ($gateCap ?? 5),
             'gate_cap'       => $gateCap,
             'confidence'     => $mlResult['confidence']    ?? null,
             'probabilities'  => $mlResult['probabilities'] ?? null,
@@ -73,23 +95,37 @@ class GapAssessmentService
 
     // ─── ML Predict ───────────────────────────────────────────────────────────
 
-    private function callMLPredict(array $answers, $questions): ?array
+    /**
+     * @param  array  $normalized  [ question_id => float 0.0..1.0 ]
+     * @param  \Illuminate\Support\Collection  $questions  ordered Question models
+     */
+    private function callMLPredict(array $normalized, $questions): ?array
     {
         try {
-            $values  = ['YES' => 1.0, 'PARTIAL' => 0.5, 'NO' => 0.0];
             $payload = [];
 
+            // Build q1..q5 from ordered questions
             foreach ($questions as $i => $question) {
-                $answer = $answers[$question->id] ?? 'NO';
-                $payload['q' . ($i + 1)] = $values[$answer] ?? 0.0;
+                $payload['q' . ($i + 1)] = $normalized[$question->id] ?? 0.0;
             }
 
-            $response = Http::timeout(5)
-                ->post(self::ML_URL . '/predict', $payload);
+            Log::debug('ML predict payload', $payload);
+
+            $response = Http::timeout(5)->post(self::ML_URL . '/predict', $payload);
 
             if ($response->successful()) {
-                return $response->json();
+                $data = $response->json();
+
+                // Validate response structure
+                if (!isset($data['maturity_level'])) {
+                    Log::warning('ML predict: unexpected response', ['data' => $data]);
+                    return null;
+                }
+
+                return $data;
             }
+
+            Log::warning('ML predict non-2xx', ['status' => $response->status()]);
         } catch (\Exception $e) {
             Log::warning('ML predict unavailable: ' . $e->getMessage());
         }
@@ -97,21 +133,64 @@ class GapAssessmentService
         return null;
     }
 
-    // ─── ML Question Generation ───────────────────────────────────────────────
+    // ─── Analyze (Roadmap) ────────────────────────────────────────────────────
 
     /**
-     * Try ML service first, fallback to Anthropic API, then generic questions.
+     * Build analyze payload and call /analyze on the ML service.
+     *
+     * @param  Requirement  $requirement
+     * @param  array        $answers          [ question_id => int 0..4 ]
+     * @param  array        $mlPredictResult  result from calculate()
      */
+    public function analyze(Requirement $requirement, array $answers, array $mlPredictResult): array
+    {
+        $questions = $requirement->gapQuestions()->orderBy('order')->get();
+
+        // Map each dimension to its answer label for the roadmap builder
+        $dimensionAnswers = [];
+        foreach ($questions as $q) {
+            $raw   = isset($answers[$q->id]) ? (int) $answers[$q->id] : 0;
+            $float = self::SCALE_TO_FLOAT[max(0, min(4, $raw))];
+
+            $dimensionAnswers[$q->dimension ?? "Q{$q->order}"] = match (true) {
+                $float === 0.0  => 'NO',
+                $float <= 0.5   => 'PARTIAL',
+                default         => 'YES',
+            };
+        }
+
+        $payload = [
+            'requirement_code'  => $requirement->code,
+            'requirement_title' => $requirement->title,
+            'maturity_level'    => $mlPredictResult['maturity_level'],
+            'score'             => $mlPredictResult['score'],
+            'gap'               => 5 - $mlPredictResult['maturity_level'],
+            'answers'           => $dimensionAnswers,
+        ];
+
+        try {
+            $response = Http::timeout(10)->post(self::ML_URL . '/analyze', $payload);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+        } catch (\Exception $e) {
+            Log::warning('ML analyze unavailable: ' . $e->getMessage());
+        }
+
+        return ['error' => 'ML analyze unavailable'];
+    }
+
+    // ─── Question Generation ──────────────────────────────────────────────────
+
     public function generateQuestionsViaAI(Requirement $requirement): array
     {
-        // 1. Try ML service (local, no internet)
         $mlQuestions = $this->generateQuestionsViaML($requirement);
         if ($mlQuestions !== null) {
             Log::info("Questions generated via ML for {$requirement->code}");
             return $mlQuestions;
         }
 
-        // 2. Fallback: Anthropic API
         try {
             $apiQuestions = $this->generateQuestionsViaAnthropic($requirement);
             Log::info("Questions generated via Anthropic API for {$requirement->code}");
@@ -120,7 +199,6 @@ class GapAssessmentService
             Log::warning("Anthropic API failed: " . $e->getMessage());
         }
 
-        // 3. Last resort: generic questions
         Log::warning("Using generic questions for {$requirement->code}");
         return $this->genericQuestions($requirement->title);
     }
@@ -135,9 +213,7 @@ class GapAssessmentService
             ]);
 
             if ($response->successful()) {
-                $data      = $response->json();
-                $questions = $data['questions'] ?? [];
-
+                $questions = $response->json('questions', []);
                 if (count($questions) >= 3) {
                     return $questions;
                 }
@@ -189,9 +265,9 @@ Return ONLY a valid JSON array, no markdown, no explanation:
             throw new \RuntimeException('Anthropic API failed: ' . $response->status());
         }
 
-        $content = $response->json('content.0.text', '');
-        $content = preg_replace('/^```json\s*/i', '', trim($content));
-        $content = preg_replace('/\s*```$/m', '', $content);
+        $content   = $response->json('content.0.text', '');
+        $content   = preg_replace('/^```json\s*/i', '', trim($content));
+        $content   = preg_replace('/\s*```$/m', '', $content);
         $questions = json_decode(trim($content), true);
 
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($questions)) {
@@ -222,11 +298,11 @@ Return ONLY a valid JSON array, no markdown, no explanation:
     private function genericQuestions(string $title): array
     {
         return [
-            ['order'=>1,'dimension'=>'Existence',    'weight'=>0.10,'text'=>"Does a formal process or policy exist for \"{$title}\"?"],
-            ['order'=>2,'dimension'=>'Formalization','weight'=>0.20,'text'=>"Is \"{$title}\" formally documented, approved by management, and communicated?"],
-            ['order'=>3,'dimension'=>'Enforcement',  'weight'=>0.30,'text'=>"Are controls actively enforced to ensure compliance with \"{$title}\"?"],
-            ['order'=>4,'dimension'=>'Measurement',  'weight'=>0.20,'text'=>"Are metrics tracked and reviewed periodically for \"{$title}\"?"],
-            ['order'=>5,'dimension'=>'Optimization', 'weight'=>0.20,'text'=>"Is \"{$title}\" continuously reviewed and improved based on incidents or audits?"],
+            ['order' => 1, 'dimension' => 'Existence',     'weight' => 0.10, 'text' => "Does a formal process or policy exist for \"{$title}\"?"],
+            ['order' => 2, 'dimension' => 'Formalization',  'weight' => 0.20, 'text' => "Is \"{$title}\" formally documented, approved by management, and communicated?"],
+            ['order' => 3, 'dimension' => 'Enforcement',    'weight' => 0.30, 'text' => "Are controls actively enforced to ensure compliance with \"{$title}\"?"],
+            ['order' => 4, 'dimension' => 'Measurement',    'weight' => 0.20, 'text' => "Are metrics tracked and reviewed periodically for \"{$title}\"?"],
+            ['order' => 5, 'dimension' => 'Optimization',   'weight' => 0.20, 'text' => "Is \"{$title}\" continuously reviewed and improved based on incidents or audits?"],
         ];
     }
 

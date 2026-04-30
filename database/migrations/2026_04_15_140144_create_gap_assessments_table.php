@@ -36,6 +36,12 @@ return new class extends Migration
             if (!Schema::hasColumn('gap_assessments', 'is_deleted')) {
                 $table->tinyInteger('is_deleted')->default(0);
             }
+             if (!Schema::hasColumn('gap_assessments', 'score')) {
+        $table->unsignedSmallInteger('score')->nullable()->after('end_date');
+    }
+    if (!Schema::hasColumn('gap_assessments', 'maturity_level')) {
+        $table->unsignedTinyInteger('maturity_level')->nullable()->after('score');
+    }
         });
 
         // 2. Table pivot gap_assessment_requirements

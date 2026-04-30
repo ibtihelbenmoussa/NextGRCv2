@@ -15,7 +15,8 @@ public function up(): void
         $table->id();
         $table->foreignId('gap_assessment_id')->constrained('gap_assessments')->cascadeOnDelete();
         $table->foreignId('gap_question_id')->constrained('gap_questions')->cascadeOnDelete();
-        $table->enum('answer', ['YES', 'PARTIAL', 'NO']);
+       $table->tinyInteger('answer')->unsigned(); // 0,1,2,3,4
+
         $table->text('note')->nullable();
         $table->float('score')->default(0); // 0, 0.5, ou 1.0
         $table->integer('maturity_level')->default(1); // 1-5

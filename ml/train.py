@@ -7,12 +7,14 @@ import joblib
 import json
 import os
 
-print("=== NextGRC ML Model Training ===")
-print("Generating training data...")
+# Mapping 0..4 → 0.0..1.0
+SCALE_MAP = {0: 0.0, 1: 0.25, 2: 0.5, 3: 0.75, 4: 1.0}
 
+print("=== NextGRC ML Model Training ===")
 np.random.seed(42)
 weights = np.array([0.10, 0.20, 0.30, 0.20, 0.20])
 
+# Profiles: [p(NO=0), p(PARTIAL=0.5), p(YES=1)] per dimension per level
 level_profiles = {
     1: [[0.85,0.10,0.05],[0.90,0.08,0.02],[0.93,0.05,0.02],[0.95,0.04,0.01],[0.96,0.03,0.01]],
     2: [[0.10,0.30,0.60],[0.50,0.35,0.15],[0.70,0.25,0.05],[0.80,0.15,0.05],[0.85,0.12,0.03]],
@@ -24,6 +26,7 @@ level_profiles = {
 rows = []
 for level, profile in level_profiles.items():
     for _ in range(400):
+        # Raw answers in 0/0.5/1 internally for training
         answers = [np.random.choice([0.0, 0.5, 1.0], p=probs) for probs in profile]
         score = float(np.dot(answers, weights) * 100)
         rows.append({
@@ -34,8 +37,6 @@ for level, profile in level_profiles.items():
         })
 
 df = pd.DataFrame(rows)
-print(f"Dataset: {len(df)} samples")
-print(df['maturity_level'].value_counts().sort_index().to_string())
 
 def build_features(df):
     X = df[['q1','q2','q3','q4','q5','weighted_score']].copy()
@@ -48,49 +49,19 @@ def build_features(df):
 X = build_features(df)
 y = df['maturity_level']
 
-print("\nTraining Random Forest...")
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 model = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=10,
-    min_samples_split=5,
-    min_samples_leaf=2,
-    class_weight='balanced',
-    random_state=42,
-    n_jobs=-1
+    n_estimators=200, max_depth=10, min_samples_split=5,
+    min_samples_leaf=2, class_weight='balanced', random_state=42, n_jobs=-1
 )
 model.fit(X_train, y_train)
 
-cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
-y_pred = model.predict(X_test)
-
-print(f"\nCV Accuracy:   {cv_scores.mean():.3f} (+/- {cv_scores.std():.3f})")
-print(f"Test Accuracy: {model.score(X_test, y_test):.3f}")
-print("\nClassification Report:")
-print(classification_report(y_test, y_pred, target_names=['L1','L2','L3','L4','L5']))
-
-print("Feature Importances:")
-for name, imp in sorted(zip(X.columns, model.feature_importances_), key=lambda x: -x[1]):
-    bar = "█" * int(imp * 50)
-    print(f"  {name:20s} {bar} {imp:.3f}")
+cv = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
+print(f"CV: {cv.mean():.3f} ± {cv.std():.3f} | Test: {model.score(X_test, y_test):.3f}")
+print(classification_report(y_test, model.predict(X_test), target_names=['L1','L2','L3','L4','L5']))
 
 os.makedirs('models', exist_ok=True)
 joblib.dump(model, 'models/maturity_classifier.pkl')
-
-metadata = {
-    'feature_names': X.columns.tolist(),
-    'classes': model.classes_.tolist(),
-    'version': '1.0.0'
-}
-with open('models/model_metadata.json', 'w') as f:
-    json.dump(metadata, f, indent=2)
-
-df.to_csv('models/training_data.csv', index=False)
-
-print("\n=== DONE ===")
-print("  models/maturity_classifier.pkl  ✓")
-print("  models/model_metadata.json      ✓")
-print("  models/training_data.csv        ✓")
+json.dump({'feature_names': X.columns.tolist(), 'classes': model.classes_.tolist(), 'version': '1.1.0'},
+          open('models/model_metadata.json','w'), indent=2)

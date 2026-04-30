@@ -1,3 +1,4 @@
+# app/ml/app.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
@@ -8,50 +9,229 @@ app = Flask(__name__)
 CORS(app)
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'maturity_classifier.pkl')
-model = joblib.load(MODEL_PATH)
 
+# ─── Training Data ────────────────────────────────────────────────────────────
+
+def generate_training_data(n=5000):
+    """
+    Generate synthetic training data.
+    Answers are floats in {0.0, 0.25, 0.5, 0.75, 1.0}
+    matching the 5-level frontend scale (0..4 mapped to floats).
+    """
+    np.random.seed(42)
+
+    # All possible answer values (0=Initial, 0.25=Basic, 0.5=Defined, 0.75=Managed, 1.0=Optimized)
+    vals = [0.0, 0.25, 0.5, 0.75, 1.0]
+    weights = [0.10, 0.20, 0.30, 0.20, 0.20]
+
+    # Probability profiles per maturity level [p(0), p(0.25), p(0.5), p(0.75), p(1.0)]
+    level_profiles = {
+        1: [[0.70, 0.20, 0.07, 0.02, 0.01],   # mostly 0 (Initial)
+            [0.75, 0.18, 0.05, 0.01, 0.01],
+            [0.80, 0.12, 0.05, 0.02, 0.01],
+            [0.82, 0.12, 0.04, 0.01, 0.01],
+            [0.83, 0.11, 0.04, 0.01, 0.01]],
+
+        2: [[0.05, 0.65, 0.20, 0.08, 0.02],   # mostly 0.25 (Basic)
+            [0.35, 0.45, 0.15, 0.04, 0.01],
+            [0.55, 0.30, 0.10, 0.04, 0.01],
+            [0.65, 0.25, 0.07, 0.02, 0.01],
+            [0.70, 0.20, 0.07, 0.02, 0.01]],
+
+        3: [[0.02, 0.08, 0.60, 0.25, 0.05],   # mostly 0.5 (Defined)
+            [0.05, 0.15, 0.55, 0.20, 0.05],
+            [0.10, 0.30, 0.40, 0.15, 0.05],
+            [0.40, 0.35, 0.15, 0.08, 0.02],
+            [0.50, 0.30, 0.12, 0.06, 0.02]],
+
+        4: [[0.01, 0.03, 0.10, 0.70, 0.16],   # mostly 0.75 (Managed)
+            [0.02, 0.05, 0.13, 0.65, 0.15],
+            [0.03, 0.08, 0.17, 0.55, 0.17],
+            [0.05, 0.15, 0.30, 0.35, 0.15],
+            [0.25, 0.35, 0.25, 0.10, 0.05]],
+
+        5: [[0.01, 0.02, 0.05, 0.12, 0.80],   # mostly 1.0 (Optimized)
+            [0.01, 0.02, 0.07, 0.15, 0.75],
+            [0.01, 0.03, 0.09, 0.17, 0.70],
+            [0.02, 0.04, 0.09, 0.20, 0.65],
+            [0.03, 0.06, 0.11, 0.25, 0.55]],
+    }
+
+    X, y = [], []
+    per_level = n // 5
+
+    for level, profile in level_profiles.items():
+        for _ in range(per_level):
+            q = [np.random.choice(vals, p=profile[i]) for i in range(5)]
+            ws  = sum(qi * wi for qi, wi in zip(q, weights)) * 100
+            gv  = int(q[0] == 0.0)
+            pc  = sum(1 for v in q if v == 0.5)
+            yc  = sum(1 for v in q if v == 1.0)
+            eg  = int(q[0] >= 0.5 and q[1] >= 0.5 and q[2] == 0.0)
+
+            X.append([q[0], q[1], q[2], q[3], q[4], ws, gv, pc, yc, eg])
+            y.append(level)
+
+    return np.array(X), np.array(y)
+
+
+def train_and_save():
+    from sklearn.ensemble import RandomForestClassifier
+
+    print("⚙️  Model not found — training from scratch...")
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+
+    X, y = generate_training_data(5000)
+
+    model = RandomForestClassifier(
+        n_estimators=300,
+        max_depth=12,
+        min_samples_split=4,
+        min_samples_leaf=2,
+        class_weight='balanced',
+        random_state=42,
+        n_jobs=-1,
+    )
+    model.fit(X, y)
+    joblib.dump(model, MODEL_PATH)
+
+    print(f"✅ Model trained and saved → {MODEL_PATH}")
+    print(f"   Classes: {model.classes_}")
+    return model
+
+
+def load_model():
+    if os.path.exists(MODEL_PATH):
+        print(f"✅ Model loaded → {MODEL_PATH}")
+        return joblib.load(MODEL_PATH)
+    return train_and_save()
+
+
+# Load at startup
+model = load_model()
+
+
+# ─── Feature Builder ──────────────────────────────────────────────────────────
 
 def build_features(q):
-    weighted_score  = (q[0]*0.10 + q[1]*0.20 + q[2]*0.30 + q[3]*0.20 + q[4]*0.20) * 100
+    """
+    q: list of 5 floats in [0.0, 0.25, 0.5, 0.75, 1.0]
+    returns: numpy array shape (1, 10)
+    """
+    weights = [0.10, 0.20, 0.30, 0.20, 0.20]
+    weighted_score  = sum(qi * wi for qi, wi in zip(q, weights)) * 100
     gate_violated   = int(q[0] == 0.0)
     partial_count   = sum(1 for v in q if v == 0.5)
     yes_count       = sum(1 for v in q if v == 1.0)
     enforcement_gap = int(q[0] >= 0.5 and q[1] >= 0.5 and q[2] == 0.0)
-    return np.array([[q[0], q[1], q[2], q[3], q[4],
-                      weighted_score, gate_violated,
-                      partial_count, yes_count, enforcement_gap]])
 
+    return np.array([[
+        q[0], q[1], q[2], q[3], q[4],
+        weighted_score, gate_violated,
+        partial_count, yes_count, enforcement_gap
+    ]])
+
+
+def normalize_answer(val):
+    """
+    Accept either:
+      - float already in [0.0..1.0]
+      - int 0..4 from old clients → map to float
+      - string 'YES'/'PARTIAL'/'NO' → map to float
+    Returns a float in [0.0, 1.0].
+    """
+    if isinstance(val, str):
+        return {'YES': 1.0, 'PARTIAL': 0.5, 'NO': 0.0}.get(val.upper(), 0.0)
+
+    val = float(val)
+
+    # If value is an integer-like 0..4, map to float scale
+    if val > 1.0:
+        scale = {0: 0.0, 1: 0.25, 2: 0.5, 3: 0.75, 4: 1.0}
+        return scale.get(int(val), 0.0)
+
+    return val  # already 0.0..1.0
+
+
+# ─── Gate Logic ───────────────────────────────────────────────────────────────
+
+def apply_gate(q1_float, raw_level):
+    """
+    Q1 (Existence) gates the maximum achievable level:
+      0.0       → cap at 1
+      0.0..0.5  → cap at 2
+      > 0.5     → no cap
+    """
+    if q1_float == 0.0:
+        gate_cap = 1
+    elif q1_float <= 0.5:
+        gate_cap = 2
+    else:
+        gate_cap = None
+
+    final_level = min(raw_level, gate_cap) if gate_cap else raw_level
+    return final_level, gate_cap
+
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'model': 'maturity_classifier v1.0'})
+    return jsonify({
+        'status':  'ok',
+        'model':   'maturity_classifier v2.0',
+        'classes': model.classes_.tolist(),
+        'path':    MODEL_PATH,
+        'scale':   '0.0/0.25/0.5/0.75/1.0 (5-level)',
+    })
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        data = request.get_json()
-        q = [float(data.get(f'q{i}', 0)) for i in range(1, 6)]
-        features       = build_features(q)
-        level          = int(model.predict(features)[0])
-        proba          = model.predict_proba(features)[0]
-        confidence     = round(float(proba[level - 1]), 3)
-        weighted_score = round((q[0]*0.10 + q[1]*0.20 + q[2]*0.30 + q[3]*0.20 + q[4]*0.20) * 100, 2)
+        data = request.get_json(force=True) or {}
+
+        # Parse q1..q5 — accept int 0..4, float 0.0..1.0, or YES/NO/PARTIAL
+        q = []
+        for i in range(1, 6):
+            val = data.get(f'q{i}', 0.0)
+            q.append(normalize_answer(val))
+
+        features    = build_features(q)
+        raw_level   = int(model.predict(features)[0])
+        proba       = model.predict_proba(features)[0]
+
+        # Confidence for the predicted level
+        classes = model.classes_.tolist()
+        confidence = round(float(proba[classes.index(raw_level)]) if raw_level in classes else max(proba), 3)
+
+        weighted_score = round(
+            sum(qi * wi for qi, wi in zip(q, [0.10, 0.20, 0.30, 0.20, 0.20])) * 100, 2
+        )
+
+        final_level, gate_cap = apply_gate(q[0], raw_level)
+
         return jsonify({
-            'maturity_level': level,
+            'maturity_level': final_level,
+            'raw_level':      raw_level,
+            'gate_capped':    gate_cap is not None and raw_level > (gate_cap or 5),
+            'gate_cap':       gate_cap,
             'confidence':     confidence,
             'weighted_score': weighted_score,
-            'probabilities':  {f'level_{i+1}': round(float(p), 3) for i, p in enumerate(proba)},
-            'source':         'ml_model'
+            'probabilities':  {
+                f'L{int(cls)}': round(float(p), 3)
+                for cls, p in zip(model.classes_, proba)
+            },
+            'source': 'ml_model',
         })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
 
+# ─── Roadmap Builder ──────────────────────────────────────────────────────────
+
 def build_roadmap(title, code, current_level, weak, partial, strong):
-    """
-    Génère un roadmap structuré niveau par niveau avec actions spécifiques.
-    """
     specific_by_dim = {
         'Existence':     f'Formally establish that {title} controls exist and are recognized',
         'Formalization': f'Document, get management approval, and communicate {title} procedures',
@@ -68,16 +248,16 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
                 'Identify the responsible person or team for this requirement',
                 'Conduct an initial awareness session with relevant staff',
                 'Create a basic inventory of gaps to be addressed',
-            ]
+            ],
         },
         {
-            'level': 2, 'icon': '🟠', 'label': 'Developing', 'subtitle': 'Basic / Informal',
+            'level': 2, 'icon': '🟠', 'label': 'Basic', 'subtitle': 'Ad-hoc / Informal',
             'base_actions': [
                 f'Draft an initial policy or procedure for {title}',
                 'Identify the scope and assets concerned by this requirement',
                 'Implement basic manual controls and workarounds',
                 'Communicate basic rules and expectations to relevant personnel',
-            ]
+            ],
         },
         {
             'level': 3, 'icon': '🟡', 'label': 'Defined', 'subtitle': 'Documented & Approved',
@@ -86,7 +266,7 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
                 'Document procedures clearly and assign responsibilities',
                 'Implement technical or administrative enforcement controls',
                 'Train all relevant staff on the defined procedures',
-            ]
+            ],
         },
         {
             'level': 4, 'icon': '🟢', 'label': 'Managed', 'subtitle': 'Measured & Monitored',
@@ -95,23 +275,22 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
                 'Implement regular compliance checks and reviews',
                 'Set up dashboards or reports to track performance over time',
                 'Review and update procedures based on collected metrics',
-            ]
+            ],
         },
         {
-            'level': 5, 'icon': '🔵', 'label': 'Optimizing', 'subtitle': 'Continuously Improved',
+            'level': 5, 'icon': '🔵', 'label': 'Optimized', 'subtitle': 'Continuously Improved',
             'base_actions': [
                 f'Establish a continuous improvement cycle for {title}',
                 'Integrate lessons learned from incidents, audits, and reviews',
                 'Benchmark against industry best practices and standards',
                 'Automate controls and monitoring where technically feasible',
-            ]
+            ],
         },
     ]
 
     roadmap = []
     for cfg in level_configs:
         lv = cfg['level']
-
         if lv < current_level:
             status = 'completed'
         elif lv == current_level:
@@ -119,7 +298,6 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
         else:
             status = 'todo'
 
-        # Extra actions for the next target level
         extra_actions = []
         if lv == current_level + 1:
             for dim in weak:
@@ -146,42 +324,47 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
-        data    = request.get_json()
+        data    = request.get_json(force=True) or {}
         code    = data.get('requirement_code', '')
         title   = data.get('requirement_title', '')
         level   = int(data.get('maturity_level', 1))
         score   = float(data.get('score', 0))
         gap     = int(data.get('gap', 5 - level))
-        answers = data.get('answers', {})
+        answers = data.get('answers', {})  # {'Existence': 'YES', 'Enforcement': 'NO', ...}
 
-        level_labels = ['', 'Initial', 'Developing', 'Defined', 'Managed', 'Optimizing']
+        level_labels = ['', 'Initial', 'Basic', 'Defined', 'Managed', 'Optimized']
         label        = level_labels[level] if 1 <= level <= 5 else 'Unknown'
 
         weak    = [k for k, v in answers.items() if v == 'NO']
         partial = [k for k, v in answers.items() if v == 'PARTIAL']
         strong  = [k for k, v in answers.items() if v == 'YES']
 
-        # Summary text
         if level == 5:
             summary = (
                 f'The requirement {code} – {title} has achieved the highest maturity level '
-                f'(Level 5: Optimizing) with a score of {score:.0f}%. '
+                f'(Level 5: Optimized) with a score of {score:.0f}%. '
                 f'All dimensions are fully implemented and continuously improved.'
             )
         else:
             summary = (
                 f'The requirement {code} – {title} is currently at maturity Level {level} ({label}) '
-                f'with a score of {score:.0f}%, requiring {gap} level(s) of improvement to reach full optimization.'
+                f'with a score of {score:.0f}%, requiring {gap} level(s) of improvement '
+                f'to reach full optimization.'
             )
 
-        # Current issues
         current_issues = []
         if weak:
-            current_issues.append(f'Critical gaps in: {", ".join(weak)} — not implemented, must be addressed as priority')
+            current_issues.append(
+                f'Critical gaps in: {", ".join(weak)} — not implemented, must be addressed as priority'
+            )
         if partial:
-            current_issues.append(f'Partial implementation in: {", ".join(partial)} — requires formalization and enforcement')
+            current_issues.append(
+                f'Partial implementation in: {", ".join(partial)} — requires formalization and enforcement'
+            )
         if strong:
-            current_issues.append(f'Confirmed strengths in: {", ".join(strong)} — maintain and leverage as foundation')
+            current_issues.append(
+                f'Confirmed strengths in: {", ".join(strong)} — maintain and leverage as foundation'
+            )
 
         roadmap = build_roadmap(title, code, level, weak, partial, strong)
 
@@ -190,6 +373,7 @@ def analyze():
             'current_issues': current_issues,
             'roadmap':        roadmap,
             'current_level':  level,
+            'label':          label,
             'source':         'ml_local',
         })
 
@@ -197,6 +381,60 @@ def analyze():
         return jsonify({'error': str(e)}), 400
 
 
+# ─── Retrain ──────────────────────────────────────────────────────────────────
+
+@app.route('/retrain', methods=['POST'])
+def retrain():
+    global model
+    try:
+        from sklearn.ensemble import RandomForestClassifier
+
+        data        = request.get_json(force=True) or {}
+        new_samples = data.get('samples', [])
+
+        X_base, y_base = generate_training_data(2000)
+
+        if len(new_samples) >= 10:
+            X_new = []
+            for s in new_samples:
+                q = [normalize_answer(s.get(f'q{i}', 0)) for i in range(1, 6)]
+                ws  = sum(qi * wi for qi, wi in zip(q, [0.10, 0.20, 0.30, 0.20, 0.20])) * 100
+                gv  = int(q[0] == 0.0)
+                pc  = sum(1 for v in q if v == 0.5)
+                yc  = sum(1 for v in q if v == 1.0)
+                eg  = int(q[0] >= 0.5 and q[1] >= 0.5 and q[2] == 0.0)
+                X_new.append([q[0], q[1], q[2], q[3], q[4], ws, gv, pc, yc, eg])
+
+            y_new = np.array([s['level'] for s in new_samples])
+            X_all = np.vstack([X_base, np.array(X_new)])
+            y_all = np.concatenate([y_base, y_new])
+        else:
+            X_all, y_all = X_base, y_base
+
+        model = RandomForestClassifier(
+            n_estimators=300, max_depth=12,
+            min_samples_split=4, min_samples_leaf=2,
+            class_weight='balanced', random_state=42, n_jobs=-1,
+        )
+        model.fit(X_all, y_all)
+        joblib.dump(model, MODEL_PATH)
+
+        return jsonify({
+            'status':        'retrained',
+            'total_samples': len(X_all),
+            'new_samples':   len(new_samples),
+            'model_classes': model.classes_.tolist(),
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
-    print("NextGRC ML API — http://localhost:5000")
+    print("=" * 50)
+    print("  NextGRC ML API — http://localhost:5000")
+    print("  Scale: 0=Initial, 1=Basic, 2=Defined, 3=Managed, 4=Optimized")
+    print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=False)

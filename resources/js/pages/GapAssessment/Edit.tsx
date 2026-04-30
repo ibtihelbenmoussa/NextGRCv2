@@ -33,12 +33,11 @@ import {
   Building2,
   FileText,
   Layers,
-  Tag,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
 // ─────────────────────────────────────────────
-// Types
+// Types (identiques à Create.tsx)
 // ─────────────────────────────────────────────
 
 interface Question {
@@ -61,8 +60,25 @@ interface Framework {
   requirements: Requirement[]
 }
 
+interface Assessment {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  start_date: string | null
+  end_date: string | null
+  framework_id: number
+  selected_requirement_ids: number[]
+}
+
+interface Props {
+  assessment: Assessment
+  framework: Framework
+  existingCount?: number
+}
+
 // ─────────────────────────────────────────────
-// Step Bar (conservé mais avec le style shadcn)
+// Step Bar (strictement identique)
 // ─────────────────────────────────────────────
 
 const STEPS = [
@@ -113,26 +129,27 @@ function StepBar({ current }: { current: number }) {
 }
 
 // ─────────────────────────────────────────────
-// Step 1: Basic Info (avec design identique à Framework)
+// Step 1: Basic Info (pré‑remplie)
 // ─────────────────────────────────────────────
 
 function StepBasic({
+  initialFramework,
+  initialForm,
   onNext,
-  existingCount,
 }: {
+  initialFramework: Framework | null
+  initialForm: {
+    code: string
+    name: string
+    description: string
+    start_date: string
+    end_date: string
+  }
   onNext: (data: any) => void
-  existingCount: number
 }) {
   const [frameworks, setFrameworks] = useState<Framework[]>([])
-  const [selectedFramework, setSelectedFramework] = useState<Framework | null>(null)
-  const [form, setForm] = useState({
-    code: '',
-    name: '',
-    description: '',
-    start_date: '',
-    end_date: '',
-  })
-
+  const [selectedFramework, setSelectedFramework] = useState<Framework | null>(initialFramework)
+  const [form, setForm] = useState(initialForm)
   const [startDateOpen, setStartDateOpen] = useState(false)
   const [endDateOpen, setEndDateOpen] = useState(false)
   const [errors, setErrors] = useState<{ framework?: string; name?: string }>({})
@@ -146,16 +163,7 @@ function StepBasic({
   const handleFrameworkChange = (frameworkId: string) => {
     const fw = frameworks.find(f => f.id === Number(frameworkId))
     setSelectedFramework(fw ?? null)
-    if (fw) {
-      const today = new Date()
-      const dd = String(today.getDate()).padStart(2, '0')
-      const mm = String(today.getMonth() + 1).padStart(2, '0')
-      const yyyy = today.getFullYear()
-      const n = existingCount + 1
-      const autoCode = `GA${n}-${fw.code}-${dd}${mm}${yyyy}`
-      setForm(prev => ({ ...prev, code: autoCode }))
-      setErrors(prev => ({ ...prev, framework: undefined }))
-    }
+    setErrors(prev => ({ ...prev, framework: undefined }))
   }
 
   const validate = () => {
@@ -185,7 +193,6 @@ function StepBasic({
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-2">
-        {/* Framework selection */}
         <div className="space-y-2">
           <Label>Framework <span className="text-destructive">*</span></Label>
           <Select
@@ -208,13 +215,12 @@ function StepBasic({
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Code <span className="text-xs text-muted-foreground font-normal"></span></Label>
+            <Label>Code</Label>
             <Input
               value={form.code}
               onChange={e => setForm({ ...form, code: e.target.value })}
-              className="bg-muted/40 font-mono h-11"
-              readOnly={!!selectedFramework}
-              placeholder="Select a framework first"
+              className="font-mono h-11"
+              placeholder="Assessment code"
             />
           </div>
           <div className="space-y-2">
@@ -298,7 +304,7 @@ function StepBasic({
 }
 
 // ─────────────────────────────────────────────
-// Step 2: Requirements Selection (card style harmonisé)
+// Step 2: Requirements Selection (identique à Create)
 // ─────────────────────────────────────────────
 
 function StepRequirements({
@@ -416,18 +422,20 @@ function StepRequirements({
 }
 
 // ─────────────────────────────────────────────
-// Step 3: Review & Save (avec stats et liste)
+// Step 3: Review & Update (PUT au lieu de POST)
 // ─────────────────────────────────────────────
 
 function StepReview({
   framework,
   selectedReqIds,
   formData,
+  assessmentId,
   onBack,
 }: {
   framework: Framework
   selectedReqIds: number[]
   formData: any
+  assessmentId: number
   onBack: () => void
 }) {
   const [loading, setLoading] = useState(false)
@@ -436,7 +444,7 @@ function StepReview({
 
   const handleSubmit = () => {
     setLoading(true)
-    router.post('/gap-assessments', {
+    router.put(`/gap-assessments/${assessmentId}`, {
       code: formData.code,
       name: formData.name,
       description: formData.description,
@@ -451,7 +459,6 @@ function StepReview({
 
   return (
     <div className="space-y-8">
-      {/* Summary Card */}
       <Card className="shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-3">
@@ -460,7 +467,7 @@ function StepReview({
             </div>
             <div>
               <CardTitle>Assessment Summary</CardTitle>
-              <CardDescription>Review before saving</CardDescription>
+              <CardDescription>Review changes before saving</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -504,7 +511,6 @@ function StepReview({
         </CardContent>
       </Card>
 
-      {/* Selected Requirements List */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl">Selected Requirements</CardTitle>
@@ -527,7 +533,7 @@ function StepReview({
       <div className="flex items-start gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5 text-base text-amber-800">
         <span className="text-xl leading-none mt-0.5">💡</span>
         <p>
-          After saving, you can answer all questions from the assessment page using the <strong>Answer Questions</strong> button.
+          After updating, you can continue answering questions from the assessment page.
         </p>
       </div>
 
@@ -537,7 +543,7 @@ function StepReview({
         </Button>
         <Button size="lg" onClick={handleSubmit} disabled={loading} className="gap-2 min-w-[160px]">
           <Save size={18} />
-          {loading ? 'Saving...' : 'Save Assessment'}
+          {loading ? 'Updating...' : 'Update Assessment'}
         </Button>
       </div>
     </div>
@@ -545,33 +551,35 @@ function StepReview({
 }
 
 // ─────────────────────────────────────────────
-// Main Page (exactement les mêmes dimensions que CreateFramework)
+// Main Edit Page
 // ─────────────────────────────────────────────
 
-interface Props {
-  existingCount?: number
-}
-
-export default function CreateGapAssessment({ existingCount = 0 }: Props) {
+export default function EditGapAssessment({ assessment, framework }: Props) {
   const [step, setStep] = useState(1)
-  const [formData, setFormData] = useState<any>(null)
-  const [selectedReqs, setSelectedReqs] = useState<number[]>([])
+  const [formData, setFormData] = useState({
+    code: assessment.code,
+    name: assessment.name,
+    description: assessment.description ?? '',
+    start_date: assessment.start_date ?? '',
+    end_date: assessment.end_date ?? '',
+  })
+  const [selectedReqs, setSelectedReqs] = useState<number[]>(assessment.selected_requirement_ids)
 
   return (
     <AppLayout
       breadcrumbs={[
         { title: 'Gap Assessments', href: '/gap-assessment' },
-        { title: 'Create', href: '' },
+        { title: 'Edit', href: '' },
       ]}
     >
-      <Head title="Create Gap Assessment" />
+      <Head title={`Edit ${assessment.name}`} />
 
       <div className="space-y-6 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Create Gap Assessment</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Gap Assessment</h1>
             <p className="text-muted-foreground mt-1.5">
-              Evaluate compliance by answering questions from selected framework requirements.
+              Update assessment information or change selected requirements.
             </p>
           </div>
           <Button variant="outline" size="sm" asChild>
@@ -585,7 +593,8 @@ export default function CreateGapAssessment({ existingCount = 0 }: Props) {
 
         {step === 1 && (
           <StepBasic
-            existingCount={existingCount}
+            initialFramework={framework}
+            initialForm={formData}
             onNext={data => {
               setFormData(data)
               setStep(2)
@@ -593,9 +602,9 @@ export default function CreateGapAssessment({ existingCount = 0 }: Props) {
           />
         )}
 
-        {step === 2 && formData?.framework && (
+        {step === 2 && (
           <StepRequirements
-            framework={formData.framework}
+            framework={framework}
             initialSelected={selectedReqs}
             onBack={() => setStep(1)}
             onNext={ids => {
@@ -605,11 +614,12 @@ export default function CreateGapAssessment({ existingCount = 0 }: Props) {
           />
         )}
 
-        {step === 3 && formData?.framework && (
+        {step === 3 && (
           <StepReview
-            framework={formData.framework}
+            framework={framework}
             selectedReqIds={selectedReqs}
             formData={formData}
+            assessmentId={assessment.id}
             onBack={() => setStep(2)}
           />
         )}

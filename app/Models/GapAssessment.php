@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class GapAssessment extends Model
 {
-    protected $guarded = []; // ← autorise tous les champs
+    protected $guarded = []; 
 
     protected $casts = [
         'answers'    => 'array',
@@ -40,5 +40,9 @@ class GapAssessment extends Model
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);
+    }
+        public function answers()
+    {
+        return $this->hasMany(GapAssessmentAnswer::class);
     }
 }

@@ -215,7 +215,7 @@ Route::post('/ai/import-requirements', [DocumentAnalysisController::class, 'impo
     Route::resource('requirements', RequirementController::class);
 // ================= Gap Assessment =================
 
-// ✅ Routes statiques EN PREMIER
+// ✅ Routes statiques (pas de modèle)
 Route::get('/gap-assessment', [GapAssessmentController::class, 'index'])
     ->name('gap-assessment.index');
 
@@ -228,7 +228,6 @@ Route::get('/gap-assessment/frameworks', [GapAssessmentController::class, 'getFr
 Route::get('/gap-assessment/questions/{requirement}', [GapAssessmentController::class, 'getQuestions'])
     ->name('gap-assessment.questions');
 
-// Gap Questions CRUD
 Route::post('/gap-assessment/questions/{requirement}', [GapAssessmentController::class, 'storeQuestion'])
     ->name('gap-assessment.questions.store');
 
@@ -238,34 +237,49 @@ Route::put('/gap-assessment/questions/{question}', [GapAssessmentController::cla
 Route::delete('/gap-assessment/questions/{question}', [GapAssessmentController::class, 'destroyQuestion'])
     ->name('gap-assessment.questions.destroy');
 
-// ✅ Store (POST)
-Route::post('/gap-assessments', [GapAssessmentController::class, 'store'])
+Route::post('/gap-assessments', [GapAssessmentController::class, 'store'])  // store
     ->name('gap-assessment.store');
 
-// ✅ Routes avec {assessment} EN DERNIER
+// Routes avec binding model – les plus spécifiques d'abord
 Route::get('/gap-assessments/{assessment}/answer', [GapAssessmentController::class, 'answerQuestions'])
     ->name('gap-assessment.answer');
 
 Route::post('/gap-assessments/{assessment}/answers', [GapAssessmentController::class, 'storeAnswers'])
     ->name('gap-assessment.answers.store');
+    Route::get('/gap-assessments/{assessment}/results', [GapAssessmentController::class, 'resultsPage'])
+        ->name('gap-assessments.results');
+        Route::post('/api/ml/predict', [GapAssessmentController::class, 'mlPredict']);
+Route::post('/api/ml/analyze', [GapAssessmentController::class, 'mlAnalyze']);
 
 Route::post('/gap-assessments/{assessment}/ai-feedback', [GapAssessmentController::class, 'generateAiFeedback'])
     ->name('gap-assessment.ai-feedback');
 
-Route::get('/gap-assessments/{id}', [GapAssessmentController::class, 'show'])
+Route::get('/gap-assessments/{assessment}/edit', [GapAssessmentController::class, 'edit'])
+    ->name('gap-assessment.edit');
+
+// Routes génériques avec binding model
+Route::get('/gap-assessments/{assessment}', [GapAssessmentController::class, 'show'])
     ->name('gap-assessment.show');
 
+Route::put('/gap-assessments/{assessment}', [GapAssessmentController::class, 'update'])
+    ->name('gap-assessment.update');
+
+Route::delete('/gap-assessments/{assessment}', [GapAssessmentController::class, 'destroy'])
+    ->name('gap-assessment.destroy');
+
+// Autres routes utilitaires
 Route::get('/requirements/{id}/assessments', [GapAssessmentController::class, 'byRequirement'])
     ->name('gap-assessment.by-requirement');
 
 Route::post('/ai/gap-analysis', [GapAssessmentController::class, 'generateAiAnalysis']);
-// Action Plans
+
+// Action Plans (inchangé)
 Route::resource('action-plans', ActionPlanController::class)
     ->only(['index', 'store', 'update', 'destroy']);
 
+
     // ================= REQUIREMENT TESTS =================
 
-    // ✅ Routes statiques EN PREMIER
     Route::get('requirement-tests/validation', [RequirementTestController::class, 'validation'])
         ->name('requirement-tests.validation');
 
