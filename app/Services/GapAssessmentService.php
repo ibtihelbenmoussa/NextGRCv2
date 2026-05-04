@@ -142,45 +142,38 @@ class GapAssessmentService
      * @param  array        $answers          [ question_id => int 0..4 ]
      * @param  array        $mlPredictResult  result from calculate()
      */
-    public function analyze(Requirement $requirement, array $answers, array $mlPredictResult): array
-    {
-        $questions = $requirement->gapQuestions()->orderBy('order')->get();
+   public function analyze(Requirement $requirement, array $answers, array $mlPredictResult): array
+{
+    $questions = $requirement->gapQuestions()->orderBy('order')->get();
 
-        // Map each dimension to its answer label for the roadmap builder
-        $dimensionAnswers = [];
-        foreach ($questions as $q) {
-            $raw   = isset($answers[$q->id]) ? (int) $answers[$q->id] : 0;
-            $float = self::SCALE_TO_FLOAT[max(0, min(4, $raw))];
-
-            $dimensionAnswers[$q->dimension ?? "Q{$q->order}"] = match (true) {
-                $float === 0.0  => 'NO',
-                $float <= 0.5   => 'PARTIAL',
-                default         => 'YES',
-            };
-        }
-
-        $payload = [
-            'requirement_code'  => $requirement->code,
-            'requirement_title' => $requirement->title,
-            'maturity_level'    => $mlPredictResult['maturity_level'],
-            'score'             => $mlPredictResult['score'],
-            'gap'               => 5 - $mlPredictResult['maturity_level'],
-            'answers'           => $dimensionAnswers,
-        ];
-
-        try {
-            $response = Http::timeout(10)->post(self::ML_URL . '/analyze', $payload);
-
-            if ($response->successful()) {
-                return $response->json();
-            }
-        } catch (\Exception $e) {
-            Log::warning('ML analyze unavailable: ' . $e->getMessage());
-        }
-
-        return ['error' => 'ML analyze unavailable'];
+    // ✅ FIX: baat el integer mbaashratan (0..4) badel YES/NO/PARTIAL
+    $dimensionAnswers = [];
+    foreach ($questions as $q) {
+        $raw = isset($answers[$q->id]) ? (int) $answers[$q->id] : 0;
+        $dimensionAnswers[$q->dimension ?? "Q{$q->order}"] = max(0, min(4, $raw));
     }
 
+    $payload = [
+        'requirement_code'  => $requirement->code,
+        'requirement_title' => $requirement->title,
+        'maturity_level'    => $mlPredictResult['maturity_level'],
+        'score'             => $mlPredictResult['score'],
+        'gap'               => 5 - $mlPredictResult['maturity_level'],
+        'answers'           => $dimensionAnswers,
+    ];
+
+    try {
+        $response = Http::timeout(10)->post(self::ML_URL . '/analyze', $payload);
+
+        if ($response->successful()) {
+            return $response->json();
+        }
+    } catch (\Exception $e) {
+        Log::warning('ML analyze unavailable: ' . $e->getMessage());
+    }
+
+    return ['error' => 'ML analyze unavailable'];
+}
     // ─── Question Generation ──────────────────────────────────────────────────
 
     public function generateQuestionsViaAI(Requirement $requirement): array

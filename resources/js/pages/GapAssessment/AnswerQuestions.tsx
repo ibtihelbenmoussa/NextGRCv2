@@ -496,7 +496,7 @@ export default function AnswerQuestionsPage({ assessment, requirements }: Props)
   return (
     <AppLayout breadcrumbs={[
       { title: 'Gap Assessments', href: '/gap-assessment' },
-      { title: assessment.name, href: `/gap-assessments/${assessment.id}` },
+      
       { title: 'Answer Questions', href: '' },
     ]}>
       <Head title={`Answer Questions — ${assessment.name}`} />

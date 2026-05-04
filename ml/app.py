@@ -321,6 +321,31 @@ def build_roadmap(title, code, current_level, weak, partial, strong):
     return roadmap
 
 
+# ─── Integer answer converter ─────────────────────────────────────────────────
+
+def answer_to_label(val):
+    """
+    Convert answer to label.
+    Supports:
+      - int/float 0..4  → new scale
+      - string YES/PARTIAL/NO → legacy (backward compat)
+    """
+    if isinstance(val, str):
+        v = val.upper()
+        # legacy YES/NO/PARTIAL → map to int label
+        legacy = {'NO': 'NO', 'PARTIAL': 'PARTIAL', 'YES': 'YES'}
+        return legacy.get(v, 'NO')
+
+    v = int(float(val))
+    return {
+        0: 'NO',       # Initial   — rien n'existe
+        1: 'BASIC',    # Basic     — ad-hoc
+        2: 'PARTIAL',  # Defined   — documenté mais pas complet
+        3: 'MANAGED',  # Managed   — mesuré
+        4: 'YES',      # Optimized — pleinement implémenté
+    }.get(v, 'NO')
+
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
@@ -330,14 +355,18 @@ def analyze():
         level   = int(data.get('maturity_level', 1))
         score   = float(data.get('score', 0))
         gap     = int(data.get('gap', 5 - level))
-        answers = data.get('answers', {})  # {'Existence': 'YES', 'Enforcement': 'NO', ...}
+        answers = data.get('answers', {})
 
         level_labels = ['', 'Initial', 'Basic', 'Defined', 'Managed', 'Optimized']
         label        = level_labels[level] if 1 <= level <= 5 else 'Unknown'
 
-        weak    = [k for k, v in answers.items() if v == 'NO']
-        partial = [k for k, v in answers.items() if v == 'PARTIAL']
-        strong  = [k for k, v in answers.items() if v == 'YES']
+        # ✅ FIX: convert 0..4 integers to labels (supports legacy YES/NO/PARTIAL too)
+        answers_labeled = {k: answer_to_label(v) for k, v in answers.items()}
+
+        # ✅ FIX: weak = NO + BASIC, partial = PARTIAL, strong = MANAGED + YES
+        weak    = [k for k, v in answers_labeled.items() if v in ('NO', 'BASIC')]
+        partial = [k for k, v in answers_labeled.items() if v == 'PARTIAL']
+        strong  = [k for k, v in answers_labeled.items() if v in ('MANAGED', 'YES')]
 
         if level == 5:
             summary = (
@@ -352,19 +381,34 @@ def analyze():
                 f'to reach full optimization.'
             )
 
+        # ✅ FIX: current_issues plus précis selon les 5 niveaux
         current_issues = []
         if weak:
-            current_issues.append(
-                f'Critical gaps in: {", ".join(weak)} — not implemented, must be addressed as priority'
-            )
+            no_dims    = [k for k in weak if answers_labeled[k] == 'NO']
+            basic_dims = [k for k in weak if answers_labeled[k] == 'BASIC']
+            if no_dims:
+                current_issues.append(
+                    f'Critical gaps in: {", ".join(no_dims)} — not implemented, immediate action required'
+                )
+            if basic_dims:
+                current_issues.append(
+                    f'Initial stage in: {", ".join(basic_dims)} — ad-hoc practices only, formalization needed'
+                )
         if partial:
             current_issues.append(
                 f'Partial implementation in: {", ".join(partial)} — requires formalization and enforcement'
             )
         if strong:
-            current_issues.append(
-                f'Confirmed strengths in: {", ".join(strong)} — maintain and leverage as foundation'
-            )
+            managed_dims  = [k for k in strong if answers_labeled[k] == 'MANAGED']
+            yes_dims      = [k for k in strong if answers_labeled[k] == 'YES']
+            if yes_dims:
+                current_issues.append(
+                    f'Confirmed strengths in: {", ".join(yes_dims)} — fully optimized, maintain and leverage'
+                )
+            if managed_dims:
+                current_issues.append(
+                    f'Well managed in: {", ".join(managed_dims)} — focus on continuous improvement'
+                )
 
         roadmap = build_roadmap(title, code, level, weak, partial, strong)
 
@@ -379,7 +423,6 @@ def analyze():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
 
 # ─── Retrain ──────────────────────────────────────────────────────────────────
 
