@@ -13,8 +13,9 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Color;
 
-class RequirementTestsExport implements
+class GapAssessmentExport implements
     FromCollection,
     WithHeadings,
     WithMapping,
@@ -22,75 +23,91 @@ class RequirementTestsExport implements
     WithColumnWidths,
     WithTitle
 {
-    protected Collection $tests;
-
-    public function __construct(Collection $tests)
-    {
-        $this->tests = $tests;
-    }
+    public function __construct(protected Collection $assessments) {}
 
     public function title(): string
     {
-        return 'Requirement Tests';
+        return 'Gap Assessments';
     }
 
     public function collection(): Collection
     {
-        return $this->tests;
+        return $this->assessments;
     }
 
     public function headings(): array
     {
         return [
-            'Test Code',
-            'Requirement Code',
-            'Requirement Title',
+            'Code',
+            'Name',
+            'Description',
             'Framework',
-            'Test Date',
-            'Result',
-            'Validation Status',
-            'Tested By',
-            'Comment',
+            'Status',
+            'Start Date',
+            'End Date',
+            'Requirements',
+            'Questions',
+            'Answers',
+            'Progress (%)',
         ];
     }
 
-    public function map($test): array
+    public function map($assessment): array
     {
+        $questionsCount = $assessment['questions_count'] ?? 0;
+        $answersCount   = $assessment['answers_count']   ?? 0;
+
+        // Compute status
+        $status = 'In Progress';
+        if ($questionsCount > 0 && $answersCount >= $questionsCount) {
+            $status = 'Completed';
+        } elseif (!empty($assessment['end_date']) && strtotime($assessment['end_date']) < time() && $answersCount < $questionsCount) {
+            $status = 'Overdue';
+        } elseif (!empty($assessment['start_date']) && strtotime($assessment['start_date']) > time()) {
+            $status = 'Upcoming';
+        }
+
+        $progress = $questionsCount > 0
+            ? round(($answersCount / $questionsCount) * 100, 1)
+            : 0;
+
         return [
-            $test->test_code ?? '—',
-            $test->requirement?->code ?? '—',
-            $test->requirement?->title ?? '—',
-            $test->framework?->code ?? '—',
-            $test->test_date?->format('Y-m-d') ?? '—',
-            $test->result ?? '—',
-            $test->validation_status ?? '—',
-            $test->user?->name ?? '—',
-            $test->comment ?? '',
+            $assessment['code']                     ?? '',
+            $assessment['name']                     ?? '',
+            $assessment['description']              ?? '',
+            $assessment['framework']['code'] ?? '' .
+                ($assessment['framework']['name'] ?? '' ? ' — ' . $assessment['framework']['name'] : ''),
+            $status,
+            $assessment['start_date']               ?? '',
+            $assessment['end_date']                 ?? '',
+            $assessment['requirements_count']       ?? 0,
+            $questionsCount,
+            $answersCount,
+            $progress . '%',
         ];
     }
 
     public function columnWidths(): array
     {
         return [
-            'A' => 16,  // Test Code
-            'B' => 20,  // Requirement Code
-            'C' => 40,  // Requirement Title
-            'D' => 16,  // Framework
-            'E' => 14,  // Test Date
-            'F' => 14,  // Result
-            'G' => 18,  // Validation Status
-            'H' => 18,  // Tested By
-            'I' => 50,  // Comment
+            'A' => 18,  // Code
+            'B' => 36,  // Name
+            'C' => 40,  // Description
+            'D' => 36,  // Framework
+            'E' => 16,  // Status
+            'F' => 16,  // Start Date
+            'G' => 16,  // End Date
+            'H' => 14,  // Requirements
+            'I' => 12,  // Questions
+            'J' => 12,  // Answers
+            'K' => 14,  // Progress
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $lastRow = $this->tests->count() + 1;
-        $lastColumn = 'I';
-
         // ── Header row ───────────────────────────────────────────────
-        $sheet->getStyle("A1:{$lastColumn}1")->applyFromArray([
+        $sheet->getStyle('A1:K1')->applyFromArray([
             'font' => [
                 'bold'  => true,
                 'color' => ['argb' => 'FFFFFFFF'],
@@ -98,7 +115,7 @@ class RequirementTestsExport implements
             ],
             'fill' => [
                 'fillType'   => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FF1E293B'],  // slate-800
+                'startColor' => ['argb' => 'FF1E293B'],  // slate-800 — matches NextGRC dark theme
             ],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -116,16 +133,17 @@ class RequirementTestsExport implements
         $sheet->getRowDimension(1)->setRowHeight(22);
 
         // ── Data rows — alternating zebra ────────────────────────────
+        $lastRow = $this->assessments->count() + 1;
+
         for ($row = 2; $row <= $lastRow; $row++) {
             $argb = ($row % 2 === 0) ? 'FFF8FAFC' : 'FFFFFFFF';
-            $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
                 'fill' => [
                     'fillType'   => Fill::FILL_SOLID,
                     'startColor' => ['argb' => $argb],
                 ],
                 'alignment' => [
                     'vertical' => Alignment::VERTICAL_CENTER,
-                    'wrapText' => true,
                 ],
                 'borders' => [
                     'bottom' => [
@@ -139,7 +157,7 @@ class RequirementTestsExport implements
         }
 
         // ── Outer border ─────────────────────────────────────────────
-        $sheet->getStyle("A1:{$lastColumn}{$lastRow}")->applyFromArray([
+        $sheet->getStyle("A1:K{$lastRow}")->applyFromArray([
             'borders' => [
                 'outline' => [
                     'borderStyle' => Border::BORDER_MEDIUM,
@@ -148,21 +166,10 @@ class RequirementTestsExport implements
             ],
         ]);
 
-        // ── Center-align specific columns (codes, dates, result, status) ──
-        $centerColumns = ['A', 'B', 'D', 'E', 'F', 'G', 'H'];
-        foreach ($centerColumns as $col) {
-            $sheet->getStyle("{$col}2:{$col}{$lastRow}")->applyFromArray([
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-            ]);
-        }
-
-        // Left-align the description-like columns (C, I)
-        $leftColumns = ['C', 'I'];
-        foreach ($leftColumns as $col) {
-            $sheet->getStyle("{$col}2:{$col}{$lastRow}")->applyFromArray([
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT],
-            ]);
-        }
+        // ── Numeric columns right-aligned ────────────────────────────
+        $sheet->getStyle("H2:K{$lastRow}")->applyFromArray([
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
 
         return [];
     }

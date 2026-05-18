@@ -45,7 +45,7 @@ return [
     'key' => env('ANTHROPIC_API_KEY'),
 ],
 'ml' => [
-    'url' => env('ML_API_URL', 'http://localhost:5000'),
+    'url' => env('ML_API_URL', 'http://127.0.0.1:5000'),
 ],
 'pdf_to_text' => [
     'path' => env('PDFTOTEXT_PATH', 'C:\msys64\mingw64\bin\pdftotext.exe'),

@@ -13,6 +13,10 @@ use App\Models\GapQuestion;
 use Illuminate\Support\Facades\Http;
 use App\Models\GapAssessmentAnswer;
 use App\Services\MLMaturityService;
+use App\Exports\GapAssessmentExport;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\DB;
+
 
 
 class GapAssessmentController extends Controller
@@ -24,7 +28,7 @@ class GapAssessmentController extends Controller
     // ─── Page principale ──────────────────────────────────────────────────────
     public function index()
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $orgId = $user->current_organization_id;
 
         $assessments = GapAssessment::where('organization_id', $orgId)
@@ -33,46 +37,53 @@ class GapAssessmentController extends Controller
             ->withCount('assessmentRequirements')
             ->withCount([
                 'answers as answers_count' => function ($q) {
-                    $q->select(\DB::raw('COUNT(DISTINCT gap_question_id)'));
+                    $q->select(DB::raw('COUNT(DISTINCT gap_question_id)'));
                 },
-            ])
+            ])->withCount([
+                    'answers as answers_count' => function ($q) {
+                        $q->select(\DB::raw('COUNT(DISTINCT gap_question_id)'));
+                    },
+                ])
             ->latest()
             ->get()
             ->map(function ($a) {
-                // ── Charge les requirements + leur nombre de questions en 1 requête
                 $requirementsWithQuestions = $a->assessmentRequirements()
                     ->with(['requirement' => fn($q) => $q->withCount('gapQuestions')])
                     ->get();
 
-                // ── questions_count : total de questions liées à cet assessment
                 $questionsCount = $requirementsWithQuestions->sum(
-                    fn($ar) => $ar->requirement->gap_questions_count
+                    fn($ar) => $ar->requirement?->gap_questions_count ?? 0
                 );
 
                 return [
-                    'id'                 => $a->id,
-                    'code'               => $a->code,
-                    'name'               => $a->name,
-                    'description'        => $a->description,
-                    'start_date'         => $a->start_date?->format('Y-m-d'),
-                    'end_date'           => $a->end_date?->format('Y-m-d'),
-                    'framework'          => $a->framework ? [
-                        'id'   => $a->framework->id,
+                    'id' => $a->id,
+                    'code' => $a->code,
+                    'name' => $a->name,
+                    'description' => $a->description,
+                    'start_date' => $a->start_date?->format('Y-m-d'),
+                    'end_date' => $a->end_date?->format('Y-m-d'),
+                    'framework' => $a->framework ? [
+                        'id' => $a->framework->id,
                         'code' => $a->framework->code,
                         'name' => $a->framework->name,
                     ] : null,
                     'requirements_count' => $a->assessment_requirements_count,
-                    // ✅ answers_count = nb de questions DISTINCTES ayant au moins une réponse
-                    'answers_count'      => (int) $a->answers_count,
-                    // ✅ questions_count = nb total de questions des requirements liés
-                    'questions_count'    => $questionsCount,
-                    // ✅ requirements utilise la collection déjà chargée (pas de N+1)
-                    'requirements'       => $requirementsWithQuestions->map(fn($ar) => [
-                        'id'             => $ar->requirement->id,
-                        'code'           => $ar->requirement->code,
-                        'title'          => $ar->requirement->title,
-                        'questions_count'=> $ar->requirement->gap_questions_count,
-                    ]),
+                    'answers_count' => (int) \DB::table('gap_assessment_answers')
+                        ->where('gap_assessment_id', $a->id)
+                        ->whereIn('gap_question_id', $requirementsWithQuestions->flatMap(
+                            fn($ar) => $ar->requirement?->gapQuestions?->pluck('id') ?? collect()
+                        )->toArray())
+                        ->distinct('gap_question_id')
+                        ->count('gap_question_id'),
+                    'questions_count' => $questionsCount,
+                    'requirements' => $requirementsWithQuestions
+                        ->filter(fn($ar) => $ar->requirement)
+                        ->map(fn($ar) => [
+                            'id' => $ar->requirement->id,
+                            'code' => $ar->requirement->code,
+                            'title' => $ar->requirement->title,
+                            'questions_count' => $ar->requirement->gap_questions_count,
+                        ]),
                 ];
             });
 
@@ -84,7 +95,7 @@ class GapAssessmentController extends Controller
     // ─── Frameworks + Requirements + Questions ────────────────────────────────
     public function getFrameworks()
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $orgId = $user->current_organization_id;
 
         $frameworks = Framework::where('organization_id', $orgId)
@@ -107,21 +118,21 @@ class GapAssessmentController extends Controller
             ->orderBy('name')
             ->get()
             ->map(fn($f) => [
-                'id'           => $f->id,
-                'code'         => $f->code,
-                'name'         => $f->name,
+                'id' => $f->id,
+                'code' => $f->code,
+                'name' => $f->name,
                 'requirements' => $f->requirements->map(fn($r) => [
-                    'id'               => $r->id,
-                    'code'             => $r->code,
-                    'title'            => $r->title,
-                    'priority'         => $r->priority,
-                    'questions_count'  => $r->gapQuestions->count(),
-                    'assessments_count'=> $r->gap_assessment_requirements_count,
-                    'last_assessment'  => GapAssessment::where('requirement_id', $r->id)
+                    'id' => $r->id,
+                    'code' => $r->code,
+                    'title' => $r->title,
+                    'priority' => $r->priority,
+                    'questions_count' => $r->gapQuestions->count(),
+                    'assessments_count' => $r->gap_assessment_requirements_count,
+                    'last_assessment' => GapAssessment::where('requirement_id', $r->id)
                         ->latest()
                         ->select('score', 'maturity_level', 'created_at')
                         ->first(),
-                    'questions'        => $r->gapQuestions,
+                    'questions' => $r->gapQuestions,
                 ]),
             ]);
 
@@ -136,12 +147,12 @@ class GapAssessmentController extends Controller
         if ($existing->count() >= 3) {
             return response()->json([
                 'requirement' => [
-                    'id'    => $requirement->id,
-                    'code'  => $requirement->code,
+                    'id' => $requirement->id,
+                    'code' => $requirement->code,
                     'title' => $requirement->title,
                 ],
                 'questions' => $existing,
-                'source'    => 'database',
+                'source' => 'database',
             ]);
         }
 
@@ -159,55 +170,51 @@ class GapAssessmentController extends Controller
 
         return response()->json([
             'requirement' => [
-                'id'    => $requirement->id,
-                'code'  => $requirement->code,
+                'id' => $requirement->id,
+                'code' => $requirement->code,
                 'title' => $requirement->title,
             ],
             'questions' => $requirement->gapQuestions()->orderBy('id')->get(),
-            'source'    => 'generated',
+            'source' => 'generated',
         ]);
     }
 
     // ─── Soumettre assessment ─────────────────────────────────────────────────
     public function store(Request $request)
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $orgId = $user->current_organization_id;
 
         $request->validate([
-            'code'              => 'required|string|max:100',
-            'name'              => 'required|string|max:255',
-            'description'       => 'nullable|string',
-            'start_date'        => 'nullable|date',
-            'end_date'          => 'nullable|date|after_or_equal:start_date',
-            'framework_id'      => 'required|exists:frameworks,id',
-            'requirement_ids'   => 'required|array|min:1',
+            'code' => 'required|string|max:100',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'framework_id' => 'required|exists:frameworks,id',
+            'requirement_ids' => 'required|array|min:1',
             'requirement_ids.*' => 'exists:requirements,id',
         ]);
 
         $assessment = GapAssessment::create([
             'organization_id' => $orgId,
-            'framework_id'    => $request->framework_id,
-            'code'            => $request->code,
-            'name'            => $request->name,
-            'description'     => $request->description,
-            'start_date'      => $request->start_date,
-            'end_date'        => $request->end_date,
+            'framework_id' => $request->framework_id,
+            'code' => $request->code,
+            'name' => $request->name,
+            'description' => $request->description,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
         ]);
 
-        foreach ($request->requirement_ids as $reqId) {
-            \App\Models\GapAssessmentRequirement::create([
-                'gap_assessment_id' => $assessment->id,
-                'requirement_id'    => $reqId,
-            ]);
-        }
+        // sync() au lieu du foreach — gère les doublons automatiquement
+        $assessment->requirements()->sync($request->requirement_ids);
 
         return redirect('/gap-assessment');
     }
 
     public function create(Request $request)
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $orgId = $user->current_organization_id;
 
         $requirement = null;
@@ -223,6 +230,11 @@ class GapAssessmentController extends Controller
 
         return Inertia::render('GapAssessment/Create', [
             'requirement' => $requirement,
+            'existingCount' => 0, // plus utilisé, on le retire
+            'frameworkCounts' => \App\Models\GapAssessment::where('organization_id', $orgId)
+                ->selectRaw('framework_id, count(*) as total')
+                ->groupBy('framework_id')
+                ->pluck('total', 'framework_id'), // { "2": 3, "5": 1, ... }
         ]);
     }
 
@@ -235,77 +247,81 @@ class GapAssessmentController extends Controller
         return response()->json(['success' => true]);
     }
 
-   public function show(GapAssessment $assessment)
-{
-    $user = Auth::user();
-    abort_if($assessment->organization_id !== $user->current_organization_id, 403);
+    public function show(GapAssessment $assessment)
+    {
+        $user = Auth::user();
+        abort_if($assessment->organization_id !== $user->current_organization_id, 403);
 
-    $requirements = $assessment->assessmentRequirements()
-        ->with(['requirement' => function ($q) {
-            $q->with(['gapQuestions' => function ($gq) {
-                $gq->orderBy('id');
-            }]);
-        }])
-        ->get()
-        ->map(function ($ar) use ($assessment) {
-            $requirement = $ar->requirement;
+        $requirements = $assessment->assessmentRequirements()
+            ->with([
+                'requirement' => function ($q) {
+                    $q->with([
+                        'gapQuestions' => function ($gq) {
+                            $gq->orderBy('id');
+                        }
+                    ]);
+                }
+            ])
+            ->get()
+            ->map(function ($ar) use ($assessment) {
+                $requirement = $ar->requirement;
 
-            $questions = $requirement->gapQuestions->map(function ($question) use ($assessment) {
-                $latestAnswer = GapAssessmentAnswer::where('gap_assessment_id', $assessment->id)
-                    ->where('gap_question_id', $question->id)
-                    ->latest()
-                    ->first();
+                $questions = $requirement->gapQuestions->map(function ($question) use ($assessment) {
+                    $latestAnswer = GapAssessmentAnswer::where('gap_assessment_id', $assessment->id)
+                        ->where('gap_question_id', $question->id)
+                        ->latest()
+                        ->first();
+
+                    return [
+                        'id' => $question->id,
+                        'text' => $question->text,
+                        'answer' => $latestAnswer?->answer,
+                        'note' => $latestAnswer?->note,
+                        'score' => $latestAnswer?->score,
+                        'maturity_level' => $latestAnswer?->maturity_level,
+                    ];
+                });
+
+                $answerScores = $questions->pluck('score')->filter();
+                $maturityLevels = $questions->pluck('maturity_level')->filter();
+                $reqScore = $answerScores->isNotEmpty() ? round($answerScores->avg(), 2) : 0;
+                $reqMaturity = $maturityLevels->isNotEmpty() ? (int) round($maturityLevels->avg()) : 1;
+
+                $answersMap = $questions->mapWithKeys(fn($q) => [
+                    $q['id'] => $q['answer'] ?? 0,
+                ])->all();
 
                 return [
-                    'id'             => $question->id,
-                    'text'           => $question->text,
-                    'answer'         => $latestAnswer?->answer,
-                    'note'           => $latestAnswer?->note,
-                    'score'          => $latestAnswer?->score,
-                    'maturity_level' => $latestAnswer?->maturity_level,
+                    'id' => $requirement->id,
+                    'code' => $requirement->code,
+                    'title' => $requirement->title,
+                    'description' => $requirement->description ?? '',
+                    'questions' => $questions,
+                    'score' => $reqScore,
+                    'maturity_level' => $reqMaturity,
+                    'answers_map' => $answersMap,
                 ];
             });
 
-            $answerScores   = $questions->pluck('score')->filter();
-            $maturityLevels = $questions->pluck('maturity_level')->filter();
-            $reqScore       = $answerScores->isNotEmpty() ? round($answerScores->avg(), 2) : 0;
-            $reqMaturity    = $maturityLevels->isNotEmpty() ? (int) round($maturityLevels->avg()) : 1;
-
-            $answersMap = $questions->mapWithKeys(fn($q) => [
-                $q['id'] => $q['answer'] ?? 0,
-            ])->all();
-
-            return [
-                'id'             => $requirement->id,
-                'code'           => $requirement->code,
-                'title'          => $requirement->title,
-                'description'    => $requirement->description ?? '',
-                'questions'      => $questions,
-                'score'          => $reqScore,
-                'maturity_level' => $reqMaturity,
-                'answers_map'    => $answersMap,
-            ];
-        });
-
-    return Inertia::render('GapAssessment/Show', [
-        'assessment' => [
-            'id'                     => $assessment->id,
-            'code'                   => $assessment->code,
-            'name'                   => $assessment->name,
-            'description'            => $assessment->description,
-            'start_date'             => $assessment->start_date?->format('Y-m-d'),
-            'end_date'               => $assessment->end_date?->format('Y-m-d'),
-            'framework'              => $assessment->framework ? [
-                'code' => $assessment->framework->code,
-                'name' => $assessment->framework->name,
-            ] : null,
-            'overall_score'          => $assessment->score ?? 0,
-            'overall_maturity_level' => $assessment->maturity_level ?? 1,
-        ],
-        'requirements' => $requirements,
-        'ml_result'    => session('ml_result'),
-    ]);
-}
+        return Inertia::render('GapAssessment/Show', [
+            'assessment' => [
+                'id' => $assessment->id,
+                'code' => $assessment->code,
+                'name' => $assessment->name,
+                'description' => $assessment->description,
+                'start_date' => $assessment->start_date?->format('Y-m-d'),
+                'end_date' => $assessment->end_date?->format('Y-m-d'),
+                'framework' => $assessment->framework ? [
+                    'code' => $assessment->framework->code,
+                    'name' => $assessment->framework->name,
+                ] : null,
+                'overall_score' => $assessment->score ?? 0,
+                'overall_maturity_level' => $assessment->maturity_level ?? 1,
+            ],
+            'requirements' => $requirements,
+            'ml_result' => session('ml_result'),
+        ]);
+    }
 
     public function edit(GapAssessment $assessment)
     {
@@ -326,15 +342,15 @@ class GapAssessmentController extends Controller
             ->firstOrFail();
 
         $frameworkData = [
-            'id'           => $framework->id,
-            'code'         => $framework->code,
-            'name'         => $framework->name,
+            'id' => $framework->id,
+            'code' => $framework->code,
+            'name' => $framework->name,
             'requirements' => $framework->requirements->map(fn($r) => [
-                'id'             => $r->id,
-                'code'           => $r->code,
-                'title'          => $r->title,
-                'questions'      => $r->gapQuestions,
-                'questions_count'=> $r->gap_questions_count,
+                'id' => $r->id,
+                'code' => $r->code,
+                'title' => $r->title,
+                'questions' => $r->gapQuestions,
+                'questions_count' => $r->gap_questions_count,
             ]),
         ];
 
@@ -344,13 +360,13 @@ class GapAssessmentController extends Controller
 
         return Inertia::render('GapAssessment/Edit', [
             'assessment' => [
-                'id'                       => $assessment->id,
-                'code'                     => $assessment->code,
-                'name'                     => $assessment->name,
-                'description'              => $assessment->description,
-                'start_date'               => $assessment->start_date?->format('Y-m-d'),
-                'end_date'                 => $assessment->end_date?->format('Y-m-d'),
-                'framework_id'             => $assessment->framework_id,
+                'id' => $assessment->id,
+                'code' => $assessment->code,
+                'name' => $assessment->name,
+                'description' => $assessment->description,
+                'start_date' => $assessment->start_date?->format('Y-m-d'),
+                'end_date' => $assessment->end_date?->format('Y-m-d'),
+                'framework_id' => $assessment->framework_id,
                 'selected_requirement_ids' => $selectedRequirementIds,
             ],
             'framework' => $frameworkData,
@@ -363,22 +379,22 @@ class GapAssessmentController extends Controller
         abort_if($assessment->organization_id !== $user->current_organization_id, 403);
 
         $request->validate([
-            'code'              => 'required|string|max:100',
-            'name'              => 'required|string|max:255',
-            'description'       => 'nullable|string',
-            'start_date'        => 'nullable|date',
-            'end_date'          => 'nullable|date|after_or_equal:start_date',
-            'framework_id'      => 'required|exists:frameworks,id',
-            'requirement_ids'   => 'required|array|min:1',
+            'code' => 'required|string|max:100',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'framework_id' => 'required|exists:frameworks,id',
+            'requirement_ids' => 'required|array|min:1',
             'requirement_ids.*' => 'exists:requirements,id',
         ]);
 
         $assessment->update([
-            'code'         => $request->code,
-            'name'         => $request->name,
-            'description'  => $request->description,
-            'start_date'   => $request->start_date,
-            'end_date'     => $request->end_date,
+            'code' => $request->code,
+            'name' => $request->name,
+            'description' => $request->description,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
             'framework_id' => $request->framework_id,
         ]);
 
@@ -386,7 +402,7 @@ class GapAssessmentController extends Controller
         foreach ($request->requirement_ids as $reqId) {
             \App\Models\GapAssessmentRequirement::create([
                 'gap_assessment_id' => $assessment->id,
-                'requirement_id'    => $reqId,
+                'requirement_id' => $reqId,
             ]);
         }
 
@@ -413,25 +429,25 @@ class GapAssessmentController extends Controller
     public function generateAiAnalysis(Request $request)
     {
         $validated = $request->validate([
-            'requirement_code'  => 'required|string',
+            'requirement_code' => 'required|string',
             'requirement_title' => 'required|string',
-            'maturity_level'    => 'required|integer',
-            'score'             => 'required|numeric',
-            'answer_summary'    => 'required|string',
-            'gap'               => 'required|integer',
+            'maturity_level' => 'required|integer',
+            'score' => 'required|numeric',
+            'answer_summary' => 'required|string',
+            'gap' => 'required|integer',
         ]);
 
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . config('services.groq.key'),
-            'Content-Type'  => 'application/json',
+            'Content-Type' => 'application/json',
         ])->post('https://api.groq.com/openai/v1/chat/completions', [
-            'model'      => 'llama-3.3-70b-versatile',
-            'max_tokens' => 1000,
-            'messages'   => [
-                ['role' => 'system', 'content' => 'You are a GRC compliance expert. Write a concise gap analysis. Return ONLY the paragraph.'],
-                ['role' => 'user', 'content' => "Requirement: {$validated['requirement_code']} - {$validated['requirement_title']}\nLevel: {$validated['maturity_level']}/5\nScore: {$validated['score']}%\nAnswers: {$validated['answer_summary']}\nGap: {$validated['gap']} levels."],
-            ],
-        ]);
+                    'model' => 'llama-3.3-70b-versatile',
+                    'max_tokens' => 1000,
+                    'messages' => [
+                        ['role' => 'system', 'content' => 'You are a GRC compliance expert. Write a concise gap analysis. Return ONLY the paragraph.'],
+                        ['role' => 'user', 'content' => "Requirement: {$validated['requirement_code']} - {$validated['requirement_title']}\nLevel: {$validated['maturity_level']}/5\nScore: {$validated['score']}%\nAnswers: {$validated['answer_summary']}\nGap: {$validated['gap']} levels."],
+                    ],
+                ]);
 
         return response()->json([
             'text' => $response->json('choices.0.message.content') ?? 'Unable to generate analysis.',
@@ -442,13 +458,14 @@ class GapAssessmentController extends Controller
     public function storeQuestion(Request $request, Requirement $requirement)
     {
         $user = Auth::user();
-        if ($requirement->organization_id !== $user->current_organization_id) abort(403);
+        if ($requirement->organization_id !== $user->current_organization_id)
+            abort(403);
 
         $validated = $request->validate(['text' => 'required|string|max:1000']);
 
         $question = GapQuestion::create([
             'requirement_id' => $requirement->id,
-            'text'           => $validated['text'],
+            'text' => $validated['text'],
         ]);
 
         return response()->json(['success' => true, 'question' => $question]);
@@ -457,7 +474,8 @@ class GapAssessmentController extends Controller
     public function updateQuestion(Request $request, GapQuestion $question)
     {
         $user = Auth::user();
-        if ($question->requirement->organization_id !== $user->current_organization_id) abort(403);
+        if ($question->requirement->organization_id !== $user->current_organization_id)
+            abort(403);
 
         $validated = $request->validate(['text' => 'sometimes|required|string|max:1000']);
         $question->update($validated);
@@ -468,7 +486,8 @@ class GapAssessmentController extends Controller
     public function destroyQuestion(GapQuestion $question)
     {
         $user = Auth::user();
-        if ($question->requirement->organization_id !== $user->current_organization_id) abort(403);
+        if ($question->requirement->organization_id !== $user->current_organization_id)
+            abort(403);
 
         $question->delete();
 
@@ -490,7 +509,7 @@ class GapAssessmentController extends Controller
             ->get()
             ->map(function ($ar) use ($assessment) {
                 $requirement = $ar->requirement;
-                $questions   = $requirement->gapQuestions->map(function ($q) use ($assessment) {
+                $questions = $requirement->gapQuestions->map(function ($q) use ($assessment) {
                     $lastAnswer = GapAssessmentAnswer::where('gap_assessment_id', $assessment->id)
                         ->where('gap_question_id', $q->id)
                         ->latest()
@@ -501,36 +520,36 @@ class GapAssessmentController extends Controller
                         ->orderBy('created_at', 'desc')
                         ->get()
                         ->map(fn($a) => [
-                            'id'           => $a->id,
-                            'answer'       => $a->answer,
-                            'note'         => $a->note,
-                            'answered_at'  => $a->created_at->toISOString(),
-                            'score'        => $a->score,
+                            'id' => $a->id,
+                            'answer' => $a->answer,
+                            'note' => $a->note,
+                            'answered_at' => $a->created_at->toISOString(),
+                            'score' => $a->score,
                             'maturity_level' => $a->maturity_level,
                         ]);
 
                     return [
-                        'id'             => $q->id,
-                        'text'           => $q->text,
+                        'id' => $q->id,
+                        'text' => $q->text,
                         'current_answer' => $lastAnswer?->answer,
-                        'current_note'   => $lastAnswer?->note,
-                        'history'        => $history,
+                        'current_note' => $lastAnswer?->note,
+                        'history' => $history,
                     ];
                 });
 
                 return [
-                    'id'        => $requirement->id,
-                    'code'      => $requirement->code,
-                    'title'     => $requirement->title,
+                    'id' => $requirement->id,
+                    'code' => $requirement->code,
+                    'title' => $requirement->title,
                     'questions' => $questions,
                 ];
             });
 
         return Inertia::render('GapAssessment/AnswerQuestions', [
-            'assessment'   => [
-                'id'        => $assessment->id,
-                'code'      => $assessment->code,
-                'name'      => $assessment->name,
+            'assessment' => [
+                'id' => $assessment->id,
+                'code' => $assessment->code,
+                'name' => $assessment->name,
                 'framework' => $assessment->framework ? [
                     'code' => $assessment->framework->code,
                     'name' => $assessment->framework->name,
@@ -546,57 +565,64 @@ class GapAssessmentController extends Controller
         abort_if($assessment->organization_id !== $user->current_organization_id, 403);
 
         $request->validate([
-            'answers'                => 'required|array|min:1',
-            'answers.*.question_id'  => 'required|exists:gap_questions,id',
-            'answers.*.answer'       => 'required|integer|min:0|max:4',
-            'answers.*.note'         => 'nullable|string|max:1000',
-            'ml_result'              => 'nullable|string',
+            'answers' => 'required|array|min:1',
+            'answers.*.question_id' => 'required|exists:gap_questions,id',
+            'answers.*.answer' => 'required|integer|min:0|max:4',
+            'answers.*.note' => 'nullable|string|max:1000',
+            'ml_result' => 'nullable|string',
         ]);
 
+        // ── 1. ml_result du frontend (optionnel) ─────────────────────────────
         $mlResult = $request->filled('ml_result')
             ? json_decode($request->input('ml_result'), true)
             : null;
 
+        $generateMlServerSide = !$mlResult;
+
+        // ── 2. Map des réponses ───────────────────────────────────────────────
         $answersMap = collect($request->answers)
             ->pluck('answer', 'question_id')
             ->map(fn($v) => (int) $v)
             ->all();
 
+        // ── 3. Calcul ML par requirement ──────────────────────────────────────
         $requirementResults = [];
 
         $assessment->assessmentRequirements()
             ->with(['requirement.gapQuestions' => fn($q) => $q->orderBy('id')])
             ->get()
             ->each(function ($ar) use ($answersMap, $mlService, &$requirementResults) {
-                $requirement     = $ar->requirement;
-                $questions       = $requirement->gapQuestions;
+                $requirement = $ar->requirement;
+                $questions = $requirement->gapQuestions;
                 $relevantAnswers = collect($answersMap)->only($questions->pluck('id'))->all();
 
-                if (empty($relevantAnswers)) return;
+                if (empty($relevantAnswers))
+                    return;
 
                 try {
                     $prediction = $mlService->predict($relevantAnswers, $questions);
                 } catch (\Exception $e) {
                     \Log::error("ML prediction failed for req {$requirement->id}: " . $e->getMessage());
-                    $avg        = array_sum($relevantAnswers) / count($relevantAnswers);
+                    $avg = array_sum($relevantAnswers) / count($relevantAnswers);
                     $prediction = [
-                        'maturity_level'  => max(1, min(5, (int) round($avg) + 1)),
-                        'weighted_score'  => round(($avg / 4) * 100, 2),
+                        'maturity_level' => max(1, min(5, (int) round($avg) + 1)),
+                        'weighted_score' => round(($avg / 4) * 100, 2),
                     ];
                 }
 
                 $requirementResults[$requirement->id] = $prediction;
             });
 
+        // ── 4. Enregistrement des réponses ────────────────────────────────────
         $now = now();
 
         foreach ($request->answers as $a) {
-            $qId    = (int) $a['question_id'];
+            $qId = (int) $a['question_id'];
             $answer = (int) $a['answer'];
-            $note   = $a['note'] ?? null;
+            $note = $a['note'] ?? null;
 
-            $question  = GapQuestion::find($qId);
-            $reqId     = $question?->requirement_id;
+            $question = GapQuestion::find($qId);
+            $reqId = $question?->requirement_id;
             $prediction = $requirementResults[$reqId]
                 ?? ['maturity_level' => 1, 'weighted_score' => 0];
 
@@ -612,29 +638,83 @@ class GapAssessmentController extends Controller
             if ($hasChanged) {
                 GapAssessmentAnswer::create([
                     'gap_assessment_id' => $assessment->id,
-                    'gap_question_id'   => $qId,
-                    'answer'            => $answer,
-                    'note'              => $note,
-                    'score'             => $prediction['weighted_score'],
-                    'maturity_level'    => $prediction['maturity_level'],
-                    'created_at'        => $now,
-                    'updated_at'        => $now,
+                    'gap_question_id' => $qId,
+                    'answer' => $answer,
+                    'note' => $note,
+                    'score' => $prediction['weighted_score'],
+                    'maturity_level' => $prediction['maturity_level'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ]);
             }
         }
 
+        // ── 5. Mise à jour score/maturity de l'assessment ─────────────────────
         if (!empty($requirementResults)) {
-            $avgScore   = collect($requirementResults)->avg('weighted_score');
+            $avgScore = collect($requirementResults)->avg('weighted_score');
             $avgMaturity = (int) round(collect($requirementResults)->avg('maturity_level'));
 
             $assessment->update([
-                'score'          => round($avgScore, 2),
+                'score' => round($avgScore, 2),
                 'maturity_level' => max(1, min(5, $avgMaturity)),
             ]);
         }
 
+        // ── 6. Génération ML côté serveur si non fourni par le frontend ───────
+        if ($generateMlServerSide && !empty($requirementResults)) {
+            $avgLevel = (int) round(collect($requirementResults)->avg('maturity_level'));
+            $avgScore = round(collect($requirementResults)->avg('weighted_score'), 2);
+            $mlUrl = config('services.ml.url', 'http://127.0.0.1:5000');
+
+            try {
+                $firstReq = $assessment->assessmentRequirements()
+                    ->with('requirement')
+                    ->first()?->requirement;
+
+                $analyzePayload = [
+                    'requirement_code' => $firstReq?->code ?? 'N/A',
+                    'requirement_title' => $firstReq?->title ?? 'N/A',
+                    'maturity_level' => $avgLevel,
+                    'score' => $avgScore,
+                    'gap' => max(0, 5 - $avgLevel),
+                    'answers' => collect($answersMap)->map(fn($v) => (int) $v)->toArray(),
+                ];
+
+                $response = Http::timeout(10)->post("{$mlUrl}/analyze", $analyzePayload);
+
+                if ($response->successful()) {
+                    $mlResult = array_merge(
+                        ['maturity_level' => $avgLevel, 'weighted_score' => $avgScore],
+                        $response->json()
+                    );
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Server-side ML analyze failed: ' . $e->getMessage());
+            }
+        }
+
+        // ── 7. Sauvegarde ml_result + création action plans ───────────────────
         if ($mlResult) {
+            $assessment->update(['ml_result' => $mlResult]);
             session()->flash('ml_result', $mlResult);
+
+            \App\Models\ActionPlan::where('gap_id', $assessment->id)->delete();
+
+            foreach ($mlResult['roadmap'] ?? [] as $step) {
+                if (!($step['is_next'] ?? false))
+                    continue;
+
+                foreach ($step['actions'] ?? [] as $action) {
+                    \App\Models\ActionPlan::create([
+                        'gap_id' => $assessment->id,
+                        'assigned_to' => $user->id,
+                        'title' => substr($action, 0, 255),
+                        'description' => "L{$step['level']} — {$step['label']}: {$action}",
+                        'due_date' => now()->addDays(30),
+                        'status' => 'open',
+                    ]);
+                }
+            }
         }
 
         return redirect()->route('gap-assessments.results', $assessment);
@@ -658,264 +738,278 @@ class GapAssessmentController extends Controller
                         ->first();
 
                     return [
-                        'id'             => $question->id,
-                        'text'           => $question->text,
-                        'answer'         => $latestAnswer?->answer,
-                        'note'           => $latestAnswer?->note,
-                        'score'          => $latestAnswer?->score,
+                        'id' => $question->id,
+                        'text' => $question->text,
+                        'answer' => $latestAnswer?->answer,
+                        'note' => $latestAnswer?->note,
+                        'score' => $latestAnswer?->score,
                         'maturity_level' => $latestAnswer?->maturity_level,
                     ];
                 });
 
-                $answerScores   = $questions->pluck('score')->filter();
+                $answerScores = $questions->pluck('score')->filter();
                 $maturityLevels = $questions->pluck('maturity_level')->filter();
-                $reqScore       = $answerScores->isNotEmpty() ? round($answerScores->avg(), 2) : 0;
-                $reqMaturity    = $maturityLevels->isNotEmpty() ? (int) round($maturityLevels->avg()) : 1;
+                $reqScore = $answerScores->isNotEmpty() ? round($answerScores->avg(), 2) : 0;
+                $reqMaturity = $maturityLevels->isNotEmpty() ? (int) round($maturityLevels->avg()) : 1;
 
                 $answersMap = $questions->mapWithKeys(fn($q) => [
                     $q['id'] => $q['answer'] ?? 0,
                 ])->all();
 
                 return [
-                    'id'           => $requirement->id,
-                    'code'         => $requirement->code,
-                    'title'        => $requirement->title,
-                    'description'  => $requirement->description ?? '',
-                    'questions'    => $questions,
-                    'score'        => $reqScore,
+                    'id' => $requirement->id,
+                    'code' => $requirement->code,
+                    'title' => $requirement->title,
+                    'description' => $requirement->description ?? '',
+                    'questions' => $questions,
+                    'score' => $reqScore,
                     'maturity_level' => $reqMaturity,
-                    'answers_map'  => $answersMap,
+                    'answers_map' => $answersMap,
                 ];
             });
 
         return Inertia::render('GapAssessment/Results', [
-            'assessment'   => [
-                'id'                    => $assessment->id,
-                'code'                  => $assessment->code,
-                'name'                  => $assessment->name,
-                'framework'             => $assessment->framework ? [
+            'assessment' => [
+                'id' => $assessment->id,
+                'code' => $assessment->code,
+                'name' => $assessment->name,
+                'framework' => $assessment->framework ? [
                     'code' => $assessment->framework->code,
                     'name' => $assessment->framework->name,
                 ] : null,
-                'overall_score'         => $assessment->score ?? 0,
-                'overall_maturity_level'=> $assessment->maturity_level ?? 1,
+                'overall_score' => $assessment->score ?? 0,
+                'overall_maturity_level' => $assessment->maturity_level ?? 1,
             ],
             'requirements' => $requirements,
-            'ml_result'    => session('ml_result'),
+            'ml_result' => session('ml_result') ?? $assessment->ml_result,
         ]);
     }
 
+    // ─── ML Predict → appelle Flask Python ───────────────────────────────────
     public function mlPredict(Request $request)
     {
         $request->validate([
-            'answers'              => 'required|array',
-            'answers.*.question_id'=> 'required|integer',
-            'answers.*.answer'     => 'required|integer|min:0|max:4',
-            'questions'            => 'required|array',
+            'answers' => 'required|array',
+            'answers.*.question_id' => 'required|integer',
+            'answers.*.answer' => 'required|integer|min:0|max:4',
+            'questions' => 'required|array',
         ]);
 
-        $answersById   = collect($request->answers)->pluck('answer', 'question_id')->toArray();
-        $orderedAnswers = [];
+        // Map int 0..4 → float 0.0..1.0
+        $scale = [0 => 0.0, 1 => 0.25, 2 => 0.5, 3 => 0.75, 4 => 1.0];
+
+        $answersById = collect($request->answers)
+            ->pluck('answer', 'question_id')
+            ->toArray();
+
+        $orderedFloats = [];
         foreach ($request->questions as $q) {
-            $orderedAnswers[] = $answersById[$q['id']] ?? 0;
+            $raw = (int) ($answersById[$q['id']] ?? 0);
+            $orderedFloats[] = $scale[max(0, min(4, $raw))];
         }
 
-        $avg   = empty($orderedAnswers) ? 0 : array_sum($orderedAnswers) / count($orderedAnswers);
-        $score = round(($avg / 4) * 100, 2);
-        $level = max(1, min(5, (int) round($avg) + 1));
+        $count = count($orderedFloats);
+        $payload = [];
+
+        if ($count === 0) {
+            for ($i = 1; $i <= 5; $i++)
+                $payload["q{$i}"] = 0.0;
+
+        } elseif ($count >= 5) {
+            $buckets = [[], [], [], [], []];
+            foreach ($orderedFloats as $i => $val)
+                $buckets[$i % 5][] = $val;
+            foreach ($buckets as $i => $bucket) {
+                $payload['q' . ($i + 1)] = count($bucket)
+                    ? round(array_sum($bucket) / count($bucket), 4)
+                    : 0.0;
+            }
+        } else {
+            // Interpolation linéaire pour N < 5
+            for ($i = 0; $i < 5; $i++) {
+                $srcPos = $i * ($count - 1) / 4;
+                $lo = max(0, min($count - 1, (int) floor($srcPos)));
+                $hi = max(0, min($count - 1, (int) ceil($srcPos)));
+                $frac = $srcPos - $lo;
+                $val = $orderedFloats[$lo] + $frac * ($orderedFloats[$hi] - $orderedFloats[$lo]);
+                $payload['q' . ($i + 1)] = round($val, 4);
+            }
+        }
+
+        // ── Appel Flask ────────────────────────────────────────────────────
+        $mlUrl = config('services.ml.url', 'http://127.0.0.1:5000');
+
+        try {
+            $response = Http::timeout(8)->post("{$mlUrl}/predict", $payload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return response()->json([
+                    'maturity_level' => $data['maturity_level'] ?? 1,
+                    'weighted_score' => $data['weighted_score'] ?? 0,
+                    'confidence' => $data['confidence'] ?? 0.8,
+                    'probabilities' => $data['probabilities'] ?? [],
+                    'source' => 'ml_model',
+                    'gate_capped' => $data['gate_capped'] ?? false,
+                ]);
+            }
+
+            \Log::warning('Flask /predict non-2xx', ['status' => $response->status()]);
+
+        } catch (\Exception $e) {
+            \Log::warning('Flask unavailable for mlPredict: ' . $e->getMessage());
+        }
+
+        // ── Fallback PHP ───────────────────────────────────────────────────
+        $avg = $count ? array_sum($orderedFloats) / $count : 0;
+        $score = round($avg * 100, 2);
+        $level = max(1, min(5, (int) round($avg * 4) + 1));
 
         return response()->json([
-            'maturity_level'  => $level,
-            'weighted_score'  => $score,
-            'probabilities'   => [],
-            'source'          => 'rule_based',
-            'confidence'      => 0.8,
+            'maturity_level' => $level,
+            'weighted_score' => $score,
+            'confidence' => 0.8,
+            'probabilities' => [],
+            'source' => 'rule_based',
+            'gate_capped' => false,
         ]);
     }
 
+    // ─── ML Analyze → appelle Flask Python ───────────────────────────────────
     public function mlAnalyze(Request $request)
     {
         $request->validate([
-            'requirement_code'    => 'required|string',
-            'requirement_title'   => 'required|string',
-            'maturity_level'      => 'required|integer',
-            'score'               => 'required|numeric',
-            'gap'                 => 'required|integer',
-            'answers'             => 'required|array',
+            'requirement_code' => 'required|string',
+            'requirement_title' => 'required|string',
+            'maturity_level' => 'required|integer',
+            'score' => 'required|numeric',
+            'gap' => 'required|integer',
+            'answers' => 'required|array',
             'requirements_detail' => 'nullable|array',
         ]);
 
+        $mlUrl = config('services.ml.url', 'http://127.0.0.1:5000');
+        $details = collect($request->requirements_detail ?? []);
         $globalLevel = (int) $request->maturity_level;
         $globalScore = round((float) $request->score, 1);
-        $gap         = (int) $request->gap;
-        $details     = collect($request->requirements_detail ?? []);
 
-        if ($details->isEmpty()) {
-            $details = collect([[
-                'code'           => $request->requirement_code,
-                'title'          => $request->requirement_title,
-                'score'          => $globalScore,
-                'maturity_level' => $globalLevel,
-            ]]);
+        // ── Convertir answers → {Dimension: label} pour Flask ─────────────
+        $dimensionKeys = ['Existence', 'Formalization', 'Enforcement', 'Measurement', 'Optimization'];
+        $labelMap = [0 => 'NO', 1 => 'BASIC', 2 => 'PARTIAL', 3 => 'MANAGED', 4 => 'YES'];
+        $namedAnswers = [];
+        $answersInput = $request->answers;
+
+        if (isset($answersInput[0]) && is_array($answersInput[0]) && isset($answersInput[0]['answer'])) {
+            foreach ($answersInput as $i => $a) {
+                $val = is_array($a) ? ($a['answer'] ?? 0) : $a;
+                if (isset($dimensionKeys[$i])) {
+                    $namedAnswers[$dimensionKeys[$i]] = $labelMap[(int) $val] ?? 'NO';
+                }
+            }
+        } else {
+            foreach ($answersInput as $dim => $val) {
+                $namedAnswers[$dim] = is_numeric($val)
+                    ? ($labelMap[(int) $val] ?? 'NO')
+                    : strtoupper($val);
+            }
         }
 
+        $primaryCode = $details->isNotEmpty() ? $details->first()['code'] : $request->requirement_code;
+        $primaryTitle = $details->isNotEmpty() ? $details->first()['title'] : $request->requirement_title;
+
+        $flaskPayload = [
+            'requirement_code' => $primaryCode,
+            'requirement_title' => $primaryTitle,
+            'maturity_level' => $globalLevel,
+            'score' => $globalScore,
+            'gap' => (int) $request->gap,
+            'answers' => $namedAnswers,
+        ];
+
+        try {
+            $response = Http::timeout(15)->post("{$mlUrl}/analyze", $flaskPayload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                // Enrichir summary avec tous les requirements
+                if ($details->count() >= 1) {
+                    $reqParts = $details->map(
+                        fn($r) =>
+                        "{$r['code']} at Level {$r['maturity_level']} (" . round($r['score'], 1) . "%)"
+                    )->join(', ');
+
+                    $data['summary'] = "Overall maturity is Level {$globalLevel} ({$globalScore}%). "
+                        . "Requirements: {$reqParts}. "
+                        . ((int) $request->gap > 0
+                            ? "Focus on reaching Level " . ($globalLevel + 1) . " through the actions below."
+                            : "All requirements have reached maximum maturity.");
+                }
+
+                // Enrichir current_issues avec détail par requirement
+                $reqIssues = [];
+                foreach ($details as $req) {
+                    $lvl = (int) $req['maturity_level'];
+                    $code = $req['code'];
+                    $sc = round($req['score'], 1);
+                    $reqIssues[] = match (true) {
+                        $lvl <= 1 => "Critical: {$code} has no formal processes in place ({$sc}%) — immediate action required.",
+                        $lvl === 2 => "Critical: {$code} relies on ad-hoc practices ({$sc}%) — documentation needed.",
+                        $lvl === 3 => "Confirmed: {$code} has defined processes ({$sc}%) — focus on measurement.",
+                        $lvl === 4 => "Confirmed: {$code} is well managed ({$sc}%) — optimization is next.",
+                        default => "Confirmed: {$code} is fully optimized ({$sc}%) — sustain and improve.",
+                    };
+                }
+                $data['current_issues'] = array_merge($reqIssues, $data['current_issues'] ?? []);
+
+                return response()->json($data);
+            }
+
+            \Log::warning('Flask /analyze non-2xx', ['status' => $response->status()]);
+
+        } catch (\Exception $e) {
+            \Log::warning('Flask unavailable for mlAnalyze: ' . $e->getMessage());
+        }
+
+        // ── Fallback PHP ───────────────────────────────────────────────────
+        return $this->mlAnalyzeFallback($request, $details, $globalLevel, $globalScore);
+    }
+
+    // ─── Fallback PHP pour mlAnalyze ─────────────────────────────────────────
+    private function mlAnalyzeFallback(
+        Request $request,
+        \Illuminate\Support\Collection $details,
+        int $globalLevel,
+        float $globalScore
+    ): \Illuminate\Http\JsonResponse {
+        $gap = (int) $request->gap;
+        $allCodes = $details->pluck('code')->join(', ') ?: $request->requirement_code;
+        $criticalCodes = $details->filter(fn($r) => (int) $r['maturity_level'] <= 2)->pluck('code')->join(', ');
+        $weakCodes = $details->filter(fn($r) => (int) $r['maturity_level'] <= 3)->pluck('code')->join(', ');
+
         $reqParts = $details->map(
-            fn($r) => "{$r['code']} at Level {$r['maturity_level']} (" . round($r['score'], 1) . "%)"
-        )->join(', ');
+            fn($r) =>
+            "{$r['code']} at Level {$r['maturity_level']} (" . round($r['score'], 1) . "%)"
+        )->join(', ') ?: "{$request->requirement_code} at Level {$globalLevel} ({$globalScore}%)";
 
         $summary = "Overall maturity is Level {$globalLevel} ({$globalScore}%). "
             . "Requirements: {$reqParts}. "
             . ($gap > 0
                 ? "Focus on reaching Level " . ($globalLevel + 1) . " through the actions below."
-                : "All requirements have reached maximum maturity — maintain and sustain.");
-
-        $answerToLabel = function ($val) {
-            if (is_string($val)) {
-                return match (strtoupper($val)) {
-                    'YES'     => 'YES',
-                    'MANAGED' => 'MANAGED',
-                    'PARTIAL' => 'PARTIAL',
-                    'BASIC'   => 'BASIC',
-                    default   => 'NO',
-                };
-            }
-            return match ((int) $val) {
-                0       => 'NO',
-                1       => 'BASIC',
-                2       => 'PARTIAL',
-                3       => 'MANAGED',
-                4       => 'YES',
-                default => 'NO',
-            };
-        };
-
-        $answers       = $request->answers ?? [];
-        $dimensionKeys = ['Existence', 'Formalization', 'Enforcement', 'Measurement', 'Optimization'];
-
-        if (array_is_list($answers)) {
-            $namedAnswers = [];
-            foreach ($answers as $i => $val) {
-                if (isset($dimensionKeys[$i])) {
-                    $namedAnswers[$dimensionKeys[$i]] = $val;
-                }
-            }
-            $answers = $namedAnswers;
-        }
-
-        $noDims      = [];
-        $basicDims   = [];
-        $partialDims = [];
-        $managedDims = [];
-        $yesDims     = [];
-
-        foreach ($answers as $dimension => $val) {
-            $label = $answerToLabel($val);
-            match ($label) {
-                'NO'      => $noDims[]      = $dimension,
-                'BASIC'   => $basicDims[]   = $dimension,
-                'PARTIAL' => $partialDims[] = $dimension,
-                'MANAGED' => $managedDims[] = $dimension,
-                'YES'     => $yesDims[]     = $dimension,
-                default   => null,
-            };
-        }
+                : "All requirements have reached maximum maturity.");
 
         $currentIssues = [];
-
         foreach ($details as $req) {
-            $lvl   = (int) $req['maturity_level'];
-            $code  = $req['code'];
-            $score = round($req['score'], 1);
-
-            if ($lvl <= 1) {
-                $currentIssues[] = "Critical: {$code} has no formal processes in place ({$score}%) — immediate action required.";
-            } elseif ($lvl === 2) {
-                $currentIssues[] = "Critical: {$code} relies on ad-hoc practices ({$score}%) — documentation and structure needed.";
-            } elseif ($lvl === 3) {
-                $currentIssues[] = "Confirmed: {$code} has defined processes ({$score}%) — focus on measurement and enforcement.";
-            } elseif ($lvl === 4) {
-                $currentIssues[] = "Confirmed: {$code} is well managed ({$score}%) — optimization is the next step.";
-            } else {
-                $currentIssues[] = "Confirmed: {$code} is fully optimized ({$score}%) — sustain and continuously improve.";
-            }
-        }
-
-        if (!empty($noDims))      $currentIssues[] = "Critical gaps in: " . implode(', ', $noDims) . " — not implemented, immediate action required.";
-        if (!empty($partialDims)) $currentIssues[] = "Partial implementation in: " . implode(', ', $partialDims) . " — requires formalization and enforcement.";
-        if (!empty($managedDims)) $currentIssues[] = "Well managed in: " . implode(', ', $managedDims) . " — focus on continuous improvement.";
-        if (!empty($yesDims))     $currentIssues[] = "Confirmed strengths in: " . implode(', ', $yesDims) . " — fully optimized, maintain and leverage.";
-
-        $allCodes      = $details->pluck('code')->join(', ');
-        $criticalCodes = $details->filter(fn($r) => (int) $r['maturity_level'] <= 2)->pluck('code')->join(', ');
-        $weakCodes     = $details->filter(fn($r) => (int) $r['maturity_level'] <= 3)->pluck('code')->join(', ');
-
-        $l2Actions = $criticalCodes ? [
-            "Draft an initial policy specifically for: {$criticalCodes}.",
-            "Define the scope, assets, and stakeholders for {$criticalCodes}.",
-            "Implement basic manual controls and workarounds for {$criticalCodes}.",
-            "Communicate baseline rules and expectations to the team.",
-        ] : [
-            "Review and consolidate existing policies across {$allCodes}.",
-            "Ensure all basic controls are consistently documented.",
-        ];
-
-        $l3Actions = $criticalCodes ? [
-            "Formalize and get management sign-off on the {$criticalCodes} policy.",
-            "Document step-by-step procedures and assign responsibilities for {$criticalCodes}.",
-            "Implement technical or administrative enforcement controls for {$criticalCodes}.",
-            "Train all relevant staff on the approved {$criticalCodes} procedures.",
-        ] : [
-            "Standardize and formalize all existing procedures across {$allCodes}.",
-            "Ensure management approval and staff training for all policies.",
-        ];
-
-        $l4Actions = $weakCodes ? [
-            "Define KPIs and compliance metrics for: {$weakCodes}.",
-            "Establish periodic review cycles (monthly or quarterly) for {$weakCodes}.",
-            "Implement dashboards to track compliance posture across {$allCodes}.",
-            "Address deviations through a formal corrective-action process.",
-        ] : [
-            "Refine existing KPIs and add predictive metrics across {$allCodes}.",
-            "Automate periodic reviews and reporting.",
-        ];
-
-        $l5Actions = [
-            "Automate compliance checks and alerting across {$allCodes}.",
-            "Use predictive analytics to anticipate and prevent gaps.",
-            "Integrate continuous feedback loops from audits and incidents.",
-            "Benchmark against industry peers and update controls accordingly.",
-        ];
-
-        $dimActions     = [];
-        $specificByDim  = [
-            'Existence'     => 'Formally establish that controls exist and are recognized',
-            'Formalization' => 'Document, get management approval, and communicate procedures',
-            'Enforcement'   => 'Implement technical controls to enforce compliance',
-            'Measurement'   => 'Define KPIs and track effectiveness metrics regularly',
-            'Optimization'  => 'Create feedback loops for continuous improvement',
-        ];
-
-        foreach ($noDims as $dim) {
-            if (isset($specificByDim[$dim])) {
-                $dimActions[] = "[{$dim}] {$specificByDim[$dim]}";
-            }
-        }
-
-        $nextLevel = $globalLevel + 1;
-
-        $stepsDef = [
-            1 => ['label' => 'Initial',    'actions' => []],
-            2 => ['label' => 'Basic',      'actions' => $l2Actions],
-            3 => ['label' => 'Defined',    'actions' => $l3Actions],
-            4 => ['label' => 'Managed',    'actions' => $l4Actions],
-            5 => ['label' => 'Optimized',  'actions' => $l5Actions],
-        ];
-
-        if (isset($stepsDef[$nextLevel]) && !empty($dimActions)) {
-            $stepsDef[$nextLevel]['actions'] = array_merge(
-                $stepsDef[$nextLevel]['actions'],
-                $dimActions
-            );
+            $lvl = (int) $req['maturity_level'];
+            $code = $req['code'];
+            $sc = round($req['score'], 1);
+            $currentIssues[] = match (true) {
+                $lvl <= 1 => "Critical: {$code} has no formal processes ({$sc}%) — immediate action required.",
+                $lvl === 2 => "Critical: {$code} relies on ad-hoc practices ({$sc}%) — documentation needed.",
+                $lvl === 3 => "Confirmed: {$code} has defined processes ({$sc}%) — focus on measurement.",
+                $lvl === 4 => "Confirmed: {$code} is well managed ({$sc}%) — optimization is next.",
+                default => "Confirmed: {$code} is fully optimized ({$sc}%) — sustain and improve.",
+            };
         }
 
         $subtitles = [
@@ -926,28 +1020,116 @@ class GapAssessmentController extends Controller
             5 => 'Continuously improved',
         ];
 
+        $stepsDef = [
+            1 => ['label' => 'Initial', 'actions' => []],
+            2 => ['label' => 'Basic', 'actions' => $criticalCodes ? ["Draft initial policy for: {$criticalCodes}.", "Define scope and stakeholders for {$criticalCodes}.", "Implement basic manual controls for {$criticalCodes}.", "Communicate baseline rules to the team."] : ["Review and consolidate existing policies across {$allCodes}.", "Ensure basic controls are documented."]],
+            3 => ['label' => 'Defined', 'actions' => $criticalCodes ? ["Formalize and get sign-off on {$criticalCodes} policy.", "Document procedures and assign responsibilities for {$criticalCodes}.", "Implement enforcement controls for {$criticalCodes}.", "Train staff on {$criticalCodes} procedures."] : ["Standardize procedures across {$allCodes}.", "Ensure management approval for all policies."]],
+            4 => ['label' => 'Managed', 'actions' => $weakCodes ? ["Define KPIs and metrics for: {$weakCodes}.", "Establish periodic review cycles for {$weakCodes}.", "Implement dashboards to track {$allCodes}.", "Address deviations through corrective-action process."] : ["Refine KPIs and add predictive metrics.", "Automate periodic reviews."]],
+            5 => ['label' => 'Optimized', 'actions' => ["Automate compliance checks across {$allCodes}.", "Use predictive analytics to prevent gaps.", "Integrate feedback loops from audits.", "Benchmark against industry peers."]],
+        ];
+
         $roadmap = [];
         foreach ($stepsDef as $lvl => $step) {
             $isCompleted = $lvl < $globalLevel;
-            $isCurrent   = $lvl === $globalLevel;
-            $isNext      = $lvl === $globalLevel + 1;
-            $status      = $isCompleted ? 'completed' : ($isCurrent ? 'current' : 'todo');
-
+            $isCurrent = $lvl === $globalLevel;
+            $isNext = $lvl === $globalLevel + 1;
             $roadmap[] = [
-                'level'      => $lvl,
-                'label'      => $step['label'],
-                'subtitle'   => $isCompleted ? '' : $subtitles[$lvl],
-                'status'     => $status,
-                'actions'    => $isCompleted ? [] : $step['actions'],
+                'level' => $lvl,
+                'label' => $step['label'],
+                'subtitle' => $isCompleted ? '' : $subtitles[$lvl],
+                'status' => $isCompleted ? 'completed' : ($isCurrent ? 'current' : 'todo'),
+                'actions' => $isCompleted ? [] : $step['actions'],
                 'is_current' => $isCurrent,
-                'is_next'    => $isNext,
+                'is_next' => $isNext,
             ];
         }
 
         return response()->json([
-            'summary'        => $summary,
+            'summary' => $summary,
             'current_issues' => $currentIssues,
-            'roadmap'        => $roadmap,
+            'roadmap' => $roadmap,
         ]);
+    }
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $orgId = $user->current_organization_id;
+
+        if (!$orgId) {
+            abort(403, 'Please select an organization first.');
+        }
+
+        // ── 1. Requête de base ────────────────────────────────────────
+        $query = GapAssessment::where('organization_id', $orgId)
+            ->whereNotNull('code')
+            ->with(['framework:id,code,name', 'assessmentRequirements.requirement'])
+            ->latest();
+
+        // ── 2. Filtres ────────────────────────────────────────────────
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('framework', function ($fq) use ($search) {
+                        $fq->where('code', 'like', "%{$search}%")
+                            ->orWhere('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if ($request->filled('framework_ids')) {
+            $ids = array_filter(explode(',', $request->framework_ids));
+            if (!empty($ids)) {
+                $query->whereIn('framework_id', $ids);
+            }
+        }
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $now = now();
+            if ($request->status === 'overdue') {
+                $query->where('end_date', '<', $now);
+            } elseif ($request->status === 'upcoming') {
+                $query->where('start_date', '>', $now);
+            }
+        }
+
+        // ── 3. Mapping vers tableau simple ────────────────────────────
+        $rows = $query->get()->map(function (GapAssessment $a) {
+            // Compter les questions via la relation déjà chargée
+            $questionsCount = $a->assessmentRequirements->sum(function ($ar) {
+                return $ar->requirement ? $ar->requirement->gapQuestions()->count() : 0;
+            });
+
+            // Compter les réponses distinctes
+            $answersCount = DB::table('gap_assessment_answers')
+                ->where('gap_assessment_id', $a->id)
+                ->distinct('gap_question_id')
+                ->count('gap_question_id');
+
+            return [
+                'id' => $a->id,
+                'code' => $a->code,
+                'name' => $a->name,
+                'description' => $a->description,
+                'start_date' => $a->start_date?->format('Y-m-d'),
+                'end_date' => $a->end_date?->format('Y-m-d'),
+                'framework' => $a->framework ? [
+                    'id' => $a->framework->id,
+                    'code' => $a->framework->code,
+                    'name' => $a->framework->name,
+                ] : null,
+                'requirements_count' => $a->assessmentRequirements->count(),
+                'answers_count' => (int) $answersCount,
+                'questions_count' => (int) $questionsCount,
+            ];
+        });
+
+        // ── 4. Téléchargement ─────────────────────────────────────────
+        return Excel::download(
+            new GapAssessmentExport($rows),
+            'gap-assessments-' . now()->format('Y-m-d-His') . '.xlsx'
+        );
     }
 }

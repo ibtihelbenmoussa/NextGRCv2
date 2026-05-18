@@ -77,10 +77,10 @@ const scoreColor = (s: number) =>
 
 const maturityMeta = (level: number) => {
   const map: Record<number, { label: string; color: string; bg: string; dot: string }> = {
-    1: { label: 'Initial',   color: 'text-[#A32D2D] dark:text-[#F09595]', bg: 'bg-[#FCEBEB] dark:bg-[#501313]', dot: '#E24B4A' },
-    2: { label: 'Basic',     color: 'text-[#9A3412] dark:text-[#FDC58A]', bg: 'bg-[#FEF3E2] dark:bg-[#4A2800]', dot: '#F97316' },
-    3: { label: 'Defined',   color: 'text-[#854F0B] dark:text-[#FAC775]', bg: 'bg-[#FAEEDA] dark:bg-[#412402]', dot: '#EF9F27' },
-    4: { label: 'Managed',   color: 'text-[#3B6D11] dark:text-[#C0DD97]', bg: 'bg-[#EAF3DE] dark:bg-[#27500A]', dot: '#65A30D' },
+    1: { label: 'Initial', color: 'text-[#A32D2D] dark:text-[#F09595]', bg: 'bg-[#FCEBEB] dark:bg-[#501313]', dot: '#E24B4A' },
+    2: { label: 'Basic', color: 'text-[#9A3412] dark:text-[#FDC58A]', bg: 'bg-[#FEF3E2] dark:bg-[#4A2800]', dot: '#F97316' },
+    3: { label: 'Defined', color: 'text-[#854F0B] dark:text-[#FAC775]', bg: 'bg-[#FAEEDA] dark:bg-[#412402]', dot: '#EF9F27' },
+    4: { label: 'Managed', color: 'text-[#3B6D11] dark:text-[#C0DD97]', bg: 'bg-[#EAF3DE] dark:bg-[#27500A]', dot: '#65A30D' },
     5: { label: 'Optimized', color: 'text-[#0F6E56] dark:text-[#9FE1CB]', bg: 'bg-[#E1F5EE] dark:bg-[#085041]', dot: '#1D9E75' },
   }
   return map[level] ?? { label: 'Unknown', color: 'text-muted-foreground', bg: 'bg-muted', dot: '#888' }
@@ -94,16 +94,16 @@ const LEVEL_DOT: Record<number, string> = {
 // ─── Score Ring ───────────────────────────────────────────────────────────────
 
 function ScoreRing({ score, size = 90 }: { score: number; size?: number }) {
-  const v    = isNaN(score) ? 0 : Math.min(100, Math.max(0, score))
-  const r    = (size - 12) / 2
+  const v = isNaN(score) ? 0 : Math.min(100, Math.max(0, score))
+  const r = (size - 12) / 2
   const circ = 2 * Math.PI * r
-  const off  = circ - (v / 100) * circ
+  const off = circ - (v / 100) * circ
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="currentColor"
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor"
         strokeWidth="7" className="text-muted/40" />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={scoreColor(v)}
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={scoreColor(v)}
         strokeWidth="7" strokeLinecap="round"
         strokeDasharray={circ} strokeDashoffset={off}
         style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
@@ -120,7 +120,7 @@ function CoverageBarChart({ requirements }: { requirements: RequirementResult[] 
     <div className="space-y-5 w-full">
       {requirements.map(req => {
         const score = Math.round(req.score ?? 0)
-        const meta  = maturityMeta(req.maturity_level ?? 1)
+        const meta = maturityMeta(req.maturity_level ?? 1)
 
         return (
           <div key={req.id} className="space-y-1.5">
@@ -145,19 +145,19 @@ function CoverageBarChart({ requirements }: { requirements: RequirementResult[] 
             {/* Segmented bar : 5 segments = 5 levels */}
             <div className="flex gap-0.5 h-3">
               {[1, 2, 3, 4, 5].map(lvl => {
-                const filled  = score >= lvl * 20
+                const filled = score >= lvl * 20
                 const partial = !filled && score > (lvl - 1) * 20
-                const pct     = partial ? ((score - (lvl - 1) * 20) / 20) * 100 : 0
-                const m       = maturityMeta(lvl)
+                const pct = partial ? ((score - (lvl - 1) * 20) / 20) * 100 : 0
+                const m = maturityMeta(lvl)
                 return (
                   <div key={lvl} className="flex-1 relative rounded-sm overflow-hidden bg-muted/50">
                     {(filled || partial) && (
                       <div
                         className="absolute inset-y-0 left-0 rounded-sm transition-all duration-700"
                         style={{
-                          width:           filled ? '100%' : `${pct}%`,
+                          width: filled ? '100%' : `${pct}%`,
                           backgroundColor: m.dot,
-                          opacity:         filled ? 0.9 : 0.6,
+                          opacity: filled ? 0.9 : 0.6,
                         }}
                       />
                     )}
@@ -183,7 +183,7 @@ function CoverageBarChart({ requirements }: { requirements: RequirementResult[] 
 
 function RequirementRow({ req }: { req: RequirementResult }) {
   const score = Math.round(req.score ?? 0)
-  const meta  = maturityMeta(req.maturity_level ?? 1)
+  const meta = maturityMeta(req.maturity_level ?? 1)
 
   return (
     <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
@@ -216,9 +216,9 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
   const [open, setOpen] = useState(step.is_current || step.is_next)
 
   const isCompleted = step.status === 'completed'
-  const isCurrent   = step.is_current
-  const isNext      = step.is_next && !step.is_current
-  const isTodo      = !isCompleted && !isCurrent && !isNext
+  const isCurrent = step.is_current
+  const isNext = step.is_next && !step.is_current
+  const isTodo = !isCompleted && !isCurrent && !isNext
 
   // Subtitle : masquer "Not implemented" si le step est marqué Done
   const showSubtitle = step.subtitle
@@ -228,9 +228,9 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
     <div className={cn(
       'rounded-xl border transition-all overflow-hidden',
       isCompleted && 'border-[#1D9E75]/25 bg-[#F0FBF6]/40 dark:bg-[#0A2218]/40 opacity-65',
-      isCurrent   && 'border-[#378ADD]/40 bg-white dark:bg-[#0F1E2E] shadow-sm',
-      isNext      && 'border-[#EF9F27]/40 bg-[#FFFBF0] dark:bg-[#1E1500] shadow-sm',
-      isTodo      && 'border-border/25 bg-muted/10 opacity-40',
+      isCurrent && 'border-[#378ADD]/40 bg-white dark:bg-[#0F1E2E] shadow-sm',
+      isNext && 'border-[#EF9F27]/40 bg-[#FFFBF0] dark:bg-[#1E1500] shadow-sm',
+      isTodo && 'border-border/25 bg-muted/10 opacity-40',
     )}>
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -245,8 +245,8 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold">L{step.level} — {step.label}</span>
-            {isCurrent   && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#378ADD]/15 text-[#185FA5] dark:text-[#85B7EB]">NOW</span>}
-            {isNext      && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EF9F27]/15 text-[#854F0B] dark:text-[#FAC775]">NEXT</span>}
+            {isCurrent && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#378ADD]/15 text-[#185FA5] dark:text-[#85B7EB]">NOW</span>}
+            {isNext && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EF9F27]/15 text-[#854F0B] dark:text-[#FAC775]">NEXT</span>}
             {isCompleted && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#1D9E75]/15 text-[#0F6E56] dark:text-[#9FE1CB]">✓ Done</span>}
           </div>
           {showSubtitle && (
@@ -256,7 +256,7 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
 
         {(isCurrent || isNext) && step.actions.length > 0 && (
           open
-            ? <ChevronUp   className="h-4 w-4 text-muted-foreground shrink-0" />
+            ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
             : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
         )}
       </button>
@@ -289,15 +289,15 @@ export default function AssessmentResultsPage({
   requirements,
   ml_result: initialMlResult,
 }: Props) {
-  const overall_score    = Math.round(assessment.overall_score ?? 0)
+  const overall_score = Math.round(assessment.overall_score ?? 0)
   const overall_maturity = assessment.overall_maturity_level ?? 1
 
   const [mlResult, setMlResult] = useState<MLResult | undefined>(initialMlResult)
   const [mlLoading, setMlLoading] = useState(false)
-  const [mlError, setMlError]     = useState<string | null>(null)
+  const [mlError, setMlError] = useState<string | null>(null)
 
-  const meta  = maturityMeta(overall_maturity)
-  const gap   = 5 - overall_maturity
+  const meta = maturityMeta(overall_maturity)
+  const gap = 5 - overall_maturity
   const hasML = !!mlResult?.roadmap
 
   // ─── Generate Action Plan ──────────────────────────────────────────────────
@@ -306,10 +306,10 @@ export default function AssessmentResultsPage({
     setMlLoading(true)
     setMlError(null)
     try {
-      const allQuestions   = requirements.flatMap(req => req.questions ?? [])
+      const allQuestions = requirements.flatMap(req => req.questions ?? [])
       if (allQuestions.length === 0) throw new Error('No questions')
 
-      const answersArray   = allQuestions.map(q => ({ question_id: q.id, answer: q.answer ?? 0 }))
+      const answersArray = allQuestions.map(q => ({ question_id: q.id, answer: q.answer ?? 0 }))
       const questionsArray = allQuestions.map(q => ({ id: q.id, text: q.text }))
 
       const { data: prediction } = await axios.post<MLResult>('/api/ml/predict', {
@@ -318,12 +318,12 @@ export default function AssessmentResultsPage({
 
       // Passer tous les requirements pour un summary complet
       const { data: analysis } = await axios.post('/api/ml/analyze', {
-        requirement_code:    requirements.map(r => r.code).join(', '),
-        requirement_title:   requirements.map(r => r.title).join(' | '),
-        maturity_level:      prediction.maturity_level,
-        score:               prediction.weighted_score,
-        gap:                 5 - prediction.maturity_level,
-        answers:             answersArray,
+        requirement_code: requirements.map(r => r.code).join(', '),
+        requirement_title: requirements.map(r => r.title).join(' | '),
+        maturity_level: prediction.maturity_level,
+        score: prediction.weighted_score,
+        gap: 5 - prediction.maturity_level,
+        answers: answersArray,
         requirements_detail: requirements.map(r => ({
           code: r.code, title: r.title,
           score: r.score, maturity_level: r.maturity_level,
@@ -340,8 +340,8 @@ export default function AssessmentResultsPage({
 
   const issueIcon = (issue: string) => {
     const l = issue.toLowerCase()
-    if (l.startsWith('critical'))  return <AlertTriangle className="h-4 w-4 text-[#E24B4A] shrink-0 mt-0.5" />
-    if (l.startsWith('confirmed')) return <CheckCheck    className="h-4 w-4 text-[#1D9E75] shrink-0 mt-0.5" />
+    if (l.startsWith('critical')) return <AlertTriangle className="h-4 w-4 text-[#E24B4A] shrink-0 mt-0.5" />
+    if (l.startsWith('confirmed')) return <CheckCheck className="h-4 w-4 text-[#1D9E75] shrink-0 mt-0.5" />
     return <ArrowRight className="h-4 w-4 text-[#EF9F27] shrink-0 mt-0.5" />
   }
 
@@ -350,12 +350,11 @@ export default function AssessmentResultsPage({
   return (
     <AppLayout breadcrumbs={[
       { title: 'Gap Assessments', href: '/gap-assessment' },
-      { title: assessment.name, href: `/gap-assessments/${assessment.id}` },
       { title: 'Results', href: '' },
     ]}>
       <Head title={`Results — ${assessment.name}`} />
 
-      <div className="w-full max-w-6xl mx-auto px-8 py-8 space-y-6">
+      <div className="w-full px-8 py-8 space-y-6">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-4">
@@ -380,7 +379,7 @@ export default function AssessmentResultsPage({
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="outline" size="default" className="gap-2"
               onClick={() => router.visit(`/gap-assessments/${assessment.id}/answer`)}
->
+            >
               <Edit2 className="h-4 w-4" /> Edit Answers
             </Button>
             <Button variant="outline" size="default" className="gap-2">
@@ -525,15 +524,15 @@ export default function AssessmentResultsPage({
                   </h4>
                   <div className="space-y-2">
                     {mlResult.current_issues.map((issue, i) => {
-                      const l      = issue.toLowerCase()
+                      const l = issue.toLowerCase()
                       const isCrit = l.startsWith('critical')
                       const isGood = l.startsWith('confirmed')
                       return (
                         <div key={i} className={cn(
                           'flex items-start gap-2.5 p-3 rounded-lg border border-border/40',
                           isCrit ? 'bg-[#FCEBEB]/60 dark:bg-[#501313]/20'
-                                 : isGood ? 'bg-[#E1F5EE]/60 dark:bg-[#085041]/20'
-                                          : 'bg-[#FAEEDA]/60 dark:bg-[#412402]/20'
+                            : isGood ? 'bg-[#E1F5EE]/60 dark:bg-[#085041]/20'
+                              : 'bg-[#FAEEDA]/60 dark:bg-[#412402]/20'
                         )}>
                           {issueIcon(issue)}
                           <p className="text-sm text-foreground leading-relaxed">{issue}</p>

@@ -16,6 +16,8 @@ use App\Http\Controllers\RequirementTestReservationController;
 use App\Http\Controllers\GapAssessmentController;
 use App\Http\Controllers\ActionPlanController;
 use App\Http\Controllers\DocumentAnalysisController;
+use App\Http\Controllers\DomainController;
+
 
 
 
@@ -210,12 +212,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         [RequirementController::class, 'destroyDocument']
     )
         ->name('requirements.documents.destroy');
+        // routes/web.php
+Route::post('/domains', [DomainController::class, 'store']);
+Route::put('/domains/{domain}', [DomainController::class, 'update']);
+Route::delete('/domains/{domain}', [DomainController::class, 'destroy']);
   Route::post('/ai/analyze-document', [DocumentAnalysisController::class, 'analyze']);
 Route::post('/ai/import-requirements', [DocumentAnalysisController::class, 'import']);
     Route::resource('requirements', RequirementController::class);
 // ================= Gap Assessment =================
 
 // ✅ Routes statiques (pas de modèle)
+Route::get('/gap-assessments/export', [GapAssessmentController::class, 'export'])
+    ->name('gap-assessments.export');
 Route::get('/gap-assessment', [GapAssessmentController::class, 'index'])
     ->name('gap-assessment.index');
 

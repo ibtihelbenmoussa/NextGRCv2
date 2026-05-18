@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class GapAssessment extends Model
 {
-    protected $guarded = []; 
+    protected $guarded = [];
 
     protected $casts = [
-        'answers'    => 'array',
         'start_date' => 'date',
         'end_date'   => 'date',
+        'ml_result'  => 'array', 
     ];
 
     public function framework()
@@ -24,25 +24,28 @@ class GapAssessment extends Model
         return $this->hasMany(GapAssessmentRequirement::class);
     }
 
+    // ✅ belongsToMany — permet sync(), attach(), detach()
     public function requirements()
     {
-        return $this->hasManyThrough(
+        return $this->belongsToMany(
             Requirement::class,
-            GapAssessmentRequirement::class,
+            'gap_assessment_requirements',
             'gap_assessment_id',
-            'id',
-            'id',
             'requirement_id'
         );
     }
 
-    // Gardé pour compatibilité
     public function requirement()
     {
         return $this->belongsTo(Requirement::class);
     }
-        public function answers()
+
+    public function answers()
     {
         return $this->hasMany(GapAssessmentAnswer::class);
     }
+    public function actionPlans()
+{
+    return $this->hasMany(ActionPlan::class, 'gap_id');
+}
 }

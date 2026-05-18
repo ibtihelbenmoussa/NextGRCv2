@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RequirementsExport;
 use Carbon\Carbon;
+use App\Models\Domain;
 
 class RequirementController extends Controller
 {
@@ -162,6 +163,13 @@ class RequirementController extends Controller
                 ->select('id', 'name')
                 ->orderBy('name')
                 ->get(),
+            'domains' => Domain::where('organization_id', $currentOrgId)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get(),
+
+
+
         ]);
     }
 
@@ -223,7 +231,9 @@ class RequirementController extends Controller
             'predefined_test.test_name' => 'nullable|string|max:255',
             'predefined_test.objective' => 'nullable|string|max:5000',
             'predefined_test.procedure' => 'nullable|string|max:5000',
-            'gap_questions' => 'nullable|string', // ✅ JSON string
+            'gap_questions' => 'nullable|string',
+            'domain_id' => 'nullable|integer|exists:domains,id',
+
         ]);
 
         $requirement = Requirement::create([
@@ -242,6 +252,7 @@ class RequirementController extends Controller
             'attachments' => $validated['attachments'] ?? null,
             'organization_id' => $currentOrgId,
             'auto_validate' => $validated['auto_validate'] ?? false,
+            'domain_id'        => $validated['domain_id'] ?? null,
         ]);
 
         $requirement->tags()->sync($validated['tags'] ?? []);
@@ -361,7 +372,7 @@ class RequirementController extends Controller
                 ->map(fn($id) => (string) $id)->toArray(),
             'selectedProcessIds' => $requirement->processes->pluck('id')
                 ->map(fn($id) => (string) $id)->toArray(),
-                'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
+            'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
         ]);
     }
 
@@ -421,6 +432,7 @@ class RequirementController extends Controller
             'document_descriptions' => 'nullable|array',
             'document_descriptions.*' => 'nullable|string|max:500',
             'gap_questions' => 'nullable|string',
+            'domain_id' => 'nullable|integer|exists:domains,id',
         ]);
 
         $tags = $validated['tags'] ?? [];

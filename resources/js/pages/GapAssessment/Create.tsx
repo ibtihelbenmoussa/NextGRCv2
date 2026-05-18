@@ -33,7 +33,10 @@ import {
   Building2,
   FileText,
   Layers,
-  Tag,
+  HelpCircle,
+  Check,
+  X,
+  ListChecks,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -62,7 +65,7 @@ interface Framework {
 }
 
 // ─────────────────────────────────────────────
-// Step Bar (conservé mais avec le style shadcn)
+// Step Bar
 // ─────────────────────────────────────────────
 
 const STEPS = [
@@ -99,12 +102,7 @@ function StepBar({ current }: { current: number }) {
             </span>
           </div>
           {i < STEPS.length - 1 && (
-            <div
-              className={cn(
-                'flex-1 h-px mx-4',
-                current > s.n ? 'bg-green-400' : 'bg-border'
-              )}
-            />
+            <div className={cn('flex-1 h-px mx-4', current > s.n ? 'bg-green-400' : 'bg-border')} />
           )}
         </div>
       ))}
@@ -113,15 +111,15 @@ function StepBar({ current }: { current: number }) {
 }
 
 // ─────────────────────────────────────────────
-// Step 1: Basic Info (avec design identique à Framework)
+// Step 1 — Basic Info
 // ─────────────────────────────────────────────
 
 function StepBasic({
   onNext,
-  existingCount,
+  frameworkCounts,
 }: {
   onNext: (data: any) => void
-  existingCount: number
+  frameworkCounts: Record<number, number>
 }) {
   const [frameworks, setFrameworks] = useState<Framework[]>([])
   const [selectedFramework, setSelectedFramework] = useState<Framework | null>(null)
@@ -132,7 +130,6 @@ function StepBasic({
     start_date: '',
     end_date: '',
   })
-
   const [startDateOpen, setStartDateOpen] = useState(false)
   const [endDateOpen, setEndDateOpen] = useState(false)
   const [errors, setErrors] = useState<{ framework?: string; name?: string }>({})
@@ -151,8 +148,8 @@ function StepBasic({
       const dd = String(today.getDate()).padStart(2, '0')
       const mm = String(today.getMonth() + 1).padStart(2, '0')
       const yyyy = today.getFullYear()
-      const n = existingCount + 1
-      const autoCode = `GA${n}-${fw.code}-${dd}${mm}${yyyy}`
+      const n = (frameworkCounts[fw.id] ?? 0) + 1
+      const autoCode = `GA${n}-${fw.code}-${dd}/${mm}/${yyyy}`
       setForm(prev => ({ ...prev, code: autoCode }))
       setErrors(prev => ({ ...prev, framework: undefined }))
     }
@@ -185,7 +182,6 @@ function StepBasic({
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-2">
-        {/* Framework selection */}
         <div className="space-y-2">
           <Label>Framework <span className="text-destructive">*</span></Label>
           <Select
@@ -208,7 +204,7 @@ function StepBasic({
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Code <span className="text-xs text-muted-foreground font-normal"></span></Label>
+            <Label>Code</Label>
             <Input
               value={form.code}
               onChange={e => setForm({ ...form, code: e.target.value })}
@@ -253,7 +249,7 @@ function StepBasic({
                 <Calendar
                   mode="single"
                   selected={form.start_date ? new Date(form.start_date) : undefined}
-                  onSelect={(date) => {
+                  onSelect={date => {
                     if (date) setForm({ ...form, start_date: format(date, 'yyyy-MM-dd') })
                     setStartDateOpen(false)
                   }}
@@ -275,11 +271,11 @@ function StepBasic({
                 <Calendar
                   mode="single"
                   selected={form.end_date ? new Date(form.end_date) : undefined}
-                  onSelect={(date) => {
+                  onSelect={date => {
                     if (date) setForm({ ...form, end_date: format(date, 'yyyy-MM-dd') })
                     setEndDateOpen(false)
                   }}
-                  disabled={(date) => (form.start_date ? date < new Date(form.start_date) : false)}
+                  disabled={date => (form.start_date ? date < new Date(form.start_date) : false)}
                   initialFocus
                 />
               </PopoverContent>
@@ -298,8 +294,81 @@ function StepBasic({
 }
 
 // ─────────────────────────────────────────────
-// Step 2: Requirements Selection (card style harmonisé)
+// Step 2 — Requirements (redesigned)
 // ─────────────────────────────────────────────
+
+function RequirementRow({
+  req,
+  selected,
+  onToggle,
+  index,
+}: {
+  req: Requirement
+  selected: boolean
+  onToggle: () => void
+  index: number
+}) {
+  const qCount = req.questions?.length ?? req.questions_count ?? 0
+
+  return (
+    <div
+      onClick={onToggle}
+      className={cn(
+        'group relative flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all duration-150',
+        'hover:shadow-sm',
+        selected
+          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
+          : 'border-border bg-card hover:border-border/80 hover:bg-muted/30',
+      )}
+      style={{ animationDelay: `${index * 30}ms` }}
+    >
+      {/* Checkbox */}
+      <div
+        className={cn(
+          'flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-150',
+          selected
+            ? 'bg-primary border-primary'
+            : 'border-muted-foreground/30 group-hover:border-muted-foreground/60',
+        )}
+      >
+        {selected && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
+      </div>
+
+      {/* Code badge */}
+      <span
+        className={cn(
+          'flex-shrink-0 text-xs font-mono font-bold px-2 py-1 rounded-md tracking-wide transition-colors',
+          selected
+            ? 'bg-primary/15 text-primary dark:bg-primary/25'
+            : 'bg-muted text-muted-foreground',
+        )}
+      >
+        {req.code}
+      </span>
+
+      {/* Title */}
+      <span
+        className={cn(
+          'flex-1 text-sm font-medium leading-snug min-w-0 truncate transition-colors',
+          selected ? 'text-foreground' : 'text-foreground/80',
+        )}
+      >
+        {req.title}
+      </span>
+
+      {/* Questions count */}
+      <span
+        className={cn(
+          'flex-shrink-0 flex items-center gap-1 text-xs font-mono transition-colors',
+          selected ? 'text-primary/70' : 'text-muted-foreground',
+        )}
+      >
+        <HelpCircle size={11} />
+        {qCount}Q
+      </span>
+    </div>
+  )
+}
 
 function StepRequirements({
   framework,
@@ -318,13 +387,11 @@ function StepRequirements({
   const toggle = (id: number) =>
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
-  const toggleAll = () => {
-    if (selected.length === framework.requirements.length) {
-      setSelected([])
-    } else {
-      setSelected(framework.requirements.map(r => r.id))
-    }
-  }
+  const allIds = framework.requirements.map(r => r.id)
+  const allSelected = selected.length === allIds.length && allIds.length > 0
+  const someSelected = selected.length > 0 && !allSelected
+
+  const toggleAll = () => setSelected(allSelected ? [] : allIds)
 
   const filtered = framework.requirements.filter(r =>
     !search ||
@@ -332,91 +399,227 @@ function StepRequirements({
     r.title.toLowerCase().includes(search.toLowerCase())
   )
 
-  const allSelected = selected.length === framework.requirements.length
+  const totalSelectedQuestions = framework.requirements
+    .filter(r => selected.includes(r.id))
+    .reduce((acc, r) => acc + (r.questions?.length ?? r.questions_count ?? 0), 0)
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-primary/10 p-2.5">
-            <Layers className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <CardTitle>Select Requirements</CardTitle>
-            <CardDescription>
-              <Badge variant="secondary" className="mr-2">{framework.code}</Badge>
-              {framework.name}
-            </CardDescription>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 mt-4">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search requirements..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9 h-10"
-            />
-          </div>
-          <Button variant="outline" onClick={toggleAll} className="h-10">
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </Button>
-        </div>
-        {selected.length > 0 && (
-          <div className="flex justify-end mt-2">
-            <Badge variant="default" className="bg-green-600">
-              {selected.length} selected
-            </Badge>
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        {filtered.length === 0 ? (
-          <p className="text-center py-12 text-muted-foreground">No requirements match your search</p>
-        ) : (
-          filtered.map(r => (
-            <div
-              key={r.id}
-              className={cn(
-                'flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all',
-                selected.includes(r.id)
-                  ? 'bg-green-50 border-green-300'
-                  : 'hover:bg-muted/50 border-border'
-              )}
-              onClick={() => toggle(r.id)}
-            >
-              <Checkbox
-                checked={selected.includes(r.id)}
-                onCheckedChange={() => toggle(r.id)}
-                className="mt-1 w-5 h-5"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{r.code}</p>
-                <p className="text-base font-medium mt-1">{r.title}</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {r.questions?.length ?? r.questions_count ?? 0} question{(r.questions?.length ?? r.questions_count ?? 0) !== 1 ? 's' : ''}
-                </p>
-              </div>
+    <div className="space-y-4">
+
+      {/* Header card */}
+      <Card className="shadow-sm">
+        <CardContent className="pt-5 pb-4">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-primary/10 p-2.5 shrink-0 mt-0.5">
+              <Layers className="h-5 w-5 text-primary" />
             </div>
-          ))
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-semibold">Select Requirements</h2>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md bg-[#E6F1FB] text-[#0C447C] dark:bg-[#0C447C] dark:text-[#B5D4F4]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2563eb]" />
+                  {framework.code}
+                </span>
+                <span className="text-sm text-muted-foreground truncate">{framework.name}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {framework.requirements.length} requirement{framework.requirements.length !== 1 ? 's' : ''} available
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Selection stats bar */}
+      <div className="flex items-center gap-3 px-1">
+        {/* Select all toggle */}
+        <button
+          onClick={toggleAll}
+          className={cn(
+            'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
+            allSelected
+              ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+              : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
+          )}
+        >
+          <div
+            className={cn(
+              'w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
+              allSelected ? 'bg-primary border-primary' : someSelected ? 'border-primary bg-primary/20' : 'border-muted-foreground/40',
+            )}
+          >
+            {allSelected && <Check size={9} className="text-primary-foreground" strokeWidth={3} />}
+            {someSelected && <div className="w-1.5 h-0.5 bg-primary rounded-full" />}
+          </div>
+          {allSelected ? 'Deselect all' : 'Select all'}
+        </button>
+
+        {/* Stats pills */}
+        {selected.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
+              <ListChecks size={12} />
+              {selected.length} requirement{selected.length !== 1 ? 's' : ''}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+              <HelpCircle size={12} />
+              {totalSelectedQuestions} question{totalSelectedQuestions !== 1 ? 's' : ''}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">No requirements selected</span>
         )}
 
-        <div className="flex items-center justify-between pt-6 border-t mt-6">
-          <Button variant="outline" size="lg" onClick={onBack}>
-            <ChevronLeft size={18} className="mr-2" /> Back
-          </Button>
-          <Button size="lg" disabled={selected.length === 0} onClick={() => onNext(selected)}>
-            Review ({selected.length} selected) <ChevronRight size={18} className="ml-2" />
-          </Button>
+        {/* Search */}
+        <div className="relative ml-auto max-w-xs w-full">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search requirements…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 h-8 text-xs"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Requirements list */}
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
+
+        {/* List header */}
+        <div className="grid grid-cols-[20px_80px_1fr_40px] gap-4 px-4 py-2 border-b border-border bg-muted/30">
+          <div />
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Code</span>
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Title</span>
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right">Q.</span>
+        </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-border/60">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 text-center">
+              <Search size={20} className="text-muted-foreground/40 mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">No requirements match</p>
+              <button onClick={() => setSearch('')} className="mt-1.5 text-xs text-primary underline underline-offset-2">
+                Clear search
+              </button>
+            </div>
+          ) : filtered.map((req, idx) => {
+            const qCount = req.questions?.length ?? req.questions_count ?? 0
+            const isSelected = selected.includes(req.id)
+            return (
+              <div
+                key={req.id}
+                onClick={() => toggle(req.id)}
+                className={cn(
+                  'group grid grid-cols-[20px_80px_1fr_40px] gap-4 px-4 py-3 cursor-pointer transition-all duration-100',
+                  isSelected
+                    ? 'bg-primary/5 dark:bg-primary/10'
+                    : 'hover:bg-muted/40',
+                )}
+              >
+                {/* Checkbox */}
+                <div className="flex items-center justify-center">
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150',
+                      isSelected
+                        ? 'bg-primary border-primary'
+                        : 'border-muted-foreground/30 group-hover:border-muted-foreground/60',
+                    )}
+                  >
+                    {isSelected && <Check size={9} className="text-primary-foreground" strokeWidth={3} />}
+                  </div>
+                </div>
+
+                {/* Code */}
+                <div className="flex items-center">
+                  <span
+                    className={cn(
+                      'text-xs font-mono font-bold px-1.5 py-0.5 rounded tracking-wide transition-colors',
+                      isSelected
+                        ? 'bg-primary/15 text-primary dark:bg-primary/25'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {req.code}
+                  </span>
+                </div>
+
+                {/* Title */}
+                <div className="flex items-center min-w-0">
+                  <span
+                    className={cn(
+                      'text-sm font-medium truncate transition-colors',
+                      isSelected ? 'text-foreground' : 'text-foreground/80',
+                    )}
+                  >
+                    {req.title}
+                  </span>
+                </div>
+
+                {/* Question count */}
+                <div className="flex items-center justify-end">
+                  <span
+                    className={cn(
+                      'text-xs font-mono transition-colors',
+                      isSelected ? 'text-primary/70' : 'text-muted-foreground',
+                    )}
+                  >
+                    {qCount}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer summary */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20">
+            <span className="text-xs font-mono text-muted-foreground">
+              {filtered.length} of {framework.requirements.length} shown
+            </span>
+            {selected.length > 0 && (
+              <button
+                onClick={() => setSelected([])}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+              >
+                <X size={11} /> Clear selection
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between pt-2">
+        <Button variant="outline" size="lg" onClick={onBack}>
+          <ChevronLeft size={18} className="mr-2" /> Back
+        </Button>
+        <Button
+          size="lg"
+          disabled={selected.length === 0}
+          onClick={() => onNext(selected)}
+          className="gap-2 min-w-[200px]"
+        >
+          Review ({selected.length} selected)
+          <ChevronRight size={18} />
+        </Button>
+      </div>
+    </div>
   )
 }
 
 // ─────────────────────────────────────────────
-// Step 3: Review & Save (avec stats et liste)
+// Step 3 — Review & Save
 // ─────────────────────────────────────────────
 
 function StepReview({
@@ -444,14 +647,11 @@ function StepReview({
       end_date: formData.end_date,
       framework_id: framework.id,
       requirement_ids: selectedReqIds,
-    }, {
-      onFinish: () => setLoading(false),
-    })
+    }, { onFinish: () => setLoading(false) })
   }
 
   return (
     <div className="space-y-8">
-      {/* Summary Card */}
       <Card className="shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-3">
@@ -466,24 +666,17 @@ function StepReview({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-5 md:grid-cols-2">
-            <div className="bg-muted/40 rounded-xl p-4">
-              <p className="text-sm text-muted-foreground mb-1">Code</p>
-              <p className="text-base font-mono font-semibold">{formData.code}</p>
-            </div>
-            <div className="bg-muted/40 rounded-xl p-4">
-              <p className="text-sm text-muted-foreground mb-1">Name</p>
-              <p className="text-base font-semibold">{formData.name}</p>
-            </div>
-            <div className="bg-muted/40 rounded-xl p-4">
-              <p className="text-sm text-muted-foreground mb-1">Framework</p>
-              <p className="text-base font-semibold">{framework.code} — {framework.name}</p>
-            </div>
-            <div className="bg-muted/40 rounded-xl p-4">
-              <p className="text-sm text-muted-foreground mb-1">Period</p>
-              <p className="text-base font-semibold">
-                {formData.start_date || '—'} {formData.end_date ? `→ ${formData.end_date}` : ''}
-              </p>
-            </div>
+            {[
+              { label: 'Code', value: formData.code, mono: true },
+              { label: 'Name', value: formData.name },
+              { label: 'Framework', value: `${framework.code} — ${framework.name}` },
+              { label: 'Period', value: `${formData.start_date || '—'}${formData.end_date ? ` → ${formData.end_date}` : ''}` },
+            ].map(({ label, value, mono }) => (
+              <div key={label} className="bg-muted/40 rounded-xl p-4">
+                <p className="text-sm text-muted-foreground mb-1">{label}</p>
+                <p className={cn('text-base font-semibold', mono && 'font-mono')}>{value}</p>
+              </div>
+            ))}
           </div>
           {formData.description && (
             <div className="bg-muted/40 rounded-xl p-4">
@@ -492,19 +685,18 @@ function StepReview({
             </div>
           )}
           <div className="flex gap-5">
-            <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl p-5 text-center">
-              <p className="text-3xl font-bold text-blue-700">{reqs.length}</p>
-              <p className="text-base text-blue-600 mt-1">Requirements</p>
+            <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl p-5 text-center dark:bg-blue-950/30 dark:border-blue-800">
+              <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">{reqs.length}</p>
+              <p className="text-base text-blue-600 dark:text-blue-400 mt-1">Requirements</p>
             </div>
-            <div className="flex-1 bg-purple-50 border border-purple-200 rounded-xl p-5 text-center">
-              <p className="text-3xl font-bold text-purple-700">{totalQuestions}</p>
-              <p className="text-base text-purple-600 mt-1">Questions to answer</p>
+            <div className="flex-1 bg-purple-50 border border-purple-200 rounded-xl p-5 text-center dark:bg-purple-950/30 dark:border-purple-800">
+              <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">{totalQuestions}</p>
+              <p className="text-base text-purple-600 dark:text-purple-400 mt-1">Questions to answer</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Selected Requirements List */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl">Selected Requirements</CardTitle>
@@ -524,7 +716,7 @@ function StepReview({
         </CardContent>
       </Card>
 
-      <div className="flex items-start gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5 text-base text-amber-800">
+      <div className="flex items-start gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5 text-base text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
         <span className="text-xl leading-none mt-0.5">💡</span>
         <p>
           After saving, you can answer all questions from the assessment page using the <strong>Answer Questions</strong> button.
@@ -545,14 +737,14 @@ function StepReview({
 }
 
 // ─────────────────────────────────────────────
-// Main Page (exactement les mêmes dimensions que CreateFramework)
+// Main Page
 // ─────────────────────────────────────────────
 
 interface Props {
-  existingCount?: number
+  frameworkCounts?: Record<number, number>
 }
 
-export default function CreateGapAssessment({ existingCount = 0 }: Props) {
+export default function CreateGapAssessment({ frameworkCounts = {} }: Props) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<any>(null)
   const [selectedReqs, setSelectedReqs] = useState<number[]>([])
@@ -585,11 +777,8 @@ export default function CreateGapAssessment({ existingCount = 0 }: Props) {
 
         {step === 1 && (
           <StepBasic
-            existingCount={existingCount}
-            onNext={data => {
-              setFormData(data)
-              setStep(2)
-            }}
+            frameworkCounts={frameworkCounts}
+            onNext={data => { setFormData(data); setStep(2) }}
           />
         )}
 
@@ -598,10 +787,7 @@ export default function CreateGapAssessment({ existingCount = 0 }: Props) {
             framework={formData.framework}
             initialSelected={selectedReqs}
             onBack={() => setStep(1)}
-            onNext={ids => {
-              setSelectedReqs(ids)
-              setStep(3)
-            }}
+            onNext={ids => { setSelectedReqs(ids); setStep(3) }}
           />
         )}
 

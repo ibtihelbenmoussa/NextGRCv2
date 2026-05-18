@@ -8,38 +8,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ActionPlan extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
-        'gap_id',
-        'assigned_to',
-        'title',
-        'description',
-        'due_date',
-        'status',
+        'gap_id', 'assigned_to', 'title', 
+        'description', 'due_date', 'status',
     ];
 
-    protected $casts = [
-        'due_date' => 'date',
-    ];
-
-    // ── Relations ──────────────────────────────────────────────
-
-    public function gap(): BelongsTo
+    public function assessment()
     {
         return $this->belongsTo(GapAssessment::class, 'gap_id');
     }
 
-    public function assignee(): BelongsTo
+    public function assignedUser()
     {
         return $this->belongsTo(User::class, 'assigned_to');
-    }
-
-    // ── Helpers ────────────────────────────────────────────────
-
-    public function isOverdue(): bool
-    {
-        return $this->status !== 'done'
-            && $this->due_date->isPast();
     }
 }
