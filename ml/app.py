@@ -232,7 +232,7 @@ def predict():
 # ─── Roadmap Builder ──────────────────────────────────────────────────────────
 
 def build_roadmap(title, code, current_level, weak, partial, strong):
-    specific_by_dim = {
+    specifi c_by_dim = {
         'Existence':     f'Formally establish that {title} controls exist and are recognized',
         'Formalization': f'Document, get management approval, and communicate {title} procedures',
         'Enforcement':   f'Implement technical controls to enforce {title} compliance',
@@ -345,7 +345,51 @@ def answer_to_label(val):
         4: 'YES',      # Optimized — pleinement implémenté
     }.get(v, 'NO')
 
+DIM_NAMES = [
+    'Existence',
+    'Formalization',
+    'Enforcement',
+    'Measurement',
+    'Optimization'
+]
 
+def parse_answers_to_dim_dict(raw_answers):
+    """
+    Accepts:
+      1. Array:
+         [{question_id: X, answer: Y}, ...]
+
+      2. Dict:
+         {'Existence': 4, ...}
+
+    Returns:
+      {'Existence': 'YES', ...}
+    """
+
+    # FRONTEND ARRAY
+    if isinstance(raw_answers, list):
+        result = {}
+
+        for i, item in enumerate(raw_answers):
+            dim = DIM_NAMES[i] if i < len(DIM_NAMES) else f'Q{i+1}'
+
+            if isinstance(item, dict):
+                val = item.get('answer', 0)
+            else:
+                val = item
+
+            result[dim] = answer_to_label(val)
+
+        return result
+
+    # LEGACY DICT
+    if isinstance(raw_answers, dict):
+        return {
+            k: answer_to_label(v)
+            for k, v in raw_answers.items()
+        }
+
+    return {}
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
@@ -355,75 +399,33 @@ def analyze():
         level   = int(data.get('maturity_level', 1))
         score   = float(data.get('score', 0))
         gap     = int(data.get('gap', 5 - level))
-        answers = data.get('answers', {})
+
+        # ✅ FIX
+        raw_answers = data.get('answers', [])
+        answers_labeled = parse_answers_to_dim_dict(raw_answers)
 
         level_labels = ['', 'Initial', 'Basic', 'Defined', 'Managed', 'Optimized']
-        label        = level_labels[level] if 1 <= level <= 5 else 'Unknown'
+        label = level_labels[level] if 1 <= level <= 5 else 'Unknown'
 
-        # ✅ FIX: convert 0..4 integers to labels (supports legacy YES/NO/PARTIAL too)
-        answers_labeled = {k: answer_to_label(v) for k, v in answers.items()}
-
-        # ✅ FIX: weak = NO + BASIC, partial = PARTIAL, strong = MANAGED + YES
         weak    = [k for k, v in answers_labeled.items() if v in ('NO', 'BASIC')]
         partial = [k for k, v in answers_labeled.items() if v == 'PARTIAL']
         strong  = [k for k, v in answers_labeled.items() if v in ('MANAGED', 'YES')]
 
-        if level == 5:
-            summary = (
-                f'The requirement {code} – {title} has achieved the highest maturity level '
-                f'(Level 5: Optimized) with a score of {score:.0f}%. '
-                f'All dimensions are fully implemented and continuously improved.'
-            )
-        else:
-            summary = (
-                f'The requirement {code} – {title} is currently at maturity Level {level} ({label}) '
-                f'with a score of {score:.0f}%, requiring {gap} level(s) of improvement '
-                f'to reach full optimization.'
-            )
-
-        # ✅ FIX: current_issues plus précis selon les 5 niveaux
         current_issues = []
-        if weak:
-            no_dims    = [k for k in weak if answers_labeled[k] == 'NO']
-            basic_dims = [k for k in weak if answers_labeled[k] == 'BASIC']
-            if no_dims:
-                current_issues.append(
-                    f'Critical gaps in: {", ".join(no_dims)} — not implemented, immediate action required'
-                )
-            if basic_dims:
-                current_issues.append(
-                    f'Initial stage in: {", ".join(basic_dims)} — ad-hoc practices only, formalization needed'
-                )
-        if partial:
-            current_issues.append(
-                f'Partial implementation in: {", ".join(partial)} — requires formalization and enforcement'
-            )
-        if strong:
-            managed_dims  = [k for k in strong if answers_labeled[k] == 'MANAGED']
-            yes_dims      = [k for k in strong if answers_labeled[k] == 'YES']
-            if yes_dims:
-                current_issues.append(
-                    f'Confirmed strengths in: {", ".join(yes_dims)} — fully optimized, maintain and leverage'
-                )
-            if managed_dims:
-                current_issues.append(
-                    f'Well managed in: {", ".join(managed_dims)} — focus on continuous improvement'
-                )
 
         roadmap = build_roadmap(title, code, level, weak, partial, strong)
 
         return jsonify({
-            'summary':        summary,
+            'summary': 'test',
             'current_issues': current_issues,
-            'roadmap':        roadmap,
-            'current_level':  level,
-            'label':          label,
-            'source':         'ml_local',
+            'roadmap': roadmap,
+            'current_level': level,
+            'label': label,
+            'source': 'ml_local',
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
 # ─── Retrain ──────────────────────────────────────────────────────────────────
 
 @app.route('/retrain', methods=['POST'])

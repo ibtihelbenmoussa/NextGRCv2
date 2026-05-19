@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -117,18 +116,20 @@ function StepBar({ current }: { current: number }) {
 function StepBasic({
   onNext,
   frameworkCounts,
+  initialData,
 }: {
   onNext: (data: any) => void
   frameworkCounts: Record<number, number>
+  initialData?: any
 }) {
   const [frameworks, setFrameworks] = useState<Framework[]>([])
   const [selectedFramework, setSelectedFramework] = useState<Framework | null>(null)
   const [form, setForm] = useState({
-    code: '',
-    name: '',
-    description: '',
-    start_date: '',
-    end_date: '',
+    code: initialData?.code ?? '',
+    name: initialData?.name ?? '',
+    description: initialData?.description ?? '',
+    start_date: initialData?.start_date ?? '',
+    end_date: initialData?.end_date ?? '',
   })
   const [startDateOpen, setStartDateOpen] = useState(false)
   const [endDateOpen, setEndDateOpen] = useState(false)
@@ -137,6 +138,11 @@ function StepBasic({
   useEffect(() => {
     axios.get('/gap-assessment/frameworks').then(res => {
       setFrameworks(res.data.frameworks)
+      // Restore previously selected framework when coming back from step 2
+      if (initialData?.framework?.id) {
+        const fw = res.data.frameworks.find((f: Framework) => f.id === initialData.framework.id)
+        if (fw) setSelectedFramework(fw)
+      }
     })
   }, [])
 
@@ -294,81 +300,8 @@ function StepBasic({
 }
 
 // ─────────────────────────────────────────────
-// Step 2 — Requirements (redesigned)
+// Step 2 — Requirements
 // ─────────────────────────────────────────────
-
-function RequirementRow({
-  req,
-  selected,
-  onToggle,
-  index,
-}: {
-  req: Requirement
-  selected: boolean
-  onToggle: () => void
-  index: number
-}) {
-  const qCount = req.questions?.length ?? req.questions_count ?? 0
-
-  return (
-    <div
-      onClick={onToggle}
-      className={cn(
-        'group relative flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all duration-150',
-        'hover:shadow-sm',
-        selected
-          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
-          : 'border-border bg-card hover:border-border/80 hover:bg-muted/30',
-      )}
-      style={{ animationDelay: `${index * 30}ms` }}
-    >
-      {/* Checkbox */}
-      <div
-        className={cn(
-          'flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-150',
-          selected
-            ? 'bg-primary border-primary'
-            : 'border-muted-foreground/30 group-hover:border-muted-foreground/60',
-        )}
-      >
-        {selected && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
-      </div>
-
-      {/* Code badge */}
-      <span
-        className={cn(
-          'flex-shrink-0 text-xs font-mono font-bold px-2 py-1 rounded-md tracking-wide transition-colors',
-          selected
-            ? 'bg-primary/15 text-primary dark:bg-primary/25'
-            : 'bg-muted text-muted-foreground',
-        )}
-      >
-        {req.code}
-      </span>
-
-      {/* Title */}
-      <span
-        className={cn(
-          'flex-1 text-sm font-medium leading-snug min-w-0 truncate transition-colors',
-          selected ? 'text-foreground' : 'text-foreground/80',
-        )}
-      >
-        {req.title}
-      </span>
-
-      {/* Questions count */}
-      <span
-        className={cn(
-          'flex-shrink-0 flex items-center gap-1 text-xs font-mono transition-colors',
-          selected ? 'text-primary/70' : 'text-muted-foreground',
-        )}
-      >
-        <HelpCircle size={11} />
-        {qCount}Q
-      </span>
-    </div>
-  )
-}
 
 function StepRequirements({
   framework,
@@ -432,7 +365,6 @@ function StepRequirements({
 
       {/* Selection stats bar */}
       <div className="flex items-center gap-3 px-1">
-        {/* Select all toggle */}
         <button
           onClick={toggleAll}
           className={cn(
@@ -454,7 +386,6 @@ function StepRequirements({
           {allSelected ? 'Deselect all' : 'Select all'}
         </button>
 
-        {/* Stats pills */}
         {selected.length > 0 ? (
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
@@ -470,7 +401,6 @@ function StepRequirements({
           <span className="text-xs text-muted-foreground">No requirements selected</span>
         )}
 
-        {/* Search */}
         <div className="relative ml-auto max-w-xs w-full">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -492,16 +422,13 @@ function StepRequirements({
 
       {/* Requirements list */}
       <div className="rounded-xl border border-border overflow-hidden bg-card">
-
-        {/* List header */}
         <div className="grid grid-cols-[20px_80px_1fr_40px] gap-4 px-4 py-2 border-b border-border bg-muted/30">
           <div />
           <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Code</span>
           <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Title</span>
-          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right">Q.</span>
+          <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground text-right">Questions</span>
         </div>
 
-        {/* Rows */}
         <div className="divide-y divide-border/60">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center">
@@ -511,7 +438,7 @@ function StepRequirements({
                 Clear search
               </button>
             </div>
-          ) : filtered.map((req, idx) => {
+          ) : filtered.map((req) => {
             const qCount = req.questions?.length ?? req.questions_count ?? 0
             const isSelected = selected.includes(req.id)
             return (
@@ -520,12 +447,9 @@ function StepRequirements({
                 onClick={() => toggle(req.id)}
                 className={cn(
                   'group grid grid-cols-[20px_80px_1fr_40px] gap-4 px-4 py-3 cursor-pointer transition-all duration-100',
-                  isSelected
-                    ? 'bg-primary/5 dark:bg-primary/10'
-                    : 'hover:bg-muted/40',
+                  isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                 )}
               >
-                {/* Checkbox */}
                 <div className="flex items-center justify-center">
                   <div
                     className={cn(
@@ -538,22 +462,16 @@ function StepRequirements({
                     {isSelected && <Check size={9} className="text-primary-foreground" strokeWidth={3} />}
                   </div>
                 </div>
-
-                {/* Code */}
                 <div className="flex items-center">
                   <span
                     className={cn(
                       'text-xs font-mono font-bold px-1.5 py-0.5 rounded tracking-wide transition-colors',
-                      isSelected
-                        ? 'bg-primary/15 text-primary dark:bg-primary/25'
-                        : 'bg-muted text-muted-foreground',
+                      isSelected ? 'bg-primary/15 text-primary dark:bg-primary/25' : 'bg-muted text-muted-foreground',
                     )}
                   >
                     {req.code}
                   </span>
                 </div>
-
-                {/* Title */}
                 <div className="flex items-center min-w-0">
                   <span
                     className={cn(
@@ -564,15 +482,8 @@ function StepRequirements({
                     {req.title}
                   </span>
                 </div>
-
-                {/* Question count */}
                 <div className="flex items-center justify-end">
-                  <span
-                    className={cn(
-                      'text-xs font-mono transition-colors',
-                      isSelected ? 'text-primary/70' : 'text-muted-foreground',
-                    )}
-                  >
+                  <span className={cn('text-xs font-mono transition-colors', isSelected ? 'text-primary/70' : 'text-muted-foreground')}>
                     {qCount}
                   </span>
                 </div>
@@ -581,7 +492,6 @@ function StepRequirements({
           })}
         </div>
 
-        {/* Footer summary */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20">
             <span className="text-xs font-mono text-muted-foreground">
@@ -778,6 +688,7 @@ export default function CreateGapAssessment({ frameworkCounts = {} }: Props) {
         {step === 1 && (
           <StepBasic
             frameworkCounts={frameworkCounts}
+            initialData={formData}
             onNext={data => { setFormData(data); setStep(2) }}
           />
         )}

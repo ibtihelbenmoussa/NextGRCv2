@@ -20,13 +20,16 @@ import {
   ChevronLeft, Calendar as CalendarIcon, ListTodo, FileText,
   Tag as TagIcon, FileUp, Paperclip, X, Upload, File,
   AlertCircle, Download, Trash2, ShieldCheck, Lightbulb,
-  BookOpen, CheckCircle2, Info,
+  BookOpen, CheckCircle2, Info, Layers, Search, Pencil, Check, Plus,
 } from 'lucide-react'
 import { MultiSelect } from '@/components/ui/multi-select'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Framework { id: number; code: string; name: string }
 interface Process   { id: number; name: string; code?: string }
 interface Tag       { id: number; name: string }
+interface Domain    { id: number; name: string }
 interface GapQuestion { id?: number; text: string }
 
 interface ExistingDocument {
@@ -40,6 +43,7 @@ interface Requirement {
   description: string | null; type: string; status: string
   priority: string; frequency: string
   framework_id: number | null; process_id: number | null
+  domain_id: number | null
   effective_date: string | null; completion_date: string | null
   compliance_level: string; attachments: string | null
   auto_validate: boolean; documents?: ExistingDocument[]
@@ -50,11 +54,14 @@ interface PageProps {
   frameworks: Framework[]
   processes: Process[]
   tags: Tag[]
+  domains: Domain[]
   selectedTagIds: string[]
   gapQuestions: GapQuestion[]
   flash?: { success?: string; error?: string }
   [key: string]: any
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const COMPLIANCE_LEVELS = [
   { value: 'Mandatory',   label: 'Mandatory',   icon: ShieldCheck, color: 'red'   as const, description: 'Required by law, regulation, or binding standard.', badge: 'Required' },
@@ -63,13 +70,25 @@ const COMPLIANCE_LEVELS = [
 ]
 
 const LEVEL_COLORS = {
-  red:   { border: 'border-red-200 dark:border-red-800',   borderActive: 'border-red-500 dark:border-red-400',   bg: 'bg-red-50 dark:bg-red-950',   icon: 'text-red-600 dark:text-red-400',   iconBg: 'bg-red-100 dark:bg-red-900',   badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
+  red:   { border: 'border-red-200 dark:border-red-800',    borderActive: 'border-red-500 dark:border-red-400',    bg: 'bg-red-50 dark:bg-red-950',    icon: 'text-red-600 dark:text-red-400',    iconBg: 'bg-red-100 dark:bg-red-900',    badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
   amber: { border: 'border-amber-200 dark:border-amber-800', borderActive: 'border-amber-500 dark:border-amber-400', bg: 'bg-amber-50 dark:bg-amber-950', icon: 'text-amber-600 dark:text-amber-400', iconBg: 'bg-amber-100 dark:bg-amber-900', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
-  teal:  { border: 'border-teal-200 dark:border-teal-800',  borderActive: 'border-teal-500 dark:border-teal-400',  bg: 'bg-teal-50 dark:bg-teal-950',  icon: 'text-teal-600 dark:text-teal-400',  iconBg: 'bg-teal-100 dark:bg-teal-900',  badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
+  teal:  { border: 'border-teal-200 dark:border-teal-800',   borderActive: 'border-teal-500 dark:border-teal-400',   bg: 'bg-teal-50 dark:bg-teal-950',   icon: 'text-teal-600 dark:text-teal-400',   iconBg: 'bg-teal-100 dark:bg-teal-900',   badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
 }
 
 const MAX_SIZE_MB = 10
 const MAX_FILES   = 10
+
+// ─── CSRF helper ─────────────────────────────────────────────────────────────
+
+const getCsrfToken = () =>
+  decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '')
+
+const jsonHeaders = () => ({
+  'Content-Type': 'application/json',
+  'X-XSRF-TOKEN': getCsrfToken(),
+})
+
+// ─── Doc helpers ─────────────────────────────────────────────────────────────
 
 interface DocEntry { file: File; category: string; description: string; error?: string }
 
@@ -80,9 +99,9 @@ function formatBytes(bytes: number): string {
 }
 
 function fileIcon(mimeType: string) {
-  if (mimeType.startsWith('image/'))                            return '🖼️'
-  if (mimeType === 'application/pdf')                           return '📄'
-  if (mimeType.includes('word'))                                return '📝'
+  if (mimeType.startsWith('image/'))                             return '🖼️'
+  if (mimeType === 'application/pdf')                            return '📄'
+  if (mimeType.includes('word'))                                 return '📝'
   if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊'
   return '📎'
 }
@@ -93,6 +112,245 @@ const toArray = <T,>(val: T[] | Record<string, T> | null | undefined): T[] => {
   return Object.values(val)
 }
 
+// ─── DomainDialog (identique à Create.tsx) ───────────────────────────────────
+
+function DomainDialog({
+  open, onOpenChange,
+  domains, selectedId,
+  onSelect, onAdd, onEdit, onDelete,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  domains: Domain[]; selectedId: string
+  onSelect: (item: Domain | null) => void
+  onAdd: (name: string) => void
+  onEdit: (item: Domain, newName: string) => void
+  onDelete: (item: Domain) => void
+}) {
+  const [search,       setSearch]       = useState('')
+  const [newName,      setNewName]      = useState('')
+  const [editingItem,  setEditingItem]  = useState<Domain | null>(null)
+  const [editingName,  setEditingName]  = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<Domain | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setSearch(''); setNewName(''); setEditingItem(null)
+      setEditingName(''); setConfirmDelete(null)
+      setTimeout(() => searchRef.current?.focus(), 80)
+    }
+  }, [open])
+
+  if (!open) return null
+
+  const filtered = domains.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
+  const selected = domains.find(d => d.id.toString() === selectedId) ?? null
+
+  const handleAdd = () => {
+    const t = newName.trim(); if (!t) return; onAdd(t); setNewName('')
+  }
+  const handleEdit = () => {
+    if (!editingItem || !editingName.trim()) return
+    onEdit(editingItem, editingName.trim())
+    setEditingItem(null); setEditingName('')
+  }
+  const handleDelete = () => {
+    if (!confirmDelete) return; onDelete(confirmDelete); setConfirmDelete(null)
+  }
+
+  const accentFrom = '#f59e0b'; const accentTo = '#d97706'
+
+  return (
+    <>
+      {/* Confirm delete sub-modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border bg-background shadow-xl p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Delete domain?</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <span className="font-medium text-foreground">"{confirmDelete.name}"</span> will be permanently removed.
+                </p>
+              </div>
+              <div className="flex gap-2 w-full mt-2">
+                <button onClick={() => setConfirmDelete(null)}
+                  className="flex-1 py-2 text-sm font-medium rounded-lg border border-input bg-background hover:bg-accent transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleDelete}
+                  className="flex-1 py-2 text-sm font-semibold rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={() => onOpenChange(false)} />
+
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-lg flex flex-col max-h-[85vh] rounded-2xl border bg-background shadow-2xl overflow-hidden">
+
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0"
+                style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}>
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-foreground">Manage Domain</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Select one domain for this requirement</p>
+              </div>
+            </div>
+            <button onClick={() => onOpenChange(false)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ml-4">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Selected pill */}
+          {selected && (
+            <div className="px-6 pt-3 pb-0 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border"
+                style={{ background: `${accentFrom}15`, borderColor: `${accentFrom}35`, color: accentFrom }}>
+                {selected.name}
+                <button onClick={() => onSelect(null)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="px-6 pt-3 pb-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search domains..."
+                className="w-full pl-9 pr-9 py-2 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/50 transition-all" />
+              {search && (
+                <button onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between mt-1.5 px-0.5">
+              <span className="text-xs text-muted-foreground">
+                {filtered.length} domain{filtered.length !== 1 ? 's' : ''}
+              </span>
+              {selected && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: `${accentFrom}15`, color: accentFrom }}>
+                  1 selected
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto px-6 pb-2">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Search className="h-8 w-8 mb-2 opacity-20" />
+                <p className="text-sm">No results for "{search}"</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filtered.map(item => {
+                  const isSelected = item.id.toString() === selectedId
+                  const isEditing  = editingItem?.id === item.id
+                  return (
+                    <div key={item.id} className={cn(
+                      'group flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all',
+                      isSelected ? 'border-input bg-accent/40' : 'border-transparent hover:border-input hover:bg-accent/30'
+                    )}>
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input value={editingName} onChange={e => setEditingName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleEdit()
+                              if (e.key === 'Escape') { setEditingItem(null); setEditingName('') }
+                            }}
+                            className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                            autoFocus />
+                          <button onClick={handleEdit}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
+                            style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}>
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => { setEditingItem(null); setEditingName('') }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="flex items-center gap-3 flex-1 text-left min-w-0"
+                            onClick={() => onSelect(isSelected ? null : item)}>
+                            <div className={cn(
+                              'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                              isSelected ? 'border-transparent' : 'border-input bg-background'
+                            )} style={isSelected ? { background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`, borderColor: accentFrom } : {}}>
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <span className={cn('text-sm font-medium truncate', isSelected ? 'text-foreground' : 'text-foreground/80')}>
+                              {item.name}
+                            </span>
+                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex-shrink-0">
+                            <button onClick={() => { setEditingItem(item); setEditingName(item.name) }}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button onClick={() => setConfirmDelete(item)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t bg-muted/30 space-y-3">
+            <div className="flex gap-2">
+              <input value={newName} onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                placeholder="Add new domain..."
+                className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/50 transition-all" />
+              <button onClick={handleAdd} disabled={!newName.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5 transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}>
+                <Plus className="h-4 w-4" />Add
+              </button>
+            </div>
+            <button onClick={() => onOpenChange(false)}
+              className="w-full py-2.5 rounded-lg text-sm font-semibold border border-input bg-background hover:bg-accent text-foreground transition-colors">
+              Done{selected ? ' — 1 selected' : ''}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function EditRequirement() {
   const { props } = usePage<PageProps>()
   const { requirement, frameworks = [] } = props
@@ -100,6 +358,7 @@ export default function EditRequirement() {
   const tags: Tag[]              = toArray(props.tags)
   const selectedTagIds: string[] = toArray(props.selectedTagIds)
   const existingDocs: ExistingDocument[] = toArray(requirement?.documents)
+  const allDomains: Domain[]     = toArray(props.domains)
 
   const formatDateString = (date: string | null) => (date ? date.split('T')[0] : '')
 
@@ -113,6 +372,7 @@ export default function EditRequirement() {
     frequency:        requirement?.frequency        || '',
     framework_id:     requirement?.framework_id?.toString() || '',
     process_id:       requirement?.process_id?.toString()   || '',
+    domain_id:        requirement?.domain_id?.toString()    || '',  // ← nouveau
     tags:             selectedTagIds,
     effective_date:   formatDateString(requirement?.effective_date),
     completion_date:  formatDateString(requirement?.completion_date),
@@ -121,7 +381,52 @@ export default function EditRequirement() {
     auto_validate:    requirement?.auto_validate    ?? false,
   })
 
-  // ── Gap Questions state ──────────────────────────────────────────────────
+  // ── Domain state ─────────────────────────────────────────────────────────
+  const [domainsList,      setDomainsList]      = useState<Domain[]>(allDomains)
+  const [domainDialogOpen, setDomainDialogOpen] = useState(false)
+
+  const selectedDomain = domainsList.find(d => d.id.toString() === data.domain_id) ?? null
+
+  const refreshDomains = async () => {
+    try {
+      const res  = await fetch('/domains', { headers: jsonHeaders() })
+      const json = await res.json()
+      setDomainsList(json.domains ?? [])
+    } catch (e) { console.error('Failed to refresh domains', e) }
+  }
+
+  const handleAddDomain = async (name: string) => {
+    try {
+      const res  = await fetch('/domains', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ name }) })
+      const json = await res.json()
+      setDomainsList(json.domains ?? [])
+      if (json.domain) setData('domain_id', json.domain.id.toString())
+    } catch (e) { console.error('Failed to create domain', e) }
+  }
+
+  const handleEditDomain = async (item: Domain, newName: string) => {
+    try {
+      const res = await fetch(`/domains/${item.id}`, { method: 'PUT', headers: jsonHeaders(), body: JSON.stringify({ name: newName }) })
+      if (res.ok) await refreshDomains()
+    } catch (e) { console.error('Failed to edit domain', e) }
+  }
+
+  const handleDeleteDomain = async (item: Domain) => {
+    try {
+      const res = await fetch(`/domains/${item.id}`, { method: 'DELETE', headers: jsonHeaders() })
+      if (res.ok) {
+        await refreshDomains()
+        if (data.domain_id === item.id.toString()) setData('domain_id', '')
+      }
+    } catch (e) { console.error('Failed to delete domain', e) }
+  }
+
+  const handleSelectDomain = (item: Domain | null) => {
+    setData('domain_id', item ? item.id.toString() : '')
+    setDomainDialogOpen(false)
+  }
+
+  // ── Gap Questions ────────────────────────────────────────────────────────
   const [gapQuestions, setGapQuestions] = useState<{ text: string }[]>(
     toArray(props.gapQuestions).map(q => ({ text: q.text }))
   )
@@ -216,17 +521,15 @@ export default function EditRequirement() {
     formData.append('frequency',        data.frequency)
     formData.append('framework_id',     data.framework_id)
     formData.append('process_id',       data.process_id === 'none' ? '' : (data.process_id || ''))
+    formData.append('domain_id',        data.domain_id ?? '')  // ← nouveau
     formData.append('effective_date',   data.effective_date)
     formData.append('completion_date',  data.completion_date)
     formData.append('compliance_level', data.compliance_level)
     formData.append('attachments',      data.attachments)
     formData.append('auto_validate',    data.auto_validate ? '1' : '0')
     data.tags.forEach(t => formData.append('tags[]', t))
-
-    // ✅ Gap Questions
     formData.append('gap_questions', JSON.stringify(gapQuestions))
 
-    // Documents
     let uploadIndex = 0
     docs.forEach(d => {
       if (d.error) return
@@ -243,16 +546,18 @@ export default function EditRequirement() {
     })
   }
 
-  const validDocs  = docs.filter(d => !d.error)
-  const hasInvalid = docs.some(d => !!d.error)
+  const validDocs   = docs.filter(d => !d.error)
+  const hasInvalid  = docs.some(d => !!d.error)
   const docToDelete = existingDocs.find(d => d.id === confirmDeleteId)
 
   const steps = [
-    { label: 'Basic info', icon: ListTodo },
-    { label: 'Details',    icon: FileText },
-    { label: 'Documents',  icon: FileUp },
-    { label: 'Gap Questions', icon: ListTodo },
+    { label: 'Basic info',      icon: ListTodo },
+    { label: 'Details',         icon: FileText },
+    { label: 'Documents',       icon: FileUp },
+    { label: 'Gap Questions',   icon: ListTodo },
   ]
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <AppLayout breadcrumbs={[
@@ -274,7 +579,7 @@ export default function EditRequirement() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm delete dialog */}
+      {/* Confirm delete doc dialog */}
       <Dialog open={!!confirmDeleteId} onOpenChange={() => setConfirmDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete document?</DialogTitle></DialogHeader>
@@ -376,7 +681,9 @@ export default function EditRequirement() {
                 <Label className="text-sm text-muted-foreground">Process (optional)</Label>
                 <Select value={data.process_id || 'none'} onValueChange={v => setData('process_id', v === 'none' ? '' : v)}
                   disabled={!data.framework_id || loadingProcesses}>
-                  <SelectTrigger><SelectValue placeholder={!data.framework_id ? 'Select a framework first' : loadingProcesses ? 'Loading…' : 'No specific process'} /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder={!data.framework_id ? 'Select a framework first' : loadingProcesses ? 'Loading…' : 'No specific process'} />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No specific process</SelectItem>
                     {processes.map(p => (
@@ -473,6 +780,7 @@ export default function EditRequirement() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+
               <div className="space-y-1.5">
                 <Label className="text-sm">Description</Label>
                 <Textarea placeholder="Detailed explanation…" value={data.description}
@@ -490,8 +798,11 @@ export default function EditRequirement() {
                     return (
                       <button key={level.value} type="button"
                         onClick={() => { setData('compliance_level', level.value); clearErrors('compliance_level') }}
-                        className={cn('relative text-left rounded-xl border-2 p-4 transition-all duration-150 focus:outline-none',
-                          colors.border, isSelected ? [colors.borderActive, colors.bg] : 'border-border bg-background hover:bg-muted/40')}>
+                        className={cn(
+                          'relative text-left rounded-xl border-2 p-4 transition-all duration-150 focus:outline-none',
+                          colors.border,
+                          isSelected ? [colors.borderActive, colors.bg] : 'border-border bg-background hover:bg-muted/40'
+                        )}>
                         {isSelected && <CheckCircle2 className={cn('absolute top-3 right-3 h-4 w-4', colors.icon)} />}
                         <div className={cn('inline-flex items-center justify-center rounded-lg p-2 mb-3', colors.iconBg)}>
                           <Icon className={cn('h-4 w-4', colors.icon)} />
@@ -513,13 +824,41 @@ export default function EditRequirement() {
                   className={cn(errors.effective_date && 'border-destructive')} />
                 {errors.effective_date
                   ? <p className="text-xs text-destructive">{errors.effective_date}</p>
-                  : <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Info className="h-3 w-3 shrink-0" />You can adjust the effective date manually in edit mode.</p>}
+                  : <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Info className="h-3 w-3 shrink-0" />You can adjust the effective date manually in edit mode.
+                    </p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-sm flex items-center gap-1.5"><TagIcon className="h-3.5 w-3.5" />Tags</Label>
                 <MultiSelect options={tags.map(tag => ({ value: tag.id.toString(), label: tag.name }))}
                   value={data.tags} onValueChange={selected => setData('tags', selected)} placeholder="Select relevant tags…" />
+              </div>
+
+              {/* ── Domain ── */}
+              <div className="space-y-1.5">
+                <Label className="text-sm flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5" />Domain
+                </Label>
+                <Button type="button" variant="outline"
+                  className="w-full justify-start text-left font-normal h-10"
+                  onClick={() => setDomainDialogOpen(true)}>
+                  <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
+                  {selectedDomain ? selectedDomain.name : 'Select a domain…'}
+                </Button>
+                {selectedDomain && (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border"
+                      style={{ background: '#f59e0b20', borderColor: '#f59e0b45', color: '#f59e0b' }}>
+                      {selectedDomain.name}
+                      <button type="button" onClick={() => setData('domain_id', '')}
+                        className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Associate this requirement with a business domain.</p>
               </div>
 
               <div className="space-y-1.5">
@@ -574,12 +913,16 @@ export default function EditRequirement() {
               )}
 
               <div>
-                {existingDocs.length > 0 && <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Add new documents</p>}
+                {existingDocs.length > 0 && (
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Add new documents</p>
+                )}
                 <div onDragOver={e => { e.preventDefault(); setDragOver(true) }}
                   onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={cn('flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 cursor-pointer transition-colors select-none',
-                    dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/40')}>
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 cursor-pointer transition-colors select-none',
+                    dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/40'
+                  )}>
                   <div className="rounded-full bg-muted p-3"><Upload className="h-6 w-6 text-muted-foreground" /></div>
                   <div className="text-center">
                     <p className="text-sm font-medium">Drop files here or <span className="text-primary underline underline-offset-2">browse</span></p>
@@ -631,9 +974,7 @@ export default function EditRequirement() {
                   </div>
                   <div>
                     <CardTitle className="text-base">Gap Assessment Questions</CardTitle>
-                    <CardDescription className="text-xs">
-                      Define the questions used to evaluate maturity for this requirement
-                    </CardDescription>
+                    <CardDescription className="text-xs">Define the questions used to evaluate maturity for this requirement</CardDescription>
                   </div>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addGapQuestion}>
@@ -652,14 +993,10 @@ export default function EditRequirement() {
                 gapQuestions.map((q, index) => (
                   <div key={index} className="relative rounded-xl border border-border/60 bg-muted/20 p-5 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Question {index + 1}
-                      </span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Question {index + 1}</span>
                       <Button type="button" variant="ghost" size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeGapQuestion(index)}>
-                        ✕
-                      </Button>
+                        onClick={() => removeGapQuestion(index)}>✕</Button>
                     </div>
                     <Textarea
                       placeholder="e.g. Are access controls formally documented and reviewed?"
@@ -695,6 +1032,18 @@ export default function EditRequirement() {
 
         </form>
       </div>
+
+      {/* Domain Dialog */}
+      <DomainDialog
+        open={domainDialogOpen}
+        onOpenChange={setDomainDialogOpen}
+        domains={domainsList}
+        selectedId={data.domain_id}
+        onSelect={handleSelectDomain}
+        onAdd={handleAddDomain}
+        onEdit={handleEditDomain}
+        onDelete={handleDeleteDomain}
+      />
     </AppLayout>
   )
 }
