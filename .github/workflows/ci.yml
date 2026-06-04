@@ -12,7 +12,7 @@ jobs:
     name: 🐘 Build Laravel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -32,7 +32,7 @@ jobs:
     name: 🐳 Build Docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build Docker Compose
         run: docker compose build
@@ -41,7 +41,7 @@ jobs:
     name: 🐍 Build Flask ML
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -57,11 +57,14 @@ jobs:
     needs: [build-laravel, build-docker, build-flask]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Deploy
         run: |
-          cd ~/NextGRCv2
-          git pull origin main
-          docker-compose down
-          docker-compose up -d --build
+          cd $GITHUB_WORKSPACE
+          docker compose down --remove-orphans
+          docker compose build
+          nohup docker compose up -d > /tmp/deploy.log 2>&1
+          sleep 20
+          docker compose ps
+          echo "✅ Deploy terminé !"
