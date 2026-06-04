@@ -63,5 +63,5 @@ jobs:
         run: |
           cd ~/NextGRCv2
           git pull origin main
-          docker compose down
+          docker-compose down
           docker compose up -d --build
