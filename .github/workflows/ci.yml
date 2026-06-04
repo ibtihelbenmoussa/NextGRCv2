@@ -53,17 +53,15 @@ jobs:
 
   deploy:
     name: 🚀 Deploy to VM
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build-laravel, build-docker, build-flask]
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd ~/NextGRCv2
-            git pull origin main
-            docker compose down
-            docker compose up -d --build
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Deploy
+        run: |
+          cd ~/NextGRCv2
+          git pull origin main
+          docker compose down
+          docker compose up -d --build
