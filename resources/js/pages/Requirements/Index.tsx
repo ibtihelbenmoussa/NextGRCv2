@@ -75,7 +75,6 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd'
 import { cn } from '@/lib/utils'
-import { ImportAIModal } from '@/components/ImportAIModal'   // ← NOUVEAU
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -751,15 +750,7 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
           {/* ── Boutons header ── */}
           <div className="flex flex-wrap items-center gap-3">
 
-            {/* ← NOUVEAU : Bouton Import with AI */}
-            <Button
-              variant="outline"
-              onClick={() => setAiModalOpen(true)}
-              className="gap-2 border-primary/40 text-primary hover:bg-primary/5"
-            >
-              <Sparkles className="h-4 w-4" />
-              Import with AI
-            </Button>
+           
 
             {/* Bouton existant */}
             <Button asChild>
@@ -966,12 +957,7 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ← NOUVEAU : Modal Import AI */}
-      <ImportAIModal
-        open={aiModalOpen}
-        onClose={() => setAiModalOpen(false)}
-        frameworks={frameworksForImport}
-      />
+      
 
     </AppLayout>
   )

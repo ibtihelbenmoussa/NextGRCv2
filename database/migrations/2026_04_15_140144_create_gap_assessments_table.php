@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
         // 1. Modifier gap_assessments — seulement les colonnes qui n'existent pas
@@ -36,12 +35,12 @@ return new class extends Migration
             if (!Schema::hasColumn('gap_assessments', 'is_deleted')) {
                 $table->tinyInteger('is_deleted')->default(0);
             }
-             if (!Schema::hasColumn('gap_assessments', 'score')) {
-        $table->unsignedSmallInteger('score')->nullable()->after('end_date');
-    }
-    if (!Schema::hasColumn('gap_assessments', 'maturity_level')) {
-        $table->unsignedTinyInteger('maturity_level')->nullable()->after('score');
-    }
+            if (!Schema::hasColumn('gap_assessments', 'score')) {
+                $table->unsignedSmallInteger('score')->nullable()->after('end_date');
+            }
+            if (!Schema::hasColumn('gap_assessments', 'maturity_level')) {
+                $table->unsignedTinyInteger('maturity_level')->nullable()->after('score');
+            }
         });
 
         // 2. Table pivot gap_assessment_requirements
@@ -54,7 +53,7 @@ return new class extends Migration
 
                 $table->foreign('gap_assessment_id')->references('id')->on('gap_assessments')->onDelete('cascade');
                 $table->foreign('requirement_id')->references('id')->on('requirements')->onDelete('cascade');
-                $table->unique(['gap_assessment_id', 'requirement_id']);
+                $table->unique(['gap_assessment_id', 'requirement_id'], 'gar_unique');
             });
         }
 
@@ -84,12 +83,19 @@ return new class extends Migration
 
         Schema::table('gap_assessments', function (Blueprint $table) {
             // Drop foreign keys first
-            try { $table->dropForeign(['organization_id']); } catch (\Exception $e) {}
-            try { $table->dropForeign(['framework_id']); } catch (\Exception $e) {}
+            try {
+                $table->dropForeign(['organization_id']);
+            } catch (\Exception $e) {
+            }
+            try {
+                $table->dropForeign(['framework_id']);
+            } catch (\Exception $e) {
+            }
 
             $cols = ['organization_id', 'framework_id', 'code', 'name', 'description', 'start_date', 'end_date', 'is_deleted'];
             $existing = array_filter($cols, fn($c) => Schema::hasColumn('gap_assessments', $c));
-            if ($existing) $table->dropColumn(array_values($existing));
+            if ($existing)
+                $table->dropColumn(array_values($existing));
         });
     }
 };

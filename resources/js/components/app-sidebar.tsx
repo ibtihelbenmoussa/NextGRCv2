@@ -36,7 +36,7 @@ const data = {
             isActive: true,
         },
         {
-            title: 'Audit Universe',
+            title: 'Master Data',
             url: '/audit-universe',
             icon: Network,
             items: [
@@ -47,16 +47,17 @@ const data = {
                 { title: 'BPMN Diagrams', url: '/bpmn' },
             ],
         },
-        {
-            title: 'Risk Management',
-            url: '/risks',
-            icon: AlertTriangle,
-            items: [
-                { title: 'Risks', url: '/risks' },
-                { title: 'Controls', url: '/controls' },
-                /* { title: 'Predefined Tests', url: '/predefined-tests' }, */
-            ],
-        },
+   /*
+{
+    title: 'Risk Management',
+    url: '/risks',
+    icon: AlertTriangle,
+    items: [
+        { title: 'Risks', url: '/risks' },
+        { title: 'Controls', url: '/controls' },
+    ],
+},
+*/
  /*        {
             title: 'Audit Management',
             url: '/audit-missions',

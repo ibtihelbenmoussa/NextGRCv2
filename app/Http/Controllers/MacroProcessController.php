@@ -195,7 +195,7 @@ class MacroProcessController extends Controller
             }
         }
 
-        return redirect()->route('macro-processes.show', $macroProcess)
+        return redirect()->route('macro-processes.index')
             ->with('success', 'Macro Process created successfully.');
     }
 
@@ -329,7 +329,7 @@ class MacroProcessController extends Controller
             }
         }
 
-        return redirect()->route('macro-processes.show', $macroProcess)
+        return redirect()->route('macro-processes.index')
             ->with('success', 'Macro Process updated successfully.');
     }
 

@@ -13,8 +13,8 @@ return new class extends Migration
 
             $table->unsignedBigInteger('organization_id');
 
-            //$table->string('code')->unique();
-                        $table->unique(['code', 'organization_id'], 'frameworks_code_org_unique');
+            $table->string('code');
+            $table->unique(['code', 'organization_id'], 'frameworks_code_org_unique');
 
             $table->string('name');
             $table->string('version')->nullable();
@@ -44,10 +44,7 @@ return new class extends Migration
             $table->string('language')->nullable();
             $table->text('url_reference')->nullable();
 
-            // ✅ Tags multiple
             $table->json('tags')->nullable();
-
-            // ✅ Jurisdictions multiple
             $table->json('jurisdictions')->nullable();
 
             $table->boolean('is_deleted')->default(false);

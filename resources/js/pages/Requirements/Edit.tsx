@@ -112,7 +112,7 @@ const toArray = <T,>(val: T[] | Record<string, T> | null | undefined): T[] => {
   return Object.values(val)
 }
 
-// ─── DomainDialog (identique à Create.tsx) ───────────────────────────────────
+// ─── DomainDialog ─────────────────────────────────────────────────────────────
 
 function DomainDialog({
   open, onOpenChange,
@@ -126,10 +126,10 @@ function DomainDialog({
   onEdit: (item: Domain, newName: string) => void
   onDelete: (item: Domain) => void
 }) {
-  const [search,       setSearch]       = useState('')
-  const [newName,      setNewName]      = useState('')
-  const [editingItem,  setEditingItem]  = useState<Domain | null>(null)
-  const [editingName,  setEditingName]  = useState('')
+  const [search,        setSearch]        = useState('')
+  const [newName,       setNewName]       = useState('')
+  const [editingItem,   setEditingItem]   = useState<Domain | null>(null)
+  const [editingName,   setEditingName]   = useState('')
   const [confirmDelete, setConfirmDelete] = useState<Domain | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -162,7 +162,6 @@ function DomainDialog({
 
   return (
     <>
-      {/* Confirm delete sub-modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -198,7 +197,6 @@ function DomainDialog({
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
         <div className="pointer-events-auto w-full max-w-lg flex flex-col max-h-[85vh] rounded-2xl border bg-background shadow-2xl overflow-hidden">
 
-          {/* Header */}
           <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0"
@@ -216,7 +214,6 @@ function DomainDialog({
             </button>
           </div>
 
-          {/* Selected pill */}
           {selected && (
             <div className="px-6 pt-3 pb-0 flex flex-wrap gap-1.5">
               <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border"
@@ -229,7 +226,6 @@ function DomainDialog({
             </div>
           )}
 
-          {/* Search */}
           <div className="px-6 pt-3 pb-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -256,12 +252,15 @@ function DomainDialog({
             </div>
           </div>
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto px-6 pb-2">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Search className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm">No results for "{search}"</p>
+                <Layers className="h-8 w-8 mb-2 opacity-20" />
+                {search
+                  ? <p className="text-sm">No results for "{search}"</p>
+                  : <p className="text-sm">No domains linked to this framework yet</p>
+                }
+                <p className="text-xs opacity-60 mt-1">Use the field below to add one</p>
               </div>
             ) : (
               <div className="space-y-1">
@@ -325,7 +324,6 @@ function DomainDialog({
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-6 py-4 border-t bg-muted/30 space-y-3">
             <div className="flex gap-2">
               <input value={newName} onChange={e => setNewName(e.target.value)}
@@ -355,10 +353,19 @@ export default function EditRequirement() {
   const { props } = usePage<PageProps>()
   const { requirement, frameworks = [] } = props
 
-  const tags: Tag[]              = toArray(props.tags)
+const [tagOptions, setTagOptions] = useState<Tag[]>(() =>
+  Array.isArray(props.tags) ? props.tags : Object.values(props.tags ?? {}) as Tag[]
+)
+  // Sync si les props changent (navigation)
+useEffect(() => {
+  const incoming: Tag[] = Array.isArray(props.tags)
+    ? props.tags
+    : Object.values(props.tags ?? {}) as Tag[]
+  if (incoming.length > 0) setTagOptions(incoming)
+}, [props.tags])
+
   const selectedTagIds: string[] = toArray(props.selectedTagIds)
   const existingDocs: ExistingDocument[] = toArray(requirement?.documents)
-  const allDomains: Domain[]     = toArray(props.domains)
 
   const formatDateString = (date: string | null) => (date ? date.split('T')[0] : '')
 
@@ -372,7 +379,7 @@ export default function EditRequirement() {
     frequency:        requirement?.frequency        || '',
     framework_id:     requirement?.framework_id?.toString() || '',
     process_id:       requirement?.process_id?.toString()   || '',
-    domain_id:        requirement?.domain_id?.toString()    || '',  // ← nouveau
+    domain_id:        requirement?.domain_id?.toString()    || '',
     tags:             selectedTagIds,
     effective_date:   formatDateString(requirement?.effective_date),
     completion_date:  formatDateString(requirement?.completion_date),
@@ -381,15 +388,23 @@ export default function EditRequirement() {
     auto_validate:    requirement?.auto_validate    ?? false,
   })
 
-  // ── Domain state ─────────────────────────────────────────────────────────
-  const [domainsList,      setDomainsList]      = useState<Domain[]>(allDomains)
+  // ── FIX : sync les tags sélectionnés si useForm s'initialise avant les props
+  useEffect(() => {
+    if (selectedTagIds.length > 0 && data.tags.length === 0) {
+      setData('tags', selectedTagIds)
+    }
+  }, [props.selectedTagIds])
+
+  // ── Domain state ──────────────────────────────────────────────────────────
+  const [domainsList,      setDomainsList]      = useState<Domain[]>(toArray(props.domains))
   const [domainDialogOpen, setDomainDialogOpen] = useState(false)
 
   const selectedDomain = domainsList.find(d => d.id.toString() === data.domain_id) ?? null
 
   const refreshDomains = async () => {
     try {
-      const res  = await fetch('/domains', { headers: jsonHeaders() })
+      const params = data.framework_id ? `?framework_id=${data.framework_id}` : ''
+      const res  = await fetch(`/domains${params}`, { headers: jsonHeaders() })
       const json = await res.json()
       setDomainsList(json.domains ?? [])
     } catch (e) { console.error('Failed to refresh domains', e) }
@@ -397,7 +412,11 @@ export default function EditRequirement() {
 
   const handleAddDomain = async (name: string) => {
     try {
-      const res  = await fetch('/domains', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ name }) })
+      const res  = await fetch('/domains', {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ name, framework_id: data.framework_id || null }),
+      })
       const json = await res.json()
       setDomainsList(json.domains ?? [])
       if (json.domain) setData('domain_id', json.domain.id.toString())
@@ -406,7 +425,11 @@ export default function EditRequirement() {
 
   const handleEditDomain = async (item: Domain, newName: string) => {
     try {
-      const res = await fetch(`/domains/${item.id}`, { method: 'PUT', headers: jsonHeaders(), body: JSON.stringify({ name: newName }) })
+      const res = await fetch(`/domains/${item.id}`, {
+        method: 'PUT',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ name: newName }),
+      })
       if (res.ok) await refreshDomains()
     } catch (e) { console.error('Failed to edit domain', e) }
   }
@@ -426,7 +449,7 @@ export default function EditRequirement() {
     setDomainDialogOpen(false)
   }
 
-  // ── Gap Questions ────────────────────────────────────────────────────────
+  // ── Gap Questions ─────────────────────────────────────────────────────────
   const [gapQuestions, setGapQuestions] = useState<{ text: string }[]>(
     toArray(props.gapQuestions).map(q => ({ text: q.text }))
   )
@@ -436,24 +459,36 @@ export default function EditRequirement() {
   const updateGapQuestion = (i: number, value: string) =>
     setGapQuestions(prev => prev.map((q, idx) => idx === i ? { text: value } : q))
 
-  // ── Processes ────────────────────────────────────────────────────────────
+  // ── Processes ─────────────────────────────────────────────────────────────
   const [processes,        setProcesses]        = useState<Process[]>(toArray(props.processes))
   const [loadingProcesses, setLoadingProcesses] = useState(false)
   const [initialFrameworkId]                    = useState(requirement?.framework_id?.toString() || '')
 
   useEffect(() => {
-    if (!data.framework_id) { setProcesses([]); setData('process_id', ''); return }
+    if (!data.framework_id) {
+      setProcesses([])
+      setDomainsList([])
+      setData(prev => ({ ...prev, process_id: '', domain_id: '' }))
+      return
+    }
     if (data.framework_id === initialFrameworkId) return
+
     setLoadingProcesses(true)
-    setData('process_id', '')
+    setData(prev => ({ ...prev, process_id: '', domain_id: '' }))
+
     router.get(route('requirements.processes-by-framework', data.framework_id), {}, {
-      preserveState: true, preserveScroll: true, only: ['processes'],
-      onSuccess: (page) => setProcesses((page.props.processes as Process[]) || []),
-      onFinish:  () => setLoadingProcesses(false),
+      preserveState: true, preserveScroll: true,
+      only: ['processes', 'domains'], // ← NE PAS inclure 'tags' ici
+      onSuccess: (page) => {
+        setProcesses((page.props.processes as Process[]) || [])
+        setDomainsList((page.props.domains as Domain[]) || [])
+        // tagOptions N'est PAS touché → les tags restent intacts
+      },
+      onFinish: () => setLoadingProcesses(false),
     })
   }, [data.framework_id])
 
-  // ── New documents ────────────────────────────────────────────────────────
+  // ── New documents ─────────────────────────────────────────────────────────
   const [docs,     setDocs]     = useState<DocEntry[]>([])
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef            = useRef<HTMLInputElement>(null)
@@ -475,11 +510,11 @@ export default function EditRequirement() {
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
   }
 
-  // ── Delete existing doc ──────────────────────────────────────────────────
+  // ── Delete existing doc ───────────────────────────────────────────────────
   const [deletingDocId,   setDeletingDocId]   = useState<number | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
-  const [flash,     setFlash]     = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [flashOpen, setFlashOpen] = useState(false)
+  const [flash,           setFlash]           = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [flashOpen,       setFlashOpen]       = useState(false)
 
   const handleDeleteExisting = (docId: number) => {
     setDeletingDocId(docId)
@@ -494,7 +529,7 @@ export default function EditRequirement() {
     )
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     clearErrors()
@@ -521,7 +556,7 @@ export default function EditRequirement() {
     formData.append('frequency',        data.frequency)
     formData.append('framework_id',     data.framework_id)
     formData.append('process_id',       data.process_id === 'none' ? '' : (data.process_id || ''))
-    formData.append('domain_id',        data.domain_id ?? '')  // ← nouveau
+    formData.append('domain_id',        data.domain_id ?? '')
     formData.append('effective_date',   data.effective_date)
     formData.append('completion_date',  data.completion_date)
     formData.append('compliance_level', data.compliance_level)
@@ -551,10 +586,10 @@ export default function EditRequirement() {
   const docToDelete = existingDocs.find(d => d.id === confirmDeleteId)
 
   const steps = [
-    { label: 'Basic info',      icon: ListTodo },
-    { label: 'Details',         icon: FileText },
-    { label: 'Documents',       icon: FileUp },
-    { label: 'Gap Questions',   icon: ListTodo },
+    { label: 'Basic info',    icon: ListTodo },
+    { label: 'Details',       icon: FileText },
+    { label: 'Documents',     icon: FileUp },
+    { label: 'Gap Questions', icon: ListTodo },
   ]
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -566,7 +601,6 @@ export default function EditRequirement() {
     ]}>
       <Head title="Edit Requirement" />
 
-      {/* Flash dialog */}
       <Dialog open={flashOpen} onOpenChange={setFlashOpen}>
         <DialogContent className={cn(flash?.type === 'success' ? 'border-green-600' : 'border-red-600')}>
           <DialogHeader>
@@ -579,7 +613,6 @@ export default function EditRequirement() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm delete doc dialog */}
       <Dialog open={!!confirmDeleteId} onOpenChange={() => setConfirmDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete document?</DialogTitle></DialogHeader>
@@ -598,7 +631,6 @@ export default function EditRequirement() {
 
       <div className="space-y-6 p-4">
 
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Edit Requirement</h1>
@@ -611,7 +643,6 @@ export default function EditRequirement() {
           </Button>
         </div>
 
-        {/* Step bar */}
         <div className="flex items-center gap-0">
           {steps.map((step, i) => {
             const Icon = step.icon
@@ -820,6 +851,8 @@ export default function EditRequirement() {
               <div className="space-y-1.5">
                 <Label className="text-sm flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5" />Effective Date</Label>
                 <Input type="date" value={data.effective_date}
+
+
                   onChange={e => setData('effective_date', e.target.value)}
                   className={cn(errors.effective_date && 'border-destructive')} />
                 {errors.effective_date
@@ -829,10 +862,15 @@ export default function EditRequirement() {
                     </p>}
               </div>
 
+              {/* ── Tags — utilise tagOptions (state local) au lieu de props.tags ── */}
               <div className="space-y-1.5">
                 <Label className="text-sm flex items-center gap-1.5"><TagIcon className="h-3.5 w-3.5" />Tags</Label>
-                <MultiSelect options={tags.map(tag => ({ value: tag.id.toString(), label: tag.name }))}
-                  value={data.tags} onValueChange={selected => setData('tags', selected)} placeholder="Select relevant tags…" />
+                <MultiSelect
+                  options={tagOptions.map(tag => ({ value: tag.id.toString(), label: tag.name }))}
+                  value={data.tags}
+                  onValueChange={selected => setData('tags', selected)}
+                  placeholder="Select relevant tags…"
+                />
               </div>
 
               {/* ── Domain ── */}
@@ -840,11 +878,17 @@ export default function EditRequirement() {
                 <Label className="text-sm flex items-center gap-1.5">
                   <Layers className="h-3.5 w-3.5" />Domain
                 </Label>
-                <Button type="button" variant="outline"
+                <Button
+                  type="button"
+                  variant="outline"
                   className="w-full justify-start text-left font-normal h-10"
-                  onClick={() => setDomainDialogOpen(true)}>
+                  onClick={() => setDomainDialogOpen(true)}
+                  disabled={!data.framework_id}
+                >
                   <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
-                  {selectedDomain ? selectedDomain.name : 'Select a domain…'}
+                  {!data.framework_id
+                    ? 'Select a framework first'
+                    : selectedDomain ? selectedDomain.name : 'Select a domain…'}
                 </Button>
                 {selectedDomain && (
                   <div className="flex items-center gap-1.5 mt-1">
@@ -858,7 +902,11 @@ export default function EditRequirement() {
                     </span>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">Associate this requirement with a business domain.</p>
+                <p className="text-xs text-muted-foreground">
+                  {data.framework_id
+                    ? 'Domains linked to the selected framework.'
+                    : 'Select a framework first to see its domains.'}
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -1033,7 +1081,6 @@ export default function EditRequirement() {
         </form>
       </div>
 
-      {/* Domain Dialog */}
       <DomainDialog
         open={domainDialogOpen}
         onOpenChange={setDomainDialogOpen}

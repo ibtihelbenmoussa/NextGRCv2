@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Document;
 use App\Models\Requirement;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 
 
 class Framework extends Model
@@ -60,6 +62,15 @@ public function documents()
 public function requirements(): HasMany
 {
     return $this->hasMany(Requirement::class);
+}
+public function domains(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+{
+    return $this->belongsToMany(
+        Domain::class,
+        'domain_framework',
+        'framework_id',
+        'domain_id'
+    )->withTimestamps();
 }
 }
 

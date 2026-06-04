@@ -149,50 +149,50 @@ class RequirementController extends Controller
         ]);
     }
 
-    public function create()
-    {
-        $user = Auth::user();
-        $currentOrgId = $user->current_organization_id;
+  public function create()
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-        return Inertia::render('Requirements/Create', [
-            'frameworks' => Framework::where('organization_id', $currentOrgId)
-                ->select('id', 'code', 'name')
-                ->orderBy('name')
-                ->get(),
-            'tags' => Tag::where('organization_id', $currentOrgId)
-                ->select('id', 'name')
-                ->orderBy('name')
-                ->get(),
-            'domains' => Domain::where('organization_id', $currentOrgId)
-                ->select('id', 'name')
-                ->orderBy('name')
-                ->get(),
+    return Inertia::render('Requirements/Create', [
+        'frameworks' => Framework::where('organization_id', $currentOrgId)
+            ->select('id', 'code', 'name', 'effective_date')
+            ->orderBy('name')
+            ->get(),
+        'tags' => Tag::where('organization_id', $currentOrgId)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get(),
+        'domains' => [],   
+    ]);
+}
 
+   public function getProcessesByFramework(Framework $framework)
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-
-        ]);
+    if ($framework->organization_id !== $currentOrgId) {
+        abort(403, 'Unauthorized access to this framework.');
     }
 
-    public function getProcessesByFramework(Framework $framework)
-    {
-        $user = Auth::user();
-        $currentOrgId = $user->current_organization_id;
+    $processes = $framework->processes()
+        ->where('is_active', true)
+        ->whereNull('deleted_at')
+        ->select('processes.id', 'processes.name', 'processes.code')
+        ->orderBy('processes.name')
+        ->get();
 
-        if ($framework->organization_id !== $currentOrgId) {
-            abort(403, 'Unauthorized access to this framework.');
-        }
+  $domains = $framework->domains()
+    ->select('domains.id', 'domains.name')
+    ->orderBy('domains.name')
+    ->get();
 
-        $processes = $framework->processes()
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->select('processes.id', 'processes.name', 'processes.code')
-            ->orderBy('processes.name')
-            ->get();
-
-        return Inertia::render('Requirements/Create', [
-            'processes' => $processes,
-        ])->with('only', ['processes']);
-    }
+    return Inertia::render('Requirements/Create', [
+        'processes' => $processes,
+        'domains'   => $domains,
+    ])->with('only', ['processes', 'domains']);
+}
 
     public function store(Request $request)
     {
@@ -344,37 +344,50 @@ class RequirementController extends Controller
     }
 
     public function edit(Requirement $requirement)
-    {
-        $user = Auth::user();
-        $currentOrgId = $user->current_organization_id;
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-        if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
-            abort(403, 'Unauthorized');
-        }
-
-        $requirement->load('tags', 'processes', 'documents', 'gapQuestions');
-
-        return Inertia::render('Requirements/Edit', [
-            'requirement' => $requirement,
-            'frameworks' => Framework::where('organization_id', $currentOrgId)
-                ->select('id', 'code', 'name')->get(),
-            'processes' => $requirement->framework
-                ? $requirement->framework->processes()
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at')
-                    ->select('processes.id', 'processes.name', 'processes.code')
-                    ->orderBy('processes.name')
-                    ->get()
-                : [],
-            'tags' => Tag::where('organization_id', $currentOrgId)
-                ->select('id', 'name')->get(),
-            'selectedTagIds' => $requirement->tags->pluck('id')
-                ->map(fn($id) => (string) $id)->toArray(),
-            'selectedProcessIds' => $requirement->processes->pluck('id')
-                ->map(fn($id) => (string) $id)->toArray(),
-            'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
-        ]);
+    if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
+        abort(403, 'Unauthorized');
     }
+
+    $requirement->load('tags', 'processes', 'documents', 'gapQuestions');
+
+    // ← AJOUT : charger les domains du framework actuel
+    $domains = $requirement->framework_id
+        ? Framework::find($requirement->framework_id)
+            ?->domains()
+            ->select('domains.id', 'domains.name')
+            ->orderBy('domains.name')
+            ->get() ?? collect()
+        : collect();
+
+    return Inertia::render('Requirements/Edit', [
+        'requirement' => $requirement,
+        'frameworks' => Framework::where('organization_id', $currentOrgId)
+            ->select('id', 'code', 'name')->get(),
+        'processes' => $requirement->framework
+            ? $requirement->framework->processes()
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->select('processes.id', 'processes.name', 'processes.code')
+                ->orderBy('processes.name')
+                ->get()
+            : [],
+        'tags' => Tag::where('organization_id', $currentOrgId)
+    ->select('id', 'name')
+    ->orderBy('name')
+    ->get()
+    ->values(),  // ← force un tableau indexé propre
+        'selectedTagIds' => $requirement->tags->pluck('id')
+            ->map(fn($id) => (string) $id)->toArray(),
+        'selectedProcessIds' => $requirement->processes->pluck('id')
+            ->map(fn($id) => (string) $id)->toArray(),
+        'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
+        'domains' => $domains, 
+    ]);
+}
 
     public function destroyDocument(Requirement $requirement, Document $document)
     {

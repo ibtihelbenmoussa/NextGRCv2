@@ -232,7 +232,7 @@ def predict():
 # ─── Roadmap Builder ──────────────────────────────────────────────────────────
 
 def build_roadmap(title, code, current_level, weak, partial, strong):
-    specifi c_by_dim = {
+    specific_by_dim = {
         'Existence':     f'Formally establish that {title} controls exist and are recognized',
         'Formalization': f'Document, get management approval, and communicate {title} procedures',
         'Enforcement':   f'Implement technical controls to enforce {title} compliance',

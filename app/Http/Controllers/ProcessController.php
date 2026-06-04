@@ -212,7 +212,7 @@ class ProcessController extends Controller
             }
         }
 
-        return redirect()->route('processes.show', $process)
+        return redirect()->route('processes.index', )
             ->with('success', 'Process created successfully.');
     }
 
@@ -349,7 +349,7 @@ class ProcessController extends Controller
             }
         }
 
-        return redirect()->route('processes.show', $process)
+        return redirect()->route('processes.index')
             ->with('success', 'Process updated successfully.');
     }
 

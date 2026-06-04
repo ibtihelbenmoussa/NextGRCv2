@@ -85,12 +85,12 @@ function InfoTooltip({
   description: string; hint?: string
 }) {
   const colorMap = {
-    blue:  { bar: 'bg-blue-500',    badge: 'bg-blue-500/10 text-blue-400 ring-blue-500/20',         icon: 'text-blue-400' },
-    amber: { bar: 'bg-amber-500',   badge: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',       icon: 'text-amber-400' },
-    teal:  { bar: 'bg-teal-500',    badge: 'bg-teal-500/10 text-teal-400 ring-teal-500/20',          icon: 'text-teal-400' },
+    blue: { bar: 'bg-blue-500', badge: 'bg-blue-500/10 text-blue-400 ring-blue-500/20', icon: 'text-blue-400' },
+    amber: { bar: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-400 ring-amber-500/20', icon: 'text-amber-400' },
+    teal: { bar: 'bg-teal-500', badge: 'bg-teal-500/10 text-teal-400 ring-teal-500/20', icon: 'text-teal-400' },
     green: { bar: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20', icon: 'text-emerald-400' },
-    rose:  { bar: 'bg-rose-500',    badge: 'bg-rose-500/10 text-rose-400 ring-rose-500/20',          icon: 'text-rose-400' },
-    slate: { bar: 'bg-slate-500',   badge: 'bg-slate-500/10 text-slate-400 ring-slate-500/20',       icon: 'text-slate-400' },
+    rose: { bar: 'bg-rose-500', badge: 'bg-rose-500/10 text-rose-400 ring-rose-500/20', icon: 'text-rose-400' },
+    slate: { bar: 'bg-slate-500', badge: 'bg-slate-500/10 text-slate-400 ring-slate-500/20', icon: 'text-slate-400' },
   }
   const c = colorMap[badgeColor]
   return (
@@ -178,9 +178,9 @@ const COMPLIANCE_LEVELS = [
 ]
 
 const LEVEL_COLORS = {
-  red:   { border: 'border-red-200 dark:border-red-800', borderActive: 'border-red-500 dark:border-red-400', bg: 'bg-red-50 dark:bg-red-950', icon: 'text-red-600 dark:text-red-400', iconBg: 'bg-red-100 dark:bg-red-900', badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
+  red: { border: 'border-red-200 dark:border-red-800', borderActive: 'border-red-500 dark:border-red-400', bg: 'bg-red-50 dark:bg-red-950', icon: 'text-red-600 dark:text-red-400', iconBg: 'bg-red-100 dark:bg-red-900', badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
   amber: { border: 'border-amber-200 dark:border-amber-800', borderActive: 'border-amber-500 dark:border-amber-400', bg: 'bg-amber-50 dark:bg-amber-950', icon: 'text-amber-600 dark:text-amber-400', iconBg: 'bg-amber-100 dark:bg-amber-900', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
-  teal:  { border: 'border-teal-200 dark:border-teal-800', borderActive: 'border-teal-500 dark:border-teal-400', bg: 'bg-teal-50 dark:bg-teal-950', icon: 'text-teal-600 dark:text-teal-400', iconBg: 'bg-teal-100 dark:bg-teal-900', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
+  teal: { border: 'border-teal-200 dark:border-teal-800', borderActive: 'border-teal-500 dark:border-teal-400', bg: 'bg-teal-50 dark:bg-teal-950', icon: 'text-teal-600 dark:text-teal-400', iconBg: 'bg-teal-100 dark:bg-teal-900', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
 }
 
 // ─── DomainDialog ─────────────────────────────────────────────────────────────
@@ -318,8 +318,12 @@ function DomainDialog({
           <div className="flex-1 overflow-y-auto px-6 pb-2">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Search className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm">No results for "{search}"</p>
+                <Layers className="h-8 w-8 mb-2 opacity-20" />
+                {search
+                  ? <p className="text-sm">No results for "{search}"</p>
+                  : <p className="text-sm">No domains linked to this framework yet</p>
+                }
+                <p className="text-xs opacity-60 mt-1">Use the field below to add one</p>
               </div>
             ) : (
               <div className="space-y-1">
@@ -405,7 +409,8 @@ export default function CreateRequirement() {
   const { props } = usePage<any>()
   const frameworks: Framework[] = props.frameworks ?? []
   const tags: Tag[] = props.tags ?? []
-  const allDomains: Domain[] = props.domains ?? []
+  const [domainsList, setDomainsList] = useState<Domain[]>([])
+
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -438,7 +443,6 @@ export default function CreateRequirement() {
   const [showPredefinedTest, setShowPredefinedTest] = useState(false)
   const [effectiveDateOpen, setEffectiveDateOpen] = useState(false)
   const [gapQuestions, setGapQuestions] = useState<{ text: string }[]>([])
-  const [domainsList, setDomainsList] = useState<Domain[]>(allDomains)
   const [domainDialogOpen, setDomainDialogOpen] = useState(false)
 
   const selectedFw = frameworks.find(fw => fw.id.toString() === data.framework_id) ?? null
@@ -456,25 +460,29 @@ export default function CreateRequirement() {
     })
   }
 
-  // ── Chargement des processus lorsqu'un framework est sélectionné ──────────
+  // REMPLACE tout le useEffect existant par :
   useEffect(() => {
     if (!data.framework_id) {
       setProcesses([])
-      setData(prev => ({ ...prev, process_ids: [], effective_date: today }))
+      setDomainsList([])
+      setData(prev => ({ ...prev, process_ids: [], domain_id: '', effective_date: today }))
       return
     }
+
     const fw = frameworks.find(fw => fw.id.toString() === data.framework_id)
     const rawDate = fw?.effective_date?.trim() || null
     const inheritedDate = rawDate ? rawDate.substring(0, 10) : null
-    setData(prev => ({ ...prev, effective_date: inheritedDate ?? today }))
+    setData(prev => ({ ...prev, effective_date: inheritedDate ?? today, domain_id: '' }))
 
     setLoadingProcesses(true)
     router.get(
       route('requirements.processes-by-framework', data.framework_id), {},
       {
-        preserveState: true, preserveScroll: true, only: ['processes'],
+        preserveState: true, preserveScroll: true,
+        only: ['processes', 'domains'],             // ← ajouter 'domains'
         onSuccess: (page) => {
           setProcesses((page.props.processes as Process[]) || [])
+          setDomainsList((page.props.domains as Domain[]) || [])  // ← AJOUT
           setData(prev => ({ ...prev, process_ids: [] }))
         },
         onFinish: () => setLoadingProcesses(false),
@@ -485,20 +493,23 @@ export default function CreateRequirement() {
   // ── Domain handlers ───────────────────────────────────────────────────────
   const refreshDomains = async () => {
     try {
-      const res = await fetch('/domains', { headers: jsonHeaders() })
+      const params = data.framework_id ? `?framework_id=${data.framework_id}` : ''
+      const res = await fetch(`/domains${params}`, { headers: jsonHeaders() })
       const json = await res.json()
       setDomainsList(json.domains ?? [])
     } catch (e) {
       console.error('Failed to refresh domains', e)
     }
   }
-
   const handleAddDomain = async (name: string) => {
     try {
       const res = await fetch('/domains', {
         method: 'POST',
         headers: jsonHeaders(),
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          framework_id: data.framework_id || null,  // ← AJOUT
+        }),
       })
       const json = await res.json()
       setDomainsList(json.domains ?? [])
@@ -560,14 +571,14 @@ export default function CreateRequirement() {
   // ── Submit ──
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!data.code.trim())       { setError('code', 'Code is required'); return }
-    if (!data.title.trim())      { setError('title', 'Title is required'); return }
-    if (!data.type)              { setError('type', 'Type is required'); return }
-    if (!data.status)            { setError('status', 'Status is required'); return }
-    if (!data.priority)          { setError('priority', 'Priority is required'); return }
-    if (!data.frequency)         { setError('frequency', 'Frequency is required'); return }
-    if (!data.framework_id)      { setError('framework_id', 'Framework is required'); return }
-    if (!data.compliance_level)  { setError('compliance_level', 'Compliance level is required'); return }
+    if (!data.code.trim()) { setError('code', 'Code is required'); return }
+    if (!data.title.trim()) { setError('title', 'Title is required'); return }
+    if (!data.type) { setError('type', 'Type is required'); return }
+    if (!data.status) { setError('status', 'Status is required'); return }
+    if (!data.priority) { setError('priority', 'Priority is required'); return }
+    if (!data.frequency) { setError('frequency', 'Frequency is required'); return }
+    if (!data.framework_id) { setError('framework_id', 'Framework is required'); return }
+    if (!data.compliance_level) { setError('compliance_level', 'Compliance level is required'); return }
 
     if (fwEffectiveDate && data.effective_date < fwEffectiveDate) {
       setError('effective_date', `Date must be on or after the framework effective date (${fwEffectiveDate})`)
@@ -911,9 +922,12 @@ export default function CreateRequirement() {
                     variant="outline"
                     className="flex-1 justify-start text-left font-normal h-10"
                     onClick={() => setDomainDialogOpen(true)}
+                    disabled={!data.framework_id}                
                   >
                     <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
-                    {selectedDomain ? selectedDomain.name : 'Select a domain…'}
+                    {!data.framework_id
+                      ? 'Select a framework first'
+                      : selectedDomain ? selectedDomain.name : 'Select a domain…'}
                   </Button>
                 </div>
                 {selectedDomain && (
@@ -934,7 +948,9 @@ export default function CreateRequirement() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Associate this requirement with a business domain.
+                  {data.framework_id
+                    ? 'Domains linked to the selected framework.'
+                    : 'Select a framework first to see its domains.'}
                 </p>
               </div>
 

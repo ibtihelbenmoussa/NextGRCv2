@@ -178,7 +178,7 @@ class BusinessUnitController extends Controller
             \Log::info('No documents to upload');
         }
 
-        return redirect()->route('business-units.show', $businessUnit)
+        return redirect()->route('business-units.index')
             ->with('success', 'Business Unit created successfully.');
     }
 
@@ -283,7 +283,7 @@ class BusinessUnitController extends Controller
             }
         }
 
-        return redirect()->route('business-units.show', $businessUnit)
+        return redirect()->route('business-units.index')
             ->with('success', 'Business Unit updated successfully.');
     }
 
