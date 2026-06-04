@@ -6,24 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('gap_assessments', function (Blueprint $table) {
-            $table->date('start_date')->nullable();
-$table->date('end_date')->nullable();
+            if (!Schema::hasColumn('gap_assessments', 'start_date')) {
+                $table->date('start_date')->nullable();
+            }
+            if (!Schema::hasColumn('gap_assessments', 'end_date')) {
+                $table->date('end_date')->nullable();
+            }
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('gap_assessments', function (Blueprint $table) {
-            //
+            $table->dropColumn(['start_date', 'end_date']);
         });
     }
 };
