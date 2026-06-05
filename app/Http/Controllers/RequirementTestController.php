@@ -222,6 +222,7 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
             'comment'        => ['nullable', 'string', 'max:2000'],
             'evidence'       => ['nullable', 'array'],
             'evidence.*'     => ['nullable', 'string', 'max:2048'],
+            'effective_date' => $validated['effective_date'] ?? now()->toDateString(),
         ]);
 
         $requirement = Requirement::findOrFail($validated['requirement_id']);
@@ -245,6 +246,7 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
             'validation_status' => $requirement->auto_validate ? 'accepted' : 'pending',
             'comment'           => $validated['comment'] ?? null,
             'evidence'          => $validated['evidence'] ?? null,
+            'effective_date' => $validated['effective_date'] ?? now()->toDateString(),
         ]);
 
         if ($requirement->auto_validate) {

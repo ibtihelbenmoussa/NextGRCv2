@@ -301,7 +301,7 @@ class RequirementController extends Controller
             }
         }
 
-        return redirect()->route('requirements.index')
+        return redirect('/requirements')
             ->with('success', 'Requirement created successfully.');
     }
     public function show(Requirement $requirement)

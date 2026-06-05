@@ -48,7 +48,7 @@ services:
     container_name: nextgrc_nginx
     restart: always
     ports:
-      - "8080:80" 
+      - "8080:80"
     volumes:
       - .:/var/www
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
@@ -66,6 +66,39 @@ services:
       - "5000:5000"
     volumes:
       - ./ml:/app
+# ─── Node Exporter (métriques système) ───────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: nextgrc_node_exporter
+    restart: always
+    ports:
+      - "9100:9100"
+  # ─── Prometheus ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nextgrc_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  # ─── Grafana ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nextgrc_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
   db_data:
+  prometheus_data:
+  grafana_data:
