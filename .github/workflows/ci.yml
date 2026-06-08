@@ -17,36 +17,24 @@ jobs:
       - name: Créer le fichier .env
         run: |
           cd $GITHUB_WORKSPACE
-          cp .env.example .env || true
-          # Générer la clé Laravel (optionnel)
-          docker-compose run --rm app php artisan key:generate || true
+          cp .env.docker .env
 
       - name: Déployer avec Docker
+        env:
+          COMPOSE_HTTP_TIMEOUT: 300
         run: |
           cd $GITHUB_WORKSPACE
-          
-          # Arrêter les conteneurs existants
           docker-compose down
-          
-          # Construire et démarrer
           docker-compose up -d --build
-          
-          # Attendre que les services démarrent
-          sleep 15
-          
-          # Vérifier l'état
+          sleep 30
           docker-compose ps
-          
-          # Migrer la base de données
           docker-compose exec -T app php artisan migrate --force || true
-          
           echo "✅ Déploiement terminé avec succès !"
 
       - name: Vérification de santé
         run: |
-          # Tester si l'application répond
           for i in {1..30}; do
-            if curl -s http://localhost:80 > /dev/null; then
+            if curl -s http://localhost:8080 > /dev/null; then
               echo "✅ Application accessible"
               exit 0
             fi
