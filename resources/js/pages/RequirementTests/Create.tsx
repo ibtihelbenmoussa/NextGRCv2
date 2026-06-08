@@ -541,7 +541,7 @@ export default function Create({ requirement, defaultDate }: Props) {
                   {/* Result */}
                   <div className="space-y-2">
                     <Label className="text-sm font-medium flex items-center">
-                      Result <span className="text-red-500 ml-1">*</span>
+                      Results <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Select
                       value={data.result}
