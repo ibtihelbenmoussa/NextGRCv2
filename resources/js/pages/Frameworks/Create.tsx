@@ -1,4 +1,3 @@
-// resources/js/pages/Frameworks/Create.tsx
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
@@ -7,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CardUpload, type FileUploadItem } from '@/components/card-upload'
-import { route } from 'ziggy-js'                    // ← Ajouté
+import { route } from 'ziggy-js'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -25,7 +24,7 @@ import { cn } from '@/lib/utils'
 import {
   ChevronLeft, Calendar as CalendarIcon, Building2, Globe,
   Tag as TagIcon, FileText, Plus, Pencil, Trash2, Search, X, Check,
-  Layers, ChevronRight, ChevronDown, Minus,FileUp,           // ← AJOUTÉ ICI
+  Layers, ChevronRight, ChevronDown, Minus, FileUp,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -332,6 +331,7 @@ function ManageDialog({
     </>
   )
 }
+
 // ─── TriCheckbox ──────────────────────────────────────────────────────────────
 type CheckState = 'none' | 'partial' | 'all'
 
@@ -417,7 +417,6 @@ function ProcessSelector({
 
   const q = search.toLowerCase().trim()
 
-  // ── IDs matchés — on garde les objets ORIGINAUX, on filtre seulement la visibilité ──
   const matchedBUIds = useMemo(() => {
     if (!q) return null
     const ids = new Set<number>()
@@ -495,7 +494,7 @@ function ProcessSelector({
         )}
       </div>
 
-      {/* Tree — objets originaux, visibilité filtrée par IDs */}
+      {/* Tree */}
       <div className={cn('rounded-xl border overflow-hidden', error ? 'border-destructive' : 'border-input')}>
         {visibleBUs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground text-sm italic">
@@ -648,6 +647,16 @@ export default function CreateFramework() {
   const [jurisdictionsList, setJurisdictionsList] = useState<Jurisdiction[]>(jurisdictions)
   const [tagsList, setTagsList] = useState<Tag[]>(allTags)
 
+  // ─── Computed: formulaire valide si tous les champs obligatoires sont remplis ───
+  const isFormValid = useMemo(() =>
+    data.code.trim() !== '' &&
+    data.name.trim() !== '' &&
+    data.type !== '' &&
+    data.status !== '' &&
+    data.jurisdictions.length > 0,
+    [data.code, data.name, data.type, data.status, data.jurisdictions]
+  )
+
   useEffect(() => {
     if (props.flash?.success || props.flash?.error) {
       setFlash({ type: props.flash.success ? 'success' : 'error', message: props.flash.success || props.flash.error })
@@ -663,7 +672,6 @@ export default function CreateFramework() {
   useEffect(() => { jurisdictionsRef.current = data.jurisdictions }, [data.jurisdictions])
   useEffect(() => { tagsRef.current = data.tags }, [data.tags])
 
-
   const handleFilesChange = (files: FileUploadItem[]) => {
     setData({
       ...data,
@@ -672,6 +680,7 @@ export default function CreateFramework() {
       document_descriptions: files.map(() => null),
     })
   }
+
   const toggleProcess = (process: Process) => {
     const idStr = process.id.toString()
     const current = processesRef.current
@@ -707,20 +716,30 @@ export default function CreateFramework() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     clearErrors()
+
+    // Validation côté client
     const errs: Record<string, string> = {}
     if (!data.code.trim())               errs.code          = 'Code is required'
     if (!data.name.trim())               errs.name          = 'Name is required'
     if (!data.type)                      errs.type          = 'Type is required'
     if (!data.status)                    errs.status        = 'Status is required'
     if (data.jurisdictions.length === 0) errs.jurisdictions = 'At least one jurisdiction is required'
+
     if (Object.keys(errs).length > 0) {
       Object.entries(errs).forEach(([k, v]) => setError(k as any, v))
       return
     }
+
     post('/frameworks', {
       onSuccess: () => {
         reset()
-        setReleaseOpen(false); setEffectiveOpen(false); setRetiredOpen(false)
+        setReleaseOpen(false)
+        setEffectiveOpen(false)
+        setRetiredOpen(false)
+      },
+      onError: () => {
+        // processing repasse automatiquement à false — rien à faire ici
+        // mais le callback est nécessaire pour garantir la réactivité de l'UI
       },
     })
   }
@@ -780,6 +799,7 @@ export default function CreateFramework() {
   const allProcesses = businessUnits.flatMap(bu => bu.macro_processes.flatMap(mp => mp.processes))
   const selectedProcesses = allProcesses.filter(p => data.processes.includes(p.id.toString()))
 
+  const submitLabel = processing ? 'Creating...' : 'Create Framework'
   return (
     <AppLayout breadcrumbs={[{ title: 'Frameworks', href: '/frameworks' }, { title: 'Create', href: '' }]}>
       <Head title="Create Framework" />
@@ -798,12 +818,12 @@ export default function CreateFramework() {
 
       <ManageDialog open={jurisdictionsDialogOpen} onOpenChange={setJurisdictionsDialogOpen}
         title="Manage Jurisdictions" description="Select geographic scopes for this framework"
-  icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
+        icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
         items={jurisdictionsList} selectedIds={data.jurisdictions}
         onToggle={toggleJurisdiction} onAdd={createJurisdiction} onEdit={updateJurisdiction} onDelete={deleteJurisdiction} />
       <ManageDialog open={tagsDialogOpen} onOpenChange={setTagsDialogOpen}
         title="Manage Tags" description="Categorize and label this framework"
-  icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
+        icon={<TagIcon className="h-5 w-5" />} accentFrom="#6366f1" accentTo="#8b5cf6"
         items={tagsList} selectedIds={data.tags}
         onToggle={toggleTag} onAdd={createTag} onEdit={updateTag} onDelete={deleteTag} />
 
@@ -1039,6 +1059,7 @@ export default function CreateFramework() {
             </CardContent>
           </Card>
 
+          {/* Documents */}
           <Card className="shadow-sm">
             <CardHeader className="pb-2 border-b">
               <div className="flex items-center gap-3">
@@ -1053,7 +1074,6 @@ export default function CreateFramework() {
                 </div>
               </div>
             </CardHeader>
-
             <CardContent className="pt-6">
               <CardUpload
                 maxFiles={10}
@@ -1078,12 +1098,24 @@ export default function CreateFramework() {
           </Card>
 
           {/* Actions */}
-          <div className="flex justify-end gap-4 pt-8">
+          <div className="flex flex-col sm:flex-row justify-end gap-4 pt-8">
+            {/* Hint quand le formulaire est incomplet */}
+            {!isFormValid && !processing && (
+              <p className="text-sm text-muted-foreground self-center sm:mr-auto">
+                Fill in all required fields (*) to enable submission.
+              </p>
+            )}
             <Button variant="outline" size="lg" asChild disabled={processing}>
               <Link href="/frameworks">Cancel</Link>
             </Button>
-            <Button type="submit" size="lg" disabled={processing} className="min-w-[200px]">
-              {processing ? 'Creating...' : 'Create Framework'}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={processing || !isFormValid}
+              className="min-w-[200px] transition-all"
+              title={!isFormValid ? 'Please fill in all required fields' : undefined}
+            >
+              {submitLabel}
             </Button>
           </div>
         </form>

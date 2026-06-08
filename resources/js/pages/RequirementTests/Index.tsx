@@ -148,16 +148,24 @@ function useCountUp(target: number, duration = 900) {
 
   useEffect(() => {
     if (target === 0) { setValue(0); return; }
+
     const start = performance.now();
     const tick = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
+
       setValue(Math.round(target * eased));
-      if (progress < 1) rafRef.current = requestAnimationFrame(tick);
+
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
     };
+
     rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [target, duration]);
 
   return value;
@@ -472,7 +480,7 @@ export default function RequirementTestsIndex({
 
   // ─── Handler réservation ──────────────────────────────────────────────────
   const handleReservationToggle = useCallback((req: Requirement) => {
-    const isMine  = req.reservation_user_id === currentUserId;
+    const isMine = req.reservation_user_id === currentUserId;
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     setReservingIds(prev => new Set(prev).add(req.id));
@@ -567,11 +575,11 @@ export default function RequirementTestsIndex({
         </TooltipProvider>
       ),
       cell: ({ row }) => {
-        const req       = row.original;
-        const isMine    = req.reservation_user_id === currentUserId;
-        const isTaken   = !!req.reservation_user_id && !isMine;
+        const req = row.original;
+        const isMine = req.reservation_user_id === currentUserId;
+        const isTaken = !!req.reservation_user_id && !isMine;
         const isLoading = reservingIds.has(req.id);
-        const isLocked  = req.latest_test_status === 'accepted' || req.latest_test_status === 'pending';
+        const isLocked = req.latest_test_status === 'accepted' || req.latest_test_status === 'pending';
 
         return (
           <div className="flex items-center justify-center">
@@ -579,34 +587,41 @@ export default function RequirementTestsIndex({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    disabled={isTaken || isLocked || isLoading}
+                    disabled={isTaken || isLocked || isLoading || !isToday}
                     onClick={() => handleReservationToggle(req)}
                     className={cn(
                       'w-5 h-5 rounded border-[1.5px] flex items-center justify-center transition-all duration-150',
                       isLoading && 'opacity-50 cursor-wait',
-                      isLocked  && 'opacity-30 cursor-not-allowed border-border',
-                      isMine    && 'bg-blue-600 border-blue-600 hover:bg-blue-700',
-                      isTaken   && 'opacity-40 cursor-not-allowed border-border bg-muted',
+                      isLocked && 'opacity-30 cursor-not-allowed border-border',
+                      isMine && 'bg-blue-600 border-blue-600 hover:bg-blue-700',
+                      isTaken && 'opacity-40 cursor-not-allowed border-border bg-muted',
                       !isMine && !isTaken && !isLocked && 'border-border hover:border-blue-400 hover:bg-blue-500/10',
                     )}
                   >
                     {isMine && (
                       <svg className="w-3 h-3 text-white" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                     {isTaken && (
                       <svg className="w-3 h-3 text-muted-foreground" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {isLocked  ? <p>Test already {req.latest_test_status}</p>
-                  : isMine   ? <p>You claimed this — click to release</p>
-                  : isTaken  ? <p>Claimed by {req.reservation_user_name}</p>
-                  :            <p>Click to claim this test</p>}
+                  {!isToday ? (
+                    <p>Reservation only allowed today</p>
+                  ) : isLocked ? (
+                    <p>Reservation locked (test already accepted/pending)</p>
+                  ) : isMine ? (
+                    <p>You claimed this — click to release</p>
+                  ) : isTaken ? (
+                    <p>Claimed by {req.reservation_user_name}</p>
+                  ) : (
+                    <p>Click to claim this test</p>
+                  )}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -626,9 +641,9 @@ export default function RequirementTestsIndex({
         </div>
       ),
       cell: ({ row }) => {
-        const req      = row.original;
-        const missed   = isMissedRow(req);
-        const due      = isDueRow(req);
+        const req = row.original;
+        const missed = isMissedRow(req);
+        const due = isDueRow(req);
         const selected = selectedIds.has(req.id);
         const composed = req.code ?? '—';
 
@@ -642,7 +657,7 @@ export default function RequirementTestsIndex({
             )}
             <div className={cn(
               'font-mono font-medium',
-              missed   && 'text-red-400',
+              missed && 'text-red-400',
               selected && !missed && 'text-amber-400'
             )}>
               {composed}
@@ -728,15 +743,15 @@ export default function RequirementTestsIndex({
         const dl = req.effective_date;
         if (!dl) return <span className="text-muted-foreground">—</span>;
 
-        const missed   = isMissedRow(req);
-        const overdue  = isOverdueRow(req);
-        const due      = isDueRow(req);
+        const missed = isMissedRow(req);
+        const overdue = isOverdueRow(req);
+        const due = isDueRow(req);
         const selected = selectedIds.has(req.id);
 
         const dateFormatted = format(new Date(dl), 'MMM d, yyyy', { locale: enUS });
 
-        if (missed)  return <StatusPill type="missed"   label={dateFormatted} />;
-        if (overdue) return <StatusPill type="overdue"  label={dateFormatted} />;
+        if (missed) return <StatusPill type="missed" label={dateFormatted} />;
+        if (overdue) return <StatusPill type="overdue" label={dateFormatted} />;
         if (due && selected) return <StatusPill type="due" label={dateFormatted} />;
         if (req.latest_test_status === 'accepted') return <StatusPill type="completed" label={dateFormatted} />;
 
@@ -750,12 +765,12 @@ export default function RequirementTestsIndex({
       id: 'actions',
       header: () => null,
       cell: ({ row }) => {
-        const req    = row.original;
+        const req = row.original;
         const status = req.latest_test_status;
         const missed = isMissedRow(req);
         const selected = selectedIds.has(req.id);
 
-        const isMine         = req.reservation_user_id === currentUserId;
+        const isMine = req.reservation_user_id === currentUserId;
         const isTakenByOther = !!req.reservation_user_id && !isMine;
         const hasNoReservation = !req.reservation_user_id;
 
@@ -946,10 +961,10 @@ export default function RequirementTestsIndex({
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ perspective: '1200px' }}>
-          <KpiCard label="Total today"  value={kpi.total}     sub={`${kpi.completionRate}% of total`}                                                fillPercent={kpi.completionRate}                                    fillColor="#378add" valueColor="text-foreground"                                     icon={<CircleDot      className="h-4 w-4" />} delay={0}   />
-          <KpiCard label="Completed"    value={kpi.completed} sub={kpi.total > 0 ? `${Math.round((kpi.completed / safeTotal) * 100)}% completed` : '—'} fillPercent={kpi.total > 0 ? (kpi.completed / safeTotal) * 100 : 0} fillColor="#639922" valueColor="text-[#3B6D11] dark:text-[#97C459]"           icon={<CheckCheck     className="h-4 w-4" />} delay={80}  />
-          <KpiCard label="Pending"      value={kpi.pending}   sub="awaiting validation"                                                                fillPercent={kpi.total > 0 ? (kpi.pending   / safeTotal) * 100 : 0} fillColor="#ba7517" valueColor={kpi.pending  > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground'} icon={<Clock          className="h-4 w-4" />} delay={160} />
-          <KpiCard label="Overdue"      value={kpi.overdue}   sub="deadline missed"                                                                    fillPercent={kpi.total > 0 ? (kpi.overdue   / safeTotal) * 100 : 0} fillColor="#e24b4a" valueColor={kpi.overdue  > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground'} icon={<AlertTriangle  className="h-4 w-4" />} delay={240} />
+          <KpiCard label="Total today" value={kpi.total} sub={`${kpi.completionRate}% of total`} fillPercent={kpi.completionRate} fillColor="#378add" valueColor="text-foreground" icon={<CircleDot className="h-4 w-4" />} delay={0} />
+          <KpiCard label="Completed" value={kpi.completed} sub={kpi.total > 0 ? `${Math.round((kpi.completed / safeTotal) * 100)}% completed` : '—'} fillPercent={kpi.total > 0 ? (kpi.completed / safeTotal) * 100 : 0} fillColor="#639922" valueColor="text-[#3B6D11] dark:text-[#97C459]" icon={<CheckCheck className="h-4 w-4" />} delay={80} />
+          <KpiCard label="Pending" value={kpi.pending} sub="awaiting validation" fillPercent={kpi.total > 0 ? (kpi.pending / safeTotal) * 100 : 0} fillColor="#ba7517" valueColor={kpi.pending > 0 ? 'text-[#854F0B] dark:text-[#EF9F27]' : 'text-foreground'} icon={<Clock className="h-4 w-4" />} delay={160} />
+          <KpiCard label="Overdue" value={kpi.overdue} sub="deadline missed" fillPercent={kpi.total > 0 ? (kpi.overdue / safeTotal) * 100 : 0} fillColor="#e24b4a" valueColor={kpi.overdue > 0 ? 'text-[#A32D2D] dark:text-[#F7C1C1]' : 'text-foreground'} icon={<AlertTriangle className="h-4 w-4" />} delay={240} />
         </div>
 
         {/* Banners */}

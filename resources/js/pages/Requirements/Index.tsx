@@ -41,6 +41,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
 import {
   Key,
   BookOpen,
@@ -64,7 +65,10 @@ import {
   ListFilter,
   CircleDot,
   ShieldCheck,
-  Sparkles,        // ← NOUVEAU
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PaginatedData } from '@/types'
@@ -88,7 +92,6 @@ interface FrameworkOption {
   name: string
 }
 
-// ← NOUVEAU : framework avec id pour l'import AI
 interface FrameworkForImport {
   id: number
   code: string
@@ -118,7 +121,7 @@ interface Requirement {
 interface RequirementsIndexProps {
   requirements: PaginatedData<Requirement>
   frameworks: FrameworkOption[]
-  frameworksForImport: FrameworkForImport[]   // ← NOUVEAU
+  frameworksForImport: FrameworkForImport[]
 }
 
 type GroupBy = 'status' | 'priority'
@@ -361,6 +364,7 @@ function KpiCard({
 
 function FrameworkFilter({ frameworks }: { frameworks: FrameworkOption[] }) {
   const [selected, setSelected] = useState<string[]>([])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const val = params.get('filter[framework]')
@@ -368,12 +372,9 @@ function FrameworkFilter({ frameworks }: { frameworks: FrameworkOption[] }) {
   }, [])
 
   const toggle = (code: string) => {
-    let next: string[]
-    if (selected.includes(code)) {
-      next = selected.filter(c => c !== code)
-    } else {
-      next = [...selected, code]
-    }
+    const next = selected.includes(code)
+      ? selected.filter(c => c !== code)
+      : [...selected, code]
     setSelected(next)
     const params = new URLSearchParams(window.location.search)
     if (next.length > 0) {
@@ -442,7 +443,257 @@ function FrameworkFilter({ frameworks }: { frameworks: FrameworkOption[] }) {
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── KanbanColumn ─────────────────────────────────────────────────────────────
+
+const CARDS_PER_PAGE = 2
+
+function KanbanColumn({
+  columnKey,
+  title,
+  items,
+  styles: s,
+  frameworkColorMap,
+}: {
+  columnKey: string
+  title: string
+  items: Requirement[]
+  styles: { kanbanBg: string; kanbanBorder: string; kanbanText: string }
+  frameworkColorMap: Record<string, number>
+}) {
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items
+    const q = search.toLowerCase()
+    return items.filter(
+      (r) =>
+        r.code.toLowerCase().includes(q) ||
+        r.title.toLowerCase().includes(q) ||
+        (r.framework?.code ?? '').toLowerCase().includes(q) ||
+        (r.framework?.name ?? '').toLowerCase().includes(q),
+    )
+  }, [items, search])
+
+  // Reset page quand search change
+  useEffect(() => { setPage(1) }, [search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CARDS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const visibleItems = filtered.slice(
+    (currentPage - 1) * CARDS_PER_PAGE,
+    currentPage * CARDS_PER_PAGE,
+  )
+  const isSearching = search.trim().length > 0
+
+  // Numéros de page à afficher (max 5, avec ellipsis implicite)
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (currentPage <= 3) return [1, 2, 3, 4, 5]
+    if (currentPage >= totalPages - 2) return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2]
+  }, [totalPages, currentPage])
+
+  return (
+    <Droppable droppableId={columnKey}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className={cn(
+            'flex flex-col min-w-[320px] rounded-xl border bg-gradient-to-b from-card/80 to-card/40 shadow-sm transition-all duration-200',
+            snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl',
+          )}
+        >
+          {/* ── Header ── */}
+          <div className={cn('px-5 pt-4 pb-3 rounded-t-xl border-b-2 flex flex-col gap-2.5', s.kanbanBg, s.kanbanBorder)}>
+            <div className="flex items-center justify-between">
+              <span className={cn('font-medium text-base', s.kanbanText)}>{title}</span>
+              <span className={cn(
+                'inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border bg-background/70',
+                s.kanbanBorder, s.kanbanText,
+              )}>
+                {isSearching ? `${filtered.length} / ${items.length}` : items.length}
+              </span>
+            </div>
+
+            {/* Barre de recherche */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="h-8 pl-8 text-xs bg-background/70 border-border/60 focus-visible:ring-1 focus-visible:ring-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(''); searchInputRef.current?.focus() }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors text-base leading-none"
+                  aria-label="Effacer"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ── Body ── */}
+          <div className="p-4 flex-1 space-y-4 min-h-[400px]">
+            {filtered.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground/70 italic py-12">
+                <Search className="h-5 w-5 opacity-40" />
+                <span className="text-sm">Aucun résultat</span>
+              </div>
+            ) : (
+              visibleItems.map((req, idx) => {
+                const globalIdx = (currentPage - 1) * CARDS_PER_PAGE + idx
+                return (
+                  <Draggable key={req.id} draggableId={String(req.id)} index={globalIdx}>
+                    {(dragProvided, dragSnapshot) => (
+                      <Card
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        className={cn(
+                          'transition-all duration-200 cursor-grab active:cursor-grabbing',
+                          dragSnapshot.isDragging
+                            ? 'shadow-2xl ring-2 ring-primary/60 scale-[1.02]'
+                            : 'hover:shadow-md hover:ring-1 hover:ring-primary/30',
+                        )}
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <div {...dragProvided.dragHandleProps}>
+                              <GripVertical className="h-5 w-5 text-muted-foreground/70 hover:text-foreground transition-colors" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium leading-tight mb-1.5 text-sm">
+                                {req.code} — {req.title}
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {req.description || 'No description provided'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <StatusPill value={req.status} styleMap={statusStyles} />
+                            <StatusPill value={req.priority} styleMap={priorityStyles} />
+                            {req.framework && (
+                              <FrameworkPill
+                                code={req.framework.code}
+                                colorIndex={frameworkColorMap[req.framework.code] ?? 0}
+                              />
+                            )}
+                            {req.frequency && (
+                              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                {req.frequency.replace('_', ' ')}
+                              </span>
+                            )}
+                          </div>
+
+                          {req.tags?.length ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {req.tags.slice(0, 4).map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489] dark:bg-[#3C3489] dark:text-[#CECBF6]"
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                              {req.tags.length > 4 && (
+                                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                  +{req.tags.length - 4}
+                                </span>
+                              )}
+                            </div>
+                          ) : null}
+
+                          <div className="pt-2 flex gap-2">
+                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
+                              <Link href={`/requirements/${req.id}`}>
+                                <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                              </Link>
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
+                              <Link href={`/requirements/${req.id}/edit`}>
+                                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                              </Link>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Draggable>
+                )
+              })
+            )}
+            {provided.placeholder}
+          </div>
+
+          {/* ── Pagination footer ── */}
+          {totalPages > 1 && (
+            <div className={cn(
+              'px-4 py-3 rounded-b-xl border-t flex items-center justify-between gap-1',
+              s.kanbanBg,
+            )}>
+              {/* Previous */}
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className={cn(
+                  'p-1.5 rounded-md border transition-all duration-150',
+                  currentPage === 1
+                    ? 'opacity-30 cursor-not-allowed border-border'
+                    : 'hover:bg-background/80 border-border hover:border-primary/40 active:scale-95',
+                )}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {pageNumbers.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={cn(
+                      'min-w-[26px] h-[26px] text-xs font-medium rounded-md border transition-all duration-150',
+                      p === currentPage
+                        ? cn('border-transparent shadow-sm', s.kanbanBorder, s.kanbanBg, s.kanbanText, 'ring-1', s.kanbanBorder)
+                        : 'border-border hover:border-primary/40 hover:bg-background/80 text-muted-foreground',
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              {/* Next */}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className={cn(
+                  'p-1.5 rounded-md border transition-all duration-150',
+                  currentPage === totalPages
+                    ? 'opacity-30 cursor-not-allowed border-border'
+                    : 'hover:bg-background/80 border-border hover:border-primary/40 active:scale-95',
+                )}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </Droppable>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RequirementsIndex({ requirements, frameworks, frameworksForImport }: RequirementsIndexProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -450,7 +701,7 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
   const [exportLoading, setExportLoading] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [groupBy, setGroupBy] = useState<GroupBy>('status')
-  const [aiModalOpen, setAiModalOpen] = useState(false)   // ← NOUVEAU
+  const [aiModalOpen, setAiModalOpen] = useState(false)
 
   // ── Framework color index map ─────────────────────────────────
   const frameworkColorMap = useMemo(() => {
@@ -540,7 +791,19 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
   const getGroupTitle = (key: string) =>
     key === 'other' ? 'Other' : key.charAt(0).toUpperCase() + key.slice(1)
 
-  // ── Columns ──────────────────────────────────────────────────
+  // ── onDragEnd ────────────────────────────────────────────────
+  const onDragEnd = (result: DropResult) => {
+    const { source, destination, draggableId } = result
+    if (!destination) return
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
+    const field = groupBy === 'status' ? 'status' : 'priority'
+    router.put(`/requirements/${Number(draggableId)}`, { [field]: destination.droppableId }, {
+      preserveState: true, preserveScroll: true,
+      onError: (errors) => console.error('Update failed', errors),
+    })
+  }
+
+  // ── Table columns ────────────────────────────────────────────
   const statusOptions: FacetedFilterOption[] = [
     { label: 'Active', value: 'active', icon: CheckCircle2 },
     { label: 'Draft', value: 'draft', icon: FileText },
@@ -723,17 +986,6 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
     }
   }
 
-  const onDragEnd = (result: DropResult) => {
-    const { source, destination, draggableId } = result
-    if (!destination) return
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return
-    const field = groupBy === 'status' ? 'status' : 'priority'
-    router.put(`/requirements/${Number(draggableId)}`, { [field]: destination.droppableId }, {
-      preserveState: true, preserveScroll: true,
-      onError: (errors) => console.error('Update failed', errors),
-    })
-  }
-
   return (
     <AppLayout>
       <Head title="Requirements" />
@@ -746,19 +998,12 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
             <h1 className="text-3xl font-bold tracking-tight">Requirements</h1>
             <p className="text-muted-foreground mt-1.5">Track and manage your compliance requirements</p>
           </div>
-
-          {/* ── Boutons header ── */}
           <div className="flex flex-wrap items-center gap-3">
-
-           
-
-            {/* Bouton existant */}
             <Button asChild>
               <Link href="/requirements/create">
                 <Plus className="mr-2 h-4 w-4" /> New Requirement
               </Link>
             </Button>
-
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="hidden sm:block">
               <TabsList className="grid w-44 grid-cols-2">
                 <TabsTrigger value="table"><TableIcon className="mr-2 h-4 w-4" />Table</TabsTrigger>
@@ -817,119 +1062,19 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="overflow-x-auto pb-6 scrollbar-thin">
                 <div className="grid grid-flow-col auto-cols-[minmax(320px,1fr)] gap-5 lg:gap-6">
-                  {groupOrder.map(key => {
-                    const items = groupedData[key] || []
+                  {groupOrder.map((key) => {
                     const s = groupBy === 'status'
                       ? (statusStyles[key] ?? fallbackStyle)
                       : (priorityStyles[key] ?? fallbackStyle)
-
                     return (
-                      <Droppable droppableId={key} key={key}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef} {...provided.droppableProps}
-                            className={cn(
-                              'flex flex-col min-w-[320px] rounded-xl border bg-gradient-to-b from-card/80 to-card/40 shadow-sm transition-all duration-200',
-                              snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl'
-                            )}
-                          >
-                            <div className={cn('px-5 py-4 rounded-t-xl border-b-2 font-medium text-lg flex items-center justify-between', s.kanbanBg, s.kanbanBorder)}>
-                              <span className={s.kanbanText}>{getGroupTitle(key)}</span>
-                              <span className={cn('inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border', s.kanbanBorder, s.kanbanText, 'bg-background/70')}>
-                                {items.length}
-                              </span>
-                            </div>
-
-                            <div className="p-4 flex-1 space-y-4 min-h-[500px]">
-                              {items.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-muted-foreground/70 italic py-12">
-                                  Empty column
-                                </div>
-                              ) : (
-                                items.map((req, idx) => (
-                                  <Draggable key={req.id} draggableId={String(req.id)} index={idx}>
-                                    {(dragProvided, dragSnapshot) => (
-                                      <Card
-                                        ref={dragProvided.innerRef} {...dragProvided.draggableProps}
-                                        className={cn(
-                                          'transition-all duration-200 cursor-grab active:cursor-grabbing',
-                                          dragSnapshot.isDragging
-                                            ? 'shadow-2xl ring-2 ring-primary/60 scale-[1.02]'
-                                            : 'hover:shadow-md hover:ring-1 hover:ring-primary/30'
-                                        )}
-                                      >
-                                        <CardContent className="p-4 space-y-3">
-                                          <div className="flex items-start justify-between gap-3">
-                                            <div {...dragProvided.dragHandleProps}>
-                                              <GripVertical className="h-5 w-5 text-muted-foreground/70 hover:text-foreground transition-colors" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="font-medium leading-tight mb-1.5">
-                                                {req.code} — {req.title}
-                                              </div>
-                                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                                {req.description || 'No description provided'}
-                                              </p>
-                                            </div>
-                                          </div>
-
-                                          <div className="flex flex-wrap gap-2 pt-2">
-                                            <StatusPill value={req.status} styleMap={statusStyles} />
-                                            <StatusPill value={req.priority} styleMap={priorityStyles} />
-                                            {req.framework && (
-                                              <FrameworkPill
-                                                code={req.framework.code}
-                                                colorIndex={frameworkColorMap[req.framework.code] ?? 0}
-                                              />
-                                            )}
-                                            {req.frequency && (
-                                              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                                {req.frequency.replace('_', ' ')}
-                                              </span>
-                                            )}
-                                          </div>
-
-                                          {req.tags?.length ? (
-                                            <div className="flex flex-wrap gap-1.5 pt-1">
-                                              {req.tags.slice(0, 4).map(tag => (
-                                                <span
-                                                  key={tag.id}
-                                                  className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489] dark:bg-[#3C3489] dark:text-[#CECBF6]"
-                                                >
-                                                  {tag.name}
-                                                </span>
-                                              ))}
-                                              {req.tags.length > 4 && (
-                                                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                                  +{req.tags.length - 4}
-                                                </span>
-                                              )}
-                                            </div>
-                                          ) : null}
-
-                                          <div className="pt-3 flex gap-2">
-                                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                                              <Link href={`/requirements/${req.id}`}>
-                                                <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                                              </Link>
-                                            </Button>
-                                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                                              <Link href={`/requirements/${req.id}/edit`}>
-                                                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                                              </Link>
-                                            </Button>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    )}
-                                  </Draggable>
-                                ))
-                              )}
-                              {provided.placeholder}
-                            </div>
-                          </div>
-                        )}
-                      </Droppable>
+                      <KanbanColumn
+                        key={key}
+                        columnKey={key}
+                        title={getGroupTitle(key)}
+                        items={groupedData[key] || []}
+                        styles={s}
+                        frameworkColorMap={frameworkColorMap}
+                      />
                     )
                   })}
                 </div>
@@ -956,8 +1101,6 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      
 
     </AppLayout>
   )

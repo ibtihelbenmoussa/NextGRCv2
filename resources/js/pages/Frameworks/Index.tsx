@@ -170,7 +170,7 @@ type GroupBy = 'status' | 'type';
 type ViewMode = 'table' | 'cards';
 
 // ─── Constante : nb de cartes visibles avant "Voir les N autres" ─────────────
-const INITIAL_VISIBLE = 999;
+const INITIAL_VISIBLE = 2;
 
 // ─── Soft Pill Styles ─────────────────────────────────────────────────────────
 const statusStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
