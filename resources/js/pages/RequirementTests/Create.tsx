@@ -1,6 +1,6 @@
 import { Head, useForm, router } from '@inertiajs/react'
 import { route } from 'ziggy-js'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format, parseISO } from 'date-fns'
-import { CalendarIcon, ChevronLeft, CheckCircle2, AlertCircle, FileText, Paperclip } from 'lucide-react'
+import { CalendarIcon, ChevronLeft, CheckCircle2, AlertCircle, FileText, Paperclip, ListChecks, Circle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +18,13 @@ import { CardUpload, type FileUploadItem } from '@/components/card-upload'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Framework  { id: number; code: string; name: string }
-interface Requirement { id: number; code: string; title: string; framework?: Framework | null }
+interface GapQuestion { id: number; text: string }
+interface Requirement {
+  id: number
+  code: string
+  title: string
+  framework?: Framework | null
+}
 
 interface Props {
   requirement: Requirement
@@ -62,6 +68,35 @@ function buildTestCode(requirement: Requirement, dateStr?: string): string {
 
 type EvidenceMode = 'text' | 'files' | 'both'
 
+// ─── GapQuestionsList ─────────────────────────────────────────────────────────
+
+function GapQuestionsList({ questions }: { questions: GapQuestion[] }) {
+  if (questions.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground italic py-2 px-3 border border-dashed rounded-lg">
+        <ListChecks className="h-4 w-4 shrink-0" />
+        No gap questions defined for this requirement.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {questions.map((q, i) => (
+        <div
+          key={q.id}
+          className="flex items-start gap-3 px-4 py-3 rounded-lg border border-border/50 bg-muted/30"
+        >
+          <span className="shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-background text-[11px] font-semibold text-muted-foreground">
+            {i + 1}
+          </span>
+          <span className="text-sm leading-relaxed">{q.text}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Create({ requirement, defaultDate }: Props) {
@@ -78,12 +113,12 @@ export default function Create({ requirement, defaultDate }: Props) {
     test_code:      initialTestCode,
     name:           '',
     objective:      '',
-    procedure:      '',
+    // NOTE: 'procedure' field removed — replaced by gap questions (loaded from requirement)
     status:         'pending',
     result:         '',
     efficacy:       'effective',
     evidence:       '',
-    evidence_files:        [] as File[],
+    evidence_files:             [] as File[],
     evidence_file_categories:   [] as (string | null)[],
     evidence_file_descriptions: [] as (string | null)[],
     requirement_id: requirement.id,
@@ -93,16 +128,19 @@ export default function Create({ requirement, defaultDate }: Props) {
     failure_reason: '',
   })
 
-  const [autoFields, setAutoFields] = useState<Set<string>>(new Set(['test_code']))
+  const [autoFields, setAutoFields]     = useState<Set<string>>(new Set(['test_code']))
   const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('text')
+  const [gapQuestions, setGapQuestions] = useState<GapQuestion[]>([])
+  const [gapLoading, setGapLoading]     = useState(true)
 
+  // ── Load savedDate ──
   useEffect(() => {
-    const savedDate = localStorage.getItem('selectedComplianceDate')
-    if (savedDate) {
-      const updatedTestCode = buildTestCode(requirement, savedDate)
+    const saved = localStorage.getItem('selectedComplianceDate')
+    if (saved) {
+      const updatedTestCode = buildTestCode(requirement, saved)
       setData(prev => ({
         ...prev,
-        test_date:  savedDate,
+        test_date:  saved,
         tested_at:  format(new Date(), 'yyyy-MM-dd'),
         test_code:  updatedTestCode,
       }))
@@ -110,29 +148,42 @@ export default function Create({ requirement, defaultDate }: Props) {
     }
   }, [])
 
-useEffect(() => {
-  fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
-    .then(r => r.json())
-    .then(predefined => {
-      if (predefined && predefined.id) {
-        setData(prev => {
-          const updates: Partial<typeof prev> = {}
-          if (predefined.test_name) updates.name      = predefined.test_name
-          if (predefined.objective) updates.objective = predefined.objective
-          if (predefined.procedure) updates.procedure = predefined.procedure
-          return { ...prev, ...updates }
-        })
-        setAutoFields(prev => {
-          const next = new Set(prev)
-          if (predefined.test_name) next.add('name')
-          if (predefined.objective) next.add('objective')
-          if (predefined.procedure) next.add('procedure')
-          return next
-        })
-      }
-    })
-    .catch(() => {})
-}, [requirement.id])
+  // ── Load predefined test (name, objective) + gap questions ──
+  useEffect(() => {
+    // Predefined test fields
+    fetch(`/requirements/${requirement.id}/predefined-tests/requirement`)
+      .then(r => r.json())
+      .then(predefined => {
+        if (predefined && predefined.id) {
+          setData(prev => {
+            const updates: Partial<typeof prev> = {}
+            if (predefined.test_name) updates.name      = predefined.test_name
+            if (predefined.objective) updates.objective = predefined.objective
+            // procedure intentionally omitted — gap questions replace it
+            return { ...prev, ...updates }
+          })
+          setAutoFields(prev => {
+            const next = new Set(prev)
+            if (predefined.test_name) next.add('name')
+            if (predefined.objective) next.add('objective')
+            return next
+          })
+        }
+      })
+      .catch(() => {})
+
+    // Gap questions
+    fetch(`/requirements/${requirement.id}/gap-questions`)
+      .then(r => r.json())
+      .then((questions: GapQuestion[]) => {
+        setGapQuestions(questions ?? [])
+        setGapLoading(false)
+        if ((questions ?? []).length > 0) {
+          setAutoFields(prev => new Set(prev).add('gap_questions'))
+        }
+      })
+      .catch(() => { setGapLoading(false) })
+  }, [requirement.id])
 
   const isAuto = (field: string) => autoFields.has(field)
 
@@ -145,14 +196,39 @@ useEffect(() => {
     }))
   }
 
+  // ── Derived: is evidence filled? ──
+  const evidenceFilled = useMemo(() => {
+    const hasText  = data.evidence.trim().length > 0
+    const hasFiles = data.evidence_files.length > 0
+    if (evidenceMode === 'text')  return hasText
+    if (evidenceMode === 'files') return hasFiles
+    if (evidenceMode === 'both')  return hasText || hasFiles
+    return false
+  }, [data.evidence, data.evidence_files, evidenceMode])
+
+  // ── Derived: is form submittable? ──
+  const isFormComplete = useMemo(() => {
+    const base =
+      data.test_code.trim().length > 0 &&
+      data.name.trim().length > 0 &&
+      data.objective.trim().length > 0 &&
+      data.result.length > 0 &&
+      evidenceFilled
+
+    if (!base) return false
+    if (data.result === 'non_compliant') return data.failure_reason.trim().length > 0
+    return true
+  }, [data.test_code, data.name, data.objective, data.result, data.failure_reason, evidenceFilled])
+
+  // ── Validation ──
   const validateForm = () => {
     let isValid = true
     clearErrors()
     if (!data.test_code.trim()) { setError('test_code', 'Test Code is required'); isValid = false }
     if (!data.name.trim())      { setError('name', 'Name is required'); isValid = false }
     if (!data.objective.trim()) { setError('objective', 'Objective is required'); isValid = false }
-    if (!data.procedure.trim()) { setError('procedure', 'Procedure is required'); isValid = false }
     if (!data.result)           { setError('result', 'Result is required'); isValid = false }
+    if (!evidenceFilled)        { setError('evidence', 'Evidence is required'); isValid = false }
     if (data.result === 'non_compliant' && !data.failure_reason.trim()) {
       setError('failure_reason', 'Reason for failure is required when result is non-compliant')
       isValid = false
@@ -164,9 +240,9 @@ useEffect(() => {
     e.preventDefault()
     if (!validateForm()) return
 
-    const savedDate = localStorage.getItem('selectedComplianceDate')
-    const testDate  = savedDate || data.test_date
-    const testedAt  = format(new Date(), 'yyyy-MM-dd')
+    const saved    = localStorage.getItem('selectedComplianceDate')
+    const testDate = saved || data.test_date
+    const testedAt = format(new Date(), 'yyyy-MM-dd')
 
     router.post(route('requirements.test.store', requirement.id), {
       ...data,
@@ -242,10 +318,11 @@ useEffect(() => {
           <CardContent className="pt-10 pb-14 px-6 md:px-12 lg:px-16">
             <form onSubmit={handleSubmit} className="space-y-16">
 
-              {/* Basic Information */}
+              {/* ── Basic Information ── */}
               <div className="space-y-10">
                 <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Basic Information</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
                   {/* Test Code */}
                   <div className="space-y-2">
                     <Label htmlFor="test_code" className="text-sm font-medium flex items-center">
@@ -285,7 +362,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Test Details */}
+              {/* ── Test Details ── */}
               <div className="space-y-10">
                 <h2 className="text-2xl font-semibold tracking-tight border-b pb-4">Test Details</h2>
                 <div className="space-y-6">
@@ -306,28 +383,38 @@ useEffect(() => {
                     {errors.objective && <p className="text-red-600 text-sm mt-1.5">{errors.objective}</p>}
                   </div>
 
-                  {/* Procedure */}
+                  {/* ── Gap Questions (replaces Procedure) ── */}
                   <div className="space-y-3">
-                    <Label htmlFor="procedure" className="text-sm font-medium flex items-center">
-                      Procedure / Steps <span className="text-red-500 ml-1">*</span>
-                      <AutoChip show={isAuto('procedure')} />
+                    <Label className="text-sm font-medium flex items-center">
+                      <ListChecks className="h-4 w-4 mr-1.5" />
+                      Test Questions (Gap Questions)
+                      <AutoChip show={isAuto('gap_questions')} />
                     </Label>
-                    <Textarea
-                      id="procedure"
-                      placeholder="Step-by-step instructions to perform the test..."
-                      value={data.procedure}
-                      onChange={e => { setData('procedure', e.target.value); if (errors.procedure) clearErrors('procedure') }}
-                      className={cn('min-h-[160px] resize-y transition-all', autoInputClass(isAuto('procedure')), errors.procedure && 'border-red-500')}
-                    />
-                    {errors.procedure && <p className="text-red-600 text-sm mt-1.5">{errors.procedure}</p>}
+
+                    {gapLoading ? (
+                      <div className="flex items-center gap-2 py-3 px-4 rounded-lg border border-border/40 bg-muted/20 text-sm text-muted-foreground">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-16 0z" />
+                        </svg>
+                        Loading questions…
+                      </div>
+                    ) : (
+                      <GapQuestionsList questions={gapQuestions} />
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      Questions defined on this requirement — used as the test checklist. To edit them, update the requirement.
+                    </p>
                   </div>
 
-                  {/* ── Evidence — tabs Text / Files / Both ── */}
+                  {/* ── Evidence (OBLIGATOIRE) ── */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium flex items-center gap-1.5">
                         <Paperclip className="h-3.5 w-3.5" />
                         Evidence / Proof
+                        <span className="text-red-500 ml-1">*</span>
                       </Label>
 
                       {/* Mode tabs */}
@@ -336,7 +423,10 @@ useEffect(() => {
                           <button
                             key={mode}
                             type="button"
-                            onClick={() => setEvidenceMode(mode)}
+                            onClick={() => {
+                              setEvidenceMode(mode)
+                              if (errors.evidence) clearErrors('evidence')
+                            }}
                             className={cn(
                               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
                               evidenceMode === mode
@@ -357,8 +447,11 @@ useEffect(() => {
                         id="evidence"
                         placeholder="Screenshots, logs, documents, links... (one per line if multiple)"
                         value={data.evidence}
-                        onChange={e => setData('evidence', e.target.value)}
-                        className="min-h-[120px] resize-y"
+                        onChange={e => {
+                          setData('evidence', e.target.value)
+                          if (errors.evidence) clearErrors('evidence')
+                        }}
+                        className={cn('min-h-[120px] resize-y', errors.evidence && 'border-red-500')}
                       />
                     )}
 
@@ -371,7 +464,10 @@ useEffect(() => {
                           accept="*"
                           multiple
                           simulateUpload
-                          onFilesChange={handleEvidenceFiles}
+                          onFilesChange={files => {
+                            handleEvidenceFiles(files)
+                            if (errors.evidence) clearErrors('evidence')
+                          }}
                           labels={{
                             dropzone: 'Drag & drop evidence files here, or click to select',
                             browse: 'Browse files',
@@ -385,6 +481,14 @@ useEffect(() => {
                           <p className="text-red-600 text-sm mt-1.5">{errors.evidence_files}</p>
                         )}
                       </div>
+                    )}
+
+                    {/* Error evidence (shown when not file-only mode) */}
+                    {errors.evidence && (
+                      <p className="text-red-600 text-sm flex items-center gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {errors.evidence}
+                      </p>
                     )}
 
                     <p className="text-xs text-muted-foreground">
@@ -463,7 +567,7 @@ useEffect(() => {
                     <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-5">
                       <Label htmlFor="failure_reason" className="text-sm font-medium flex items-center gap-2 text-red-500">
                         <AlertCircle className="h-4 w-4" />
-                        Reason for failure <span className="text-red-500">*</span>
+                        Reason for failure and recommendation <span className="text-red-500">*</span>
                       </Label>
                       <Textarea
                         id="failure_reason"
@@ -486,7 +590,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* ── Actions ── */}
               <div className="flex flex-col sm:flex-row justify-end gap-4 pt-12 border-t">
                 <Button
                   type="button"
@@ -498,11 +602,18 @@ useEffect(() => {
                 >
                   Cancel
                 </Button>
+
                 <Button
                   type="submit"
-                  disabled={processing}
+                  disabled={processing || !isFormComplete}
                   size="lg"
-                  className="min-w-[220px] bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+                  className={cn(
+                    'min-w-[220px] transition-all',
+                    isFormComplete
+                      ? 'bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary'
+                      : 'opacity-50 cursor-not-allowed'
+                  )}
+                  title={!isFormComplete ? 'Fill in all required fields to submit' : undefined}
                 >
                   {processing ? (
                     <span className="flex items-center gap-2">
@@ -512,7 +623,12 @@ useEffect(() => {
                       </svg>
                       Creating...
                     </span>
-                  ) : 'Create Test'}
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {!isFormComplete && <Circle className="h-4 w-4 opacity-60" />}
+                      Create Test
+                    </span>
+                  )}
                 </Button>
               </div>
 

@@ -1011,4 +1011,19 @@ class RequirementController extends Controller
             'message' => count($created) . ' requirement(s) imported successfully.'
         ]);
     }
+    public function getGapQuestions(Requirement $requirement)
+{
+    $user         = Auth::user();
+    $currentOrgId = $user->current_organization_id;
+ 
+    if ($requirement->organization_id !== $currentOrgId || $requirement->is_deleted) {
+        abort(403, 'Unauthorized');
+    }
+ 
+    $questions = $requirement->gapQuestions()
+        ->orderBy('id')
+        ->get(['id', 'text']);
+ 
+    return response()->json($questions);
+}
 }

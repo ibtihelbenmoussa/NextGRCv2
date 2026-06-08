@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 
 import {
   Key,
@@ -66,6 +67,9 @@ import {
   ListFilter,
   CircleDot,
   Globe2,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 import type { ColumnDef } from '@tanstack/react-table';
@@ -165,7 +169,10 @@ interface FrameworksIndexProps {
 type GroupBy = 'status' | 'type';
 type ViewMode = 'table' | 'cards';
 
-// ─── Soft Pill Styles (matching Requirements page) ───────────────────────────
+// ─── Constante : nb de cartes visibles avant "Voir les N autres" ─────────────
+const INITIAL_VISIBLE = 999;
+
+// ─── Soft Pill Styles ─────────────────────────────────────────────────────────
 const statusStyles: Record<string, { pill: string; dot: string; kanbanBg: string; kanbanBorder: string; kanbanText: string }> = {
   active: {
     pill: 'bg-[#EAF3DE] text-[#27500A] dark:bg-[#27500A] dark:text-[#C0DD97]',
@@ -276,7 +283,7 @@ function useCountUp(target: number, duration = 900) {
   return value;
 }
 
-// ─── KPI Card (unchanged - kept your nice 3D tilt) ───────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({
   label, value, sub, fillPercent, fillColor, icon, valueColor, delay = 0,
 }: {
@@ -389,6 +396,266 @@ function KpiCard({
   );
 }
 
+// ─── KanbanColumn ─────────────────────────────────────────────────────────────
+// Colonne Kanban autonome avec sa propre barre de recherche et son expand/collapse
+interface KanbanColumnProps {
+  columnKey: string;
+  title: string;
+  items: Framework[];
+  styles: { kanbanBg: string; kanbanBorder: string; kanbanText: string };
+  droppableId: string;
+  onDragEnd?: never; // géré par le parent via DragDropContext
+}
+
+function KanbanColumn({
+  columnKey,
+  title,
+  items,
+  styles: s,
+}: {
+  columnKey: string;
+  title: string;
+  items: Framework[];
+  styles: { kanbanBg: string; kanbanBorder: string; kanbanText: string };
+}) {
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Filtrage local par code ou nom
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.toLowerCase();
+    return items.filter(
+      (fw) =>
+        fw.code.toLowerCase().includes(q) ||
+        fw.name.toLowerCase().includes(q) ||
+        (fw.publisher ?? '').toLowerCase().includes(q),
+    );
+  }, [items, search]);
+
+  // Expand/collapse : quand on cherche on affiche tout, sinon INITIAL_VISIBLE
+  const isSearching = search.trim().length > 0;
+  const visibleItems = isSearching || expanded ? filtered : filtered.slice(0, INITIAL_VISIBLE);
+  const hiddenCount = filtered.length - INITIAL_VISIBLE;
+  const showToggle = !isSearching && filtered.length > INITIAL_VISIBLE;
+
+  // Reset expand quand la recherche change
+  useEffect(() => {
+    if (isSearching) setExpanded(false);
+  }, [isSearching]);
+
+  return (
+    <Droppable droppableId={columnKey}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className={cn(
+            'flex flex-col min-w-[320px] rounded-xl border bg-gradient-to-b from-card/80 to-card/40 shadow-sm transition-all duration-200',
+            snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl',
+          )}
+        >
+          {/* ── En-tête de colonne ── */}
+          <div
+            className={cn(
+              'px-5 pt-4 pb-3 rounded-t-xl border-b-2 flex flex-col gap-2.5',
+              s.kanbanBg,
+              s.kanbanBorder,
+            )}
+          >
+            {/* Titre + compteur */}
+            <div className="flex items-center justify-between">
+              <span className={cn('font-medium text-base', s.kanbanText)}>{title}</span>
+              <span
+                className={cn(
+                  'inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border bg-background/70',
+                  s.kanbanBorder,
+                  s.kanbanText,
+                )}
+              >
+                {/* Affiche le nb filtré / total si recherche active */}
+                {isSearching ? `${filtered.length} / ${items.length}` : items.length}
+              </span>
+            </div>
+
+            {/* Barre de recherche */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="h-8 pl-8 text-xs bg-background/70 border-border/60 focus-visible:ring-1 focus-visible:ring-primary/40"
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Effacer"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ── Corps de la colonne ── */}
+          <div className="p-4 flex-1 space-y-4 min-h-[400px]">
+            {/* Aucun résultat */}
+            {filtered.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground/70 italic py-12">
+                <Search className="h-5 w-5 opacity-40" />
+                <span className="text-sm">Aucun résultat</span>
+              </div>
+            ) : (
+              <>
+                {/* Cartes visibles */}
+                {visibleItems.map((fw, idx) => (
+                  <Draggable key={fw.id} draggableId={String(fw.id)} index={idx}>
+                    {(dragProvided, dragSnapshot) => (
+                      <Card
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        className={cn(
+                          'transition-all duration-200 cursor-grab active:cursor-grabbing',
+                          dragSnapshot.isDragging
+                            ? 'shadow-2xl ring-2 ring-primary/60 scale-[1.02]'
+                            : 'hover:shadow-md hover:ring-1 hover:ring-primary/30',
+                        )}
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div {...dragProvided.dragHandleProps}>
+                              <GripVertical className="h-5 w-5 text-muted-foreground/70 hover:text-foreground transition-colors" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              {/* Highlight de la recherche dans code + nom */}
+                              <div className="font-medium leading-tight mb-1.5">
+                                <HighlightText text={`${fw.code} — ${fw.name}`} query={search} />
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {fw.description || 'Aucune description'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <StatusPill value={fw.status} />
+                            <TypePill value={fw.type} />
+                            {fw.version && (
+                              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+                                v{fw.version}
+                              </span>
+                            )}
+                          </div>
+
+                          {fw.jurisdictions?.length ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {fw.jurisdictions.slice(0, 4).map((j, i) => {
+                                const name = typeof j === 'string' ? j : j.name || '—';
+                                const flagUrl = getFlagUrl(name);
+                                return (
+                                  <Badge key={i} variant="outline" className="text-xs flex items-center gap-1 px-2.5 py-1">
+                                    {flagUrl ? (
+                                      <img src={flagUrl} alt={`${name} flag`} className="w-5 h-4 rounded-sm object-cover" loading="lazy" />
+                                    ) : (
+                                      <Globe2 className="h-3.5 w-3.5 text-emerald-400" />
+                                    )}
+                                    <span className="truncate max-w-[140px]">{name}</span>
+                                  </Badge>
+                                );
+                              })}
+                              {fw.jurisdictions.length > 4 && (
+                                <Badge variant="outline" className="text-xs px-2.5 py-1">+{fw.jurisdictions.length - 4}</Badge>
+                              )}
+                            </div>
+                          ) : null}
+
+                          {fw.tags?.length ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {fw.tags.slice(0, 4).map((tag, i) => {
+                                const name = typeof tag === 'string' ? tag : (tag as RelationItem).name || '—';
+                                return <Badge key={i} variant="secondary" className="text-xs">{name}</Badge>;
+                              })}
+                              {fw.tags.length > 4 && <Badge variant="secondary" className="text-xs">+{fw.tags.length - 4}</Badge>}
+                            </div>
+                          ) : null}
+
+                          <div className="pt-3 flex gap-2">
+                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
+                              <Link href={`/frameworks/${fw.id}`}>
+                                <Eye className="mr-1.5 h-3.5 w-3.5" /> Voir
+                              </Link>
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
+                              <Link href={`/frameworks/${fw.id}/edit`}>
+                                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Éditer
+                              </Link>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Draggable>
+                ))}
+
+                {/* ── Bouton "Voir les N autres" / "Réduire" ── */}
+                {showToggle && (
+                  <button
+                    onClick={() => setExpanded((prev) => !prev)}
+                    className={cn(
+                      'w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium',
+                      'border border-dashed border-border/60 text-muted-foreground',
+                      'hover:border-primary/50 hover:text-primary hover:bg-primary/5',
+                      'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                    )}
+                  >
+                    {expanded ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Réduire
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Voir les {hiddenCount} autres
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            )}
+
+            {provided.placeholder}
+          </div>
+        </div>
+      )}
+    </Droppable>
+  );
+}
+
+// ─── HighlightText : surligne la query dans un texte ─────────────────────────
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -405,7 +672,8 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
     const active = data.filter(f => f.status?.toLowerCase() === 'active').length;
     const draft = data.filter(f => f.status?.toLowerCase() === 'draft').length;
     const archived = data.filter(f => f.status?.toLowerCase() === 'archived').length;
-    return { total, active, draft, archived,
+    return {
+      total, active, draft, archived,
       activeRate: Math.round((active / pageSize) * 100),
       draftRate: Math.round((draft / pageSize) * 100),
       archivedRate: Math.round((archived / pageSize) * 100),
@@ -420,7 +688,8 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
     const regulation = data.filter(f => f.type?.toLowerCase() === 'regulation').length;
     const contract = data.filter(f => f.type?.toLowerCase() === 'contract').length;
     const internalPolicy = data.filter(f => f.type?.toLowerCase() === 'internal_policy').length;
-    return { total, standard, regulation, contract, internalPolicy,
+    return {
+      total, standard, regulation, contract, internalPolicy,
       standardRate: Math.round((standard / pageSize) * 100),
       regulationRate: Math.round((regulation / pageSize) * 100),
       contractRate: Math.round((contract / pageSize) * 100),
@@ -468,7 +737,7 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
     }
   };
 
-  // ── Grouping for Kanban ──────────────────────────────────────
+  // ── Grouping pour le Kanban ──────────────────────────────────
   const groupedData = useMemo(() => {
     return frameworks.data.reduce((acc, fw) => {
       const key = groupBy === 'status'
@@ -489,14 +758,20 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
       }
     : {
         keys: ['standard', 'regulation', 'contract', 'internal_policy'],
-        getTitle: (key: string) => key === 'internal_policy' ? 'Internal Policy' : key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        getTitle: (key: string) =>
+          key === 'internal_policy'
+            ? 'Internal Policy'
+            : key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
         styles: typeStyles,
         field: 'type' as const,
       };
 
   const onDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
-    if (!destination || (source.droppableId === destination.droppableId && source.index === destination.index)) return;
+    if (
+      !destination ||
+      (source.droppableId === destination.droppableId && source.index === destination.index)
+    ) return;
 
     const framework = frameworks.data.find(f => f.id === Number(draggableId));
     if (!framework) return;
@@ -522,7 +797,7 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
     router.get(url, {}, { preserveState: true, preserveScroll: true });
   };
 
-  // ── Columns ──────────────────────────────────────────────────
+  // ── Columns (Table) ──────────────────────────────────────────
   const columns: ColumnDef<Framework>[] = [
     {
       accessorKey: 'code',
@@ -718,7 +993,7 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
         <div
           className={cn(
             'grid gap-3',
-            groupBy === 'status' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+            groupBy === 'status' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
           )}
           style={{ perspective: '1200px' }}
         >
@@ -769,11 +1044,17 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
             {frameworks.last_page > 1 && (
               <div className="flex items-center justify-between px-2 py-4">
                 <p className="text-sm text-muted-foreground">
-                  Showing <span className="font-medium">{frameworks.from}</span> – <span className="font-medium">{frameworks.to}</span> of{' '}
+                  Showing{' '}
+                  <span className="font-medium">{frameworks.from}</span> –{' '}
+                  <span className="font-medium">{frameworks.to}</span> of{' '}
                   <span className="font-medium">{frameworks.total}</span> results
                 </p>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" disabled={!frameworks.prev_page_url} onClick={() => goToPage(frameworks.prev_page_url)}>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={!frameworks.prev_page_url}
+                    onClick={() => goToPage(frameworks.prev_page_url)}
+                  >
                     Previous
                   </Button>
                   {frameworks.links
@@ -788,7 +1069,11 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
                         dangerouslySetInnerHTML={{ __html: link.label }}
                       />
                     ))}
-                  <Button variant="outline" size="sm" disabled={!frameworks.next_page_url} onClick={() => goToPage(frameworks.next_page_url)}>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={!frameworks.next_page_url}
+                    onClick={() => goToPage(frameworks.next_page_url)}
+                  >
                     Next
                   </Button>
                 </div>
@@ -796,6 +1081,7 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
             )}
           </>
         ) : (
+          /* ── Vue Kanban ── */
           <div className="space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <h2 className="text-lg font-semibold tracking-tight">
@@ -816,129 +1102,15 @@ export default function FrameworksIndex({ frameworks }: FrameworksIndexProps) {
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="overflow-x-auto pb-6 scrollbar-thin">
                 <div className="grid grid-flow-col auto-cols-[minmax(320px,1fr)] gap-5 lg:gap-6">
-                  {columnConfig.keys.map((key) => {
-                    const items = groupedData[key] || [];
-                    const s = columnConfig.styles[key] ?? fallbackStyle;
-
-                    return (
-                      <Droppable droppableId={key} key={key}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
-                            className={cn(
-                              'flex flex-col min-w-[320px] rounded-xl border bg-gradient-to-b from-card/80 to-card/40 shadow-sm transition-all duration-200',
-                              snapshot.isDraggingOver && 'ring-2 ring-primary/50 shadow-xl'
-                            )}
-                          >
-                            <div className={cn('px-5 py-4 rounded-t-xl border-b-2 font-medium text-lg flex items-center justify-between', s.kanbanBg, s.kanbanBorder)}>
-                              <span className={s.kanbanText}>{columnConfig.getTitle(key)}</span>
-                              <span className={cn('inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border bg-background/70', s.kanbanBorder, s.kanbanText)}>
-                                {items.length}
-                              </span>
-                            </div>
-
-                            <div className="p-4 flex-1 space-y-4 min-h-[500px]">
-                              {items.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-muted-foreground/70 italic py-12">
-                                  Empty column
-                                </div>
-                              ) : (
-                                items.map((fw, idx) => (
-                                  <Draggable key={fw.id} draggableId={String(fw.id)} index={idx}>
-                                    {(dragProvided, dragSnapshot) => (
-                                      <Card
-                                        ref={dragProvided.innerRef}
-                                        {...dragProvided.draggableProps}
-                                        className={cn(
-                                          'transition-all duration-200 cursor-grab active:cursor-grabbing',
-                                          dragSnapshot.isDragging
-                                            ? 'shadow-2xl ring-2 ring-primary/60 scale-[1.02]'
-                                            : 'hover:shadow-md hover:ring-1 hover:ring-primary/30'
-                                        )}
-                                      >
-                                        <CardContent className="p-4 space-y-3">
-                                          <div className="flex items-start justify-between gap-3">
-                                            <div {...dragProvided.dragHandleProps}>
-                                              <GripVertical className="h-5 w-5 text-muted-foreground/70 hover:text-foreground transition-colors" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="font-medium leading-tight mb-1.5">
-                                                {fw.code} — {fw.name}
-                                              </div>
-                                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                                {fw.description || 'No description provided'}
-                                              </p>
-                                            </div>
-                                          </div>
-
-                                          <div className="flex flex-wrap gap-2 pt-2">
-                                            <StatusPill value={fw.status} />
-                                            <TypePill value={fw.type} />
-                                            {fw.version && (
-                                              <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-                                                v{fw.version}
-                                              </span>
-                                            )}
-                                          </div>
-
-                                          {fw.jurisdictions?.length ? (
-                                            <div className="flex flex-wrap gap-1.5 pt-1">
-                                              {fw.jurisdictions.slice(0, 4).map((j, i) => {
-                                                const name = typeof j === 'string' ? j : j.name || '—';
-                                                const flagUrl = getFlagUrl(name);
-                                                return (
-                                                  <Badge key={i} variant="outline" className="text-xs flex items-center gap-1 px-2.5 py-1">
-                                                    {flagUrl ? (
-                                                      <img src={flagUrl} alt={`${name} flag`} className="w-5 h-4 rounded-sm object-cover" loading="lazy" />
-                                                    ) : (
-                                                      <Globe2 className="h-3.5 w-3.5 text-emerald-400" />
-                                                    )}
-                                                    <span className="truncate max-w-[140px]">{name}</span>
-                                                  </Badge>
-                                                );
-                                              })}
-                                              {fw.jurisdictions.length > 4 && (
-                                                <Badge variant="outline" className="text-xs px-2.5 py-1">+{fw.jurisdictions.length - 4}</Badge>
-                                              )}
-                                            </div>
-                                          ) : null}
-
-                                          {fw.tags?.length ? (
-                                            <div className="flex flex-wrap gap-1.5 pt-1">
-                                              {fw.tags.slice(0, 4).map((tag, i) => {
-                                                const name = typeof tag === 'string' ? tag : (tag as RelationItem).name || '—';
-                                                return <Badge key={i} variant="secondary" className="text-xs">{name}</Badge>;
-                                              })}
-                                              {fw.tags.length > 4 && <Badge variant="secondary" className="text-xs">+{fw.tags.length - 4}</Badge>}
-                                            </div>
-                                          ) : null}
-
-                                          <div className="pt-3 flex gap-2">
-                                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                                              <Link href={`/frameworks/${fw.id}`}>
-                                                <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                                              </Link>
-                                            </Button>
-                                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                                              <Link href={`/frameworks/${fw.id}/edit`}>
-                                                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                                              </Link>
-                                            </Button>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    )}
-                                  </Draggable>
-                                ))
-                              )}
-                              {provided.placeholder}
-                            </div>
-                          </div>
-                        )}
-                      </Droppable>
-                    );
-                  })}
+                  {columnConfig.keys.map((key) => (
+                    <KanbanColumn
+                      key={key}
+                      columnKey={key}
+                      title={columnConfig.getTitle(key)}
+                      items={groupedData[key] || []}
+                      styles={columnConfig.styles[key] ?? fallbackStyle}
+                    />
+                  ))}
                 </div>
               </div>
             </DragDropContext>

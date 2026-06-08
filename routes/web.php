@@ -219,6 +219,8 @@ Route::delete('/domains/{domain}', [DomainController::class, 'destroy']);
   Route::post('/ai/analyze-document', [DocumentAnalysisController::class, 'analyze']);
 Route::post('/ai/import-requirements', [DocumentAnalysisController::class, 'import']);
     Route::resource('requirements', RequirementController::class);
+    Route::get('/requirements/{requirement}/gap-questions', [RequirementController::class, 'getGapQuestions'])
+   ->name('requirements.gap-questions');
 // ================= Gap Assessment =================
 
 // ✅ Routes statiques (pas de modèle)

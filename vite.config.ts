@@ -1,4 +1,3 @@
-import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
@@ -13,11 +12,23 @@ export default defineConfig({
         }),
         react(),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-        }),
+        // wayfinder supprimé — php pas disponible dans le container vite
     ],
     esbuild: {
         jsx: 'automatic',
+    },
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: true,
+        hmr: {
+            host: 'localhost',
+            clientPort: 5173,
+        },
+        cors: true,
+        watch: {
+            usePolling: true,
+            interval: 1000,
+        },
     },
 });
