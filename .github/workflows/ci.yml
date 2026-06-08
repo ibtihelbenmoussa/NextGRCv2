@@ -7,64 +7,51 @@ on:
     branches: [ main ]
 
 jobs:
-
-  build-laravel:
-    name: 🐘 Build Laravel
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-
-      - name: Install Composer dependencies
-        run: composer install --no-dev --optimize-autoloader
-
-      - name: Copy .env
-        run: cp .env.example .env
-
-      - name: Generate app key
-        run: php artisan key:generate
-
-  build-docker:
-    name: 🐳 Build Docker
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker Compose
-        run: docker compose build
-
-  build-flask:
-    name: 🐍 Build Flask ML
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -r ml/requirements.txt
-
   deploy:
-    name: 🚀 Deploy to VM
+    name: 🚀 Déploiement sur VM
     runs-on: self-hosted
-    needs: [build-laravel, build-docker, build-flask]
     steps:
-      - name: Checkout
+      - name: Récupérer le code
         uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Créer le fichier .env
         run: |
           cd $GITHUB_WORKSPACE
+          cp .env.example .env || true
+          # Générer la clé Laravel (optionnel)
+          docker-compose run --rm app php artisan key:generate || true
+
+      - name: Déployer avec Docker
+        run: |
+          cd $GITHUB_WORKSPACE
+          
+          # Arrêter les conteneurs existants
           docker-compose down
-          docker-compose build
-          nohup docker-compose up -d > /tmp/deploy.log 2>&1
-          sleep 20
+          
+          # Construire et démarrer
+          docker-compose up -d --build
+          
+          # Attendre que les services démarrent
+          sleep 15
+          
+          # Vérifier l'état
           docker-compose ps
-          echo "✅ Deploy terminé !"
+          
+          # Migrer la base de données
+          docker-compose exec -T app php artisan migrate --force || true
+          
+          echo "✅ Déploiement terminé avec succès !"
+
+      - name: Vérification de santé
+        run: |
+          # Tester si l'application répond
+          for i in {1..30}; do
+            if curl -s http://localhost:80 > /dev/null; then
+              echo "✅ Application accessible"
+              exit 0
+            fi
+            echo "En attente du service... ($i/30)"
+            sleep 2
+          done
+          echo "❌ L'application ne répond pas"
+          exit 1
