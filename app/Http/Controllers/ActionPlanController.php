@@ -3,200 +3,168 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActionPlan;
-use App\Models\GapAssessment;
-use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ActionPlansExport;
 
 class ActionPlanController extends Controller
 {
-    // ─── Valid status transitions ───────────────────────────────────────────────
-    // Only forward transitions are allowed:
-    //   open → in_progress → done
-    // Going backward (e.g. done → open) is blocked intentionally.
-    private const ALLOWED_TRANSITIONS = [
-        'open'        => ['in_progress'],
-        'in_progress' => ['done'],
-        'done'        => [],          // terminal state
-    ];
-
-    // ─── Overdue scope helper ───────────────────────────────────────────────────
-    // "Overdue" means: not done AND due_date is strictly before today midnight.
-    // We avoid whereDate() / DATE() wrappers so the DB can use an index on due_date.
-    private function applyOverdueScope($query)
-    {
-        return $query->where('status', '!=', 'done')
-                     ->where('due_date', '<', now()->startOfDay());
-    }
-
-    // ─── index ─────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $query = ActionPlan::with(['gap.requirement', 'assignee']);
+        $user  = Auth::user();
+        $orgId = $user->current_organization_id;
 
-        // ── Status filter ──
-        if ($status = $request->input('status')) {
-            $statuses = array_filter(explode(',', $status));
+        $query = ActionPlan::whereHas('assessment', fn($q) =>
+            $q->where('organization_id', $orgId)
+        )
+        ->with([
+            'assessment:id,name,code',
+            'assignedUser:id,name',
+        ]);
+
+        // ── Search (title, description, assessment name/code) ──────────────
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('assessment', fn($q2) =>
+                      $q2->where('name', 'like', "%{$search}%")
+                         ->orWhere('code', 'like', "%{$search}%")
+                  )
+                  ->orWhereHas('assignedUser', fn($q2) =>
+                      $q2->where('name', 'like', "%{$search}%")
+                  );
+            });
+        }
+
+        // ── Status filter ──────────────────────────────────────────────────
+        // ServerDataTable envoie ?status=open,in_progress (virgule) ou ?status[]=open (array)
+        $rawStatus = $request->input('status');
+        if ($rawStatus) {
+            $statuses = is_array($rawStatus)
+                ? $rawStatus
+                : array_filter(explode(',', $rawStatus));
             if (!empty($statuses)) {
                 $query->whereIn('status', $statuses);
             }
         }
 
-        // ── Search ──
+        // ── Sort ───────────────────────────────────────────────────────────
+        // ServerDataTable envoie ?sort=-col (desc) ou ?sort=col (asc)
+        $rawSort = $request->input('sort', '');
+        $sortDir = str_starts_with($rawSort, '-') ? 'desc' : 'asc';
+        $sortCol = ltrim($rawSort, '-');
+
+        $allowed = ['title', 'due_date', 'status', 'step_level', 'assigned_to', 'created_at'];
+        if ($sortCol && in_array($sortCol, $allowed)) {
+            $query->orderBy($sortCol, $sortDir);
+        } else {
+            $query->orderBy('step_level')->orderBy('step_index');
+        }
+
+        // ── Paginate + transform ───────────────────────────────────────────
+        $plans = $query
+            ->paginate($request->input('per_page', 15))
+            ->withQueryString()
+            ->through(fn($ap) => [
+                'id'                  => $ap->id,
+                'title'               => $ap->title,
+                'description'         => $ap->description,
+                'assigned_to'         => $ap->assigned_to,
+                'assigned_user_name'  => $ap->assignedUser?->name,
+                'due_date'            => $ap->due_date?->format('Y-m-d'),
+                'status'              => $ap->status,
+                'gap_assessment_id'   => $ap->gap_id,
+                'gap_assessment_name' => $ap->assessment?->name,
+                'gap_assessment_code' => $ap->assessment?->code,
+                'step_level'          => $ap->step_level,
+                'step_index'          => $ap->step_index,
+            ]);
+
+        $users = \App\Models\User::whereHas('organizations', fn($q) =>
+            $q->where('organizations.id', $orgId)
+        )->select('id', 'name')->orderBy('name')->get();
+
+        return Inertia::render('ActionPlans/Index', [
+            'plans' => $plans,
+            'users' => $users,
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $user  = Auth::user();
+        $orgId = $user->current_organization_id;
+
+        $query = ActionPlan::whereHas('assessment', fn($q) =>
+            $q->where('organization_id', $orgId)
+        )
+        ->with(['assessment:id,name,code', 'assignedUser:id,name']);
+
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhereHas(
-                      'gap.requirement',
-                      fn($r) => $r->where('title', 'like', "%{$search}%")
-                                  ->orWhere('code',  'like', "%{$search}%")
+                  ->orWhereHas('assessment', fn($q2) =>
+                      $q2->where('name', 'like', "%{$search}%")
+                         ->orWhere('code', 'like', "%{$search}%")
                   );
             });
         }
 
-        // ── Sorting ──
-        $allowedSorts = ['title', 'status', 'due_date', 'created_at'];
-        if ($sort = $request->input('sort')) {
-            $desc   = str_starts_with($sort, '-');
-            $column = ltrim($sort, '-');
-            if (in_array($column, $allowedSorts)) {
-                $query->orderBy($column, $desc ? 'desc' : 'asc');
-            }
-        } else {
-            // Overdue rows first, then most recent
-            $query->orderByRaw("
-                CASE
-                    WHEN status != 'done' AND due_date < CURDATE() THEN 0
-                    ELSE 1
-                END
-            ")->latest();
+        if ($status = $request->input('status')) {
+            $query->whereIn('status', explode(',', $status));
         }
 
-        // ── Pagination ──
-        $perPage = in_array((int) $request->input('per_page', 15), [10, 15, 20, 30, 50])
-            ? (int) $request->input('per_page', 15)
-            : 15;
+        $plans = $query->orderBy('step_level')->orderBy('step_index')->get()
+            ->map(fn($ap) => [
+                'Assessment Code' => $ap->assessment?->code,
+                'Assessment'      => $ap->assessment?->name,
+                'Title'           => $ap->title,
+                'Description'     => $ap->description,
+                'Assigned To'     => $ap->assignedUser?->name,
+                'Due Date'        => $ap->due_date?->format('Y-m-d'),
+                'Status'          => $ap->status,
+            ]);
 
-        $actionPlans = $query->paginate($perPage)->withQueryString();
-
-        $users = User::select('id', 'name')->orderBy('name')->get();
-
-        // ── Global KPIs (not paginated — counts across ALL records) ──
-        // These are returned to the frontend so KPI cards reflect reality,
-        // not just the current page.
-        $globalStats = [
-            'total'       => ActionPlan::count(),
-            'open'        => ActionPlan::where('status', 'open')->count(),
-            'in_progress' => ActionPlan::where('status', 'in_progress')->count(),
-            'done'        => ActionPlan::where('status', 'done')->count(),
-            'overdue'     => $this->applyOverdueScope(ActionPlan::query())->count(),
-        ];
-
-        return Inertia::render('ActionPlans/Index', [
-            'actionPlans' => $actionPlans,
-            'users'       => $users,
-            'globalStats' => $globalStats,
-        ]);
+        return Excel::download(
+            new \App\Exports\CollectionExport($plans, [
+                'Assessment Code', 'Assessment', 'Title', 'Description',
+                'Assigned To', 'Due Date', 'Status',
+            ]),
+            'action-plans-' . now()->format('Y-m-d') . '.xlsx'
+        );
     }
 
-    // ─── store ─────────────────────────────────────────────────────────────────
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'gap_id'      => 'required|exists:gap_assessments,id',
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'assigned_to' => 'required|exists:users,id',
-            'due_date'    => 'required|date|after_or_equal:today',
-            'status'      => 'in:open,in_progress,done',
-        ]);
-
-        // New plans always start as "open" regardless of what was sent.
-        $validated['status'] = 'open';
-
-        ActionPlan::create($validated);
-
-        return back()->with('success', 'Action plan created successfully.');
-    }
-
-    // ─── update ────────────────────────────────────────────────────────────────
     public function update(Request $request, ActionPlan $actionPlan)
     {
+        $user  = Auth::user();
+        $orgId = $user->current_organization_id;
+
+        abort_if(
+            $actionPlan->assessment?->organization_id !== $orgId,
+            403
+        );
+
         $validated = $request->validate([
-            'title'       => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
-            'assigned_to' => 'sometimes|required|exists:users,id',
-            'due_date'    => 'sometimes|required|date',
-            'status'      => 'sometimes|required|in:open,in_progress,done',
+            'assigned_to' => 'nullable|exists:users,id',
+            'due_date'    => 'nullable|date',
+            'status'      => 'nullable|in:open,in_progress',
         ]);
-
-        // ── Enforce transition rules when status is being changed ──
-        if (isset($validated['status']) && $validated['status'] !== $actionPlan->status) {
-            $allowed = self::ALLOWED_TRANSITIONS[$actionPlan->status] ?? [];
-
-            if (!in_array($validated['status'], $allowed)) {
-                return back()->withErrors([
-                    'status' => "Cannot transition from \"{$actionPlan->status}\" to \"{$validated['status']}\". "
-                              . 'Allowed: ' . (empty($allowed) ? 'none (terminal state)' : implode(', ', $allowed)),
-                ]);
-            }
-        }
 
         $actionPlan->update($validated);
 
-        // ── Auto-close the parent gap if all its action plans are done ──
-        $this->syncGapStatus($actionPlan->gap_id);
-
-        return back()->with('success', 'Action plan updated successfully.');
-    }
-
-    // ─── destroy ───────────────────────────────────────────────────────────────
-    public function destroy(ActionPlan $actionPlan)
-    {
-        $gapId = $actionPlan->gap_id;
-
-        $actionPlan->delete();
-
-        // Re-evaluate gap status after deletion
-        $this->syncGapStatus($gapId);
-
-        return back()->with('success', 'Action plan deleted.');
-    }
-
-    // ─── syncGapStatus ─────────────────────────────────────────────────────────
-    // Automatically sets the parent gap's status based on its action plans:
-    //   • All done      → closed
-    //   • Any in_progress (and none overdue) → in_progress
-    //   • Any overdue   → overdue  (if your GapAssessment model supports it)
-    //   • Otherwise     → open
-    //
-    // Adjust the status strings below to match your GapAssessment::status enum.
-    private function syncGapStatus(int $gapId): void
-    {
-        $gap   = GapAssessment::find($gapId);
-        if (!$gap) return;
-
-        $plans = ActionPlan::where('gap_id', $gapId)->get();
-
-        if ($plans->isEmpty()) {
-            // No plans left — leave gap status unchanged (or set to 'open' if preferred)
-            return;
-        }
-
-        $allDone      = $plans->every(fn($p) => $p->status === 'done');
-        $anyOverdue   = $plans->contains(
-            fn($p) => $p->status !== 'done' && $p->due_date && $p->due_date->lt(now()->startOfDay())
-        );
-        $anyInProgress = $plans->contains(fn($p) => $p->status === 'in_progress');
-
-        $newStatus = match (true) {
-            $allDone      => 'closed',
-            $anyOverdue   => 'overdue',    // remove this line if GapAssessment has no "overdue" status
-            $anyInProgress => 'in_progress',
-            default       => 'open',
-        };
-
-        $gap->update(['status' => $newStatus]);
+        return response()->json([
+            'success' => true,
+            'plan'    => [
+                'id'                 => $actionPlan->id,
+                'assigned_to'        => $actionPlan->assigned_to,
+                'assigned_user_name' => $actionPlan->assignedUser?->name,
+                'due_date'           => $actionPlan->due_date?->format('Y-m-d'),
+                'status'             => $actionPlan->status,
+            ],
+        ]);
     }
 }

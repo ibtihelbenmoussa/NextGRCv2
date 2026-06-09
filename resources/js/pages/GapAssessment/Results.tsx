@@ -3,12 +3,26 @@ import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import {
-  ChevronLeft, ChevronRight, Edit2, Download, Target, TrendingUp,
+  ChevronLeft, ChevronRight, Download, Target, TrendingUp,
   AlertTriangle, CheckCheck, ArrowRight, ChevronDown,
-  ChevronUp, Zap, BarChart3, Shield, Loader2, Sparkles,
-  Layers,
+  ChevronUp, BarChart3, Shield, Loader2, Sparkles, Layers,
+  User, CalendarIcon,
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -37,7 +51,6 @@ interface RequirementResult {
 
 interface RoadmapStep {
   level: number
-  icon: string
   label: string
   subtitle: string
   status: 'completed' | 'current' | 'todo'
@@ -66,10 +79,29 @@ interface GapAssessment {
   overall_maturity_level: number
 }
 
+interface ActionPlan {
+  id: number
+  title: string
+  description: string
+  assigned_to: number | null
+  assigned_user_name: string | null
+  due_date: string | null
+  status: string
+  step_level: number | null
+  step_index: number | null
+}
+
+interface UserOption {
+  id: number
+  name: string
+}
+
 interface Props {
   assessment: GapAssessment
   requirements: RequirementResult[]
   ml_result?: MLResult
+  users: UserOption[]
+  action_plans: ActionPlan[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,42 +179,29 @@ function PaginationBar({ page, totalPages, setPage }: {
     }
     return pages
   }
-
   return (
     <div className="flex items-center justify-center gap-1 pt-3 mt-1 border-t border-border/20">
-      <button
-        onClick={() => setPage(Math.max(1, page - 1))}
-        disabled={page === 1}
+      <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
         className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground
-          hover:bg-muted/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
+          hover:bg-muted/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-
       {getPages().map((p, i) =>
         p === '...' ? (
           <span key={`e-${i}`} className="h-7 w-7 flex items-center justify-center text-xs text-muted-foreground/50">…</span>
         ) : (
-          <button
-            key={p}
-            onClick={() => setPage(p as number)}
+          <button key={p} onClick={() => setPage(p as number)}
             className={cn(
               'h-7 w-7 rounded-md flex items-center justify-center text-xs font-medium transition-colors',
               p === page ? 'bg-[#378ADD] text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'
-            )}
-          >{p}</button>
+            )}>{p}</button>
         )
       )}
-
-      <button
-        onClick={() => setPage(Math.min(totalPages, page + 1))}
-        disabled={page === totalPages}
+      <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
         className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground
-          hover:bg-muted/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
+          hover:bg-muted/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
-
       <span className="ml-2 text-[10px] text-muted-foreground/50 tabular-nums">{page} / {totalPages}</span>
     </div>
   )
@@ -193,19 +212,13 @@ function PaginationBar({ page, totalPages, setPage }: {
 function ScoreSparkline({ score, color }: { score: number; color: string }) {
   const w = 52, h = 32
   const pts = [
-    Math.max(0, score - 38),
-    Math.max(0, score - 25),
-    Math.max(0, score - 30),
-    Math.max(0, score - 15),
-    Math.max(0, score - 20),
-    Math.max(0, score - 7),
-    score,
+    Math.max(0, score - 38), Math.max(0, score - 25), Math.max(0, score - 30),
+    Math.max(0, score - 15), Math.max(0, score - 20), Math.max(0, score - 7), score,
   ]
   const xs   = pts.map((_, i) => (i / (pts.length - 1)) * w)
   const ys   = pts.map(v => h - (v / 100) * (h - 4) - 2)
   const d    = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')
   const area = `${d} L${w},${h} L0,${h} Z`
-
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
       <defs>
@@ -215,31 +228,23 @@ function ScoreSparkline({ score, color }: { score: number; color: string }) {
         </linearGradient>
       </defs>
       <path d={area} fill="url(#sg-score)" />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="2.5" fill={color} />
     </svg>
   )
 }
 
 function MaturitySparkline({ current }: { current: number }) {
-  const w = 48, h = 32
-  const bw = w / 5
-
+  const w = 48, h = 32, bw = w / 5
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
       {[1, 2, 3, 4, 5].map(l => {
-        const barH  = (l / 5) * (h - 4)
+        const barH = (l / 5) * (h - 4)
         const filled = l <= current
         return (
-          <rect key={l}
-            x={(l - 1) * bw + 1.5} y={h - barH - 2}
-            width={bw - 3} height={barH}
-            rx="2"
-            fill={filled ? LEVEL_DOT[l] : 'currentColor'}
-            fillOpacity={filled ? 0.85 : 0.1}
-            className={filled ? '' : 'text-muted-foreground'}
-          />
+          <rect key={l} x={(l - 1) * bw + 1.5} y={h - barH - 2} width={bw - 3} height={barH} rx="2"
+            fill={filled ? LEVEL_DOT[l] : 'currentColor'} fillOpacity={filled ? 0.85 : 0.1}
+            className={filled ? '' : 'text-muted-foreground'} />
         )
       })}
     </svg>
@@ -247,25 +252,17 @@ function MaturitySparkline({ current }: { current: number }) {
 }
 
 function GapSparkline({ gap }: { gap: number }) {
-  const w = 48, h = 32
-  const achieved = 5 - gap
-  const bw = w / 5
+  const w = 48, h = 32, achieved = 5 - gap, bw = w / 5
   const color = gap === 0 ? '#1D9E75' : '#E24B4A'
-
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
       {[1, 2, 3, 4, 5].map(l => {
-        const barH  = (l / 5) * (h - 4)
+        const barH = (l / 5) * (h - 4)
         const filled = l <= achieved
         return (
-          <rect key={l}
-            x={(l - 1) * bw + 1.5} y={h - barH - 2}
-            width={bw - 3} height={barH}
-            rx="2"
-            fill={filled ? color : 'currentColor'}
-            fillOpacity={filled ? 0.8 : 0.1}
-            className={filled ? '' : 'text-muted-foreground'}
-          />
+          <rect key={l} x={(l - 1) * bw + 1.5} y={h - barH - 2} width={bw - 3} height={barH} rx="2"
+            fill={filled ? color : 'currentColor'} fillOpacity={filled ? 0.8 : 0.1}
+            className={filled ? '' : 'text-muted-foreground'} />
         )
       })}
     </svg>
@@ -275,11 +272,10 @@ function GapSparkline({ gap }: { gap: number }) {
 // ─── Score Ring ───────────────────────────────────────────────────────────────
 
 function ScoreRing({ score, size = 90 }: { score: number; size?: number }) {
-  const v    = isNaN(score) ? 0 : Math.min(100, Math.max(0, score))
-  const r    = (size - 10) / 2
+  const v = isNaN(score) ? 0 : Math.min(100, Math.max(0, score))
+  const r = (size - 10) / 2
   const circ = 2 * Math.PI * r
   const off  = circ - (v / 100) * circ
-
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
       <circle cx={size / 2} cy={size / 2} r={r} fill="none"
@@ -297,14 +293,12 @@ function ScoreRing({ score, size = 90 }: { score: number; size?: number }) {
 function DomainSectionHeader({ group }: { group: DomainGroup }) {
   const meta   = maturityMeta(group.avgMaturity)
   const isNone = group.id === '__none__'
-
   return (
     <div className="flex items-center gap-2 mb-3">
       <div className={cn(
         'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-        isNone
-          ? 'bg-muted/40 border-border/50 text-muted-foreground'
-          : 'bg-amber-500/8 border-amber-500/20 text-amber-600 dark:text-amber-400'
+        isNone ? 'bg-muted/40 border-border/50 text-muted-foreground'
+               : 'bg-amber-500/8 border-amber-500/20 text-amber-600 dark:text-amber-400'
       )}>
         <Layers className="h-3 w-3 shrink-0" />
         <span className="text-xs font-semibold">{group.name}</span>
@@ -331,14 +325,11 @@ const COVERAGE_PER_PAGE = 5
 
 function CoverageBarChart({ requirements }: { requirements: RequirementResult[] }) {
   if (requirements.length === 0) return null
-
   const allGroups          = groupByDomain(requirements)
   const allReqs            = allGroups.flatMap(g => g.requirements)
   const hasMultipleDomains = allGroups.length > 1 || (allGroups.length === 1 && allGroups[0].id !== '__none__')
-
   const { page, setPage, totalPages, paginated } = usePagination(allReqs, COVERAGE_PER_PAGE)
   const pagedGroups = groupByDomain(paginated)
-
   return (
     <div className="space-y-4 w-full">
       <div className="space-y-6">
@@ -376,14 +367,8 @@ function CoverageBarChart({ requirements }: { requirements: RequirementResult[] 
                         return (
                           <div key={lvl} className="flex-1 relative rounded-sm overflow-hidden bg-muted/50">
                             {(filled || partial) && (
-                              <div
-                                className="absolute inset-y-0 left-0 rounded-sm transition-all duration-700"
-                                style={{
-                                  width: filled ? '100%' : `${pct}%`,
-                                  backgroundColor: m.dot,
-                                  opacity: filled ? 0.9 : 0.6,
-                                }}
-                              />
+                              <div className="absolute inset-y-0 left-0 rounded-sm transition-all duration-700"
+                                style={{ width: filled ? '100%' : `${pct}%`, backgroundColor: m.dot, opacity: filled ? 0.9 : 0.6 }} />
                             )}
                           </div>
                         )
@@ -412,7 +397,6 @@ function CoverageBarChart({ requirements }: { requirements: RequirementResult[] 
 function RequirementRow({ req }: { req: RequirementResult }) {
   const score = Math.round(req.score ?? 0)
   const meta  = maturityMeta(req.maturity_level ?? 1)
-
   return (
     <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -445,10 +429,8 @@ function RequirementBreakdown({ requirements }: { requirements: RequirementResul
   const allGroups          = groupByDomain(requirements)
   const allReqs            = allGroups.flatMap(g => g.requirements)
   const hasMultipleDomains = allGroups.length > 1 || (allGroups.length === 1 && allGroups[0].id !== '__none__')
-
   const { page, setPage, totalPages, paginated } = usePagination(allReqs, BREAKDOWN_PER_PAGE)
   const pagedGroups = groupByDomain(paginated)
-
   return (
     <div className="space-y-4">
       <div className="space-y-4">
@@ -488,9 +470,179 @@ function RequirementBreakdown({ requirements }: { requirements: RequirementResul
   )
 }
 
-// ─── Roadmap Step ─────────────────────────────────────────────────────────────
+// ─── DatePicker (shadcn Popover + Calendar) ───────────────────────────────────
 
-function RoadmapStepCard({ step }: { step: RoadmapStep }) {
+function DatePicker({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (val: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = value ? parseISO(value) : undefined
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            'h-7 gap-1.5 px-2.5 text-xs font-normal border-border/50',
+            'hover:border-border transition-colors min-w-[110px] justify-start',
+            !value && 'text-muted-foreground',
+          )}
+        >
+          <CalendarIcon className="h-3 w-3 shrink-0" />
+          {value ? format(parseISO(value), 'MMM d, yyyy') : 'Pick date'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => {
+            onChange(date ? format(date, 'yyyy-MM-dd') : null)
+            setOpen(false)
+          }}
+          initialFocus
+        />
+        {value && (
+          <div className="border-t border-border/50 p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full h-7 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => { onChange(null); setOpen(false) }}
+            >
+              Clear date
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ─── UserSelect (shadcn Select) ───────────────────────────────────────────────
+
+function UserSelect({
+  value,
+  users,
+  onChange,
+}: {
+  value: number | null
+  users: UserOption[]
+  onChange: (val: number | null) => void
+}) {
+  return (
+    <Select
+      value={value != null ? String(value) : '__none__'}
+      onValueChange={(v) => onChange(v === '__none__' ? null : Number(v))}
+    >
+      <SelectTrigger
+        className={cn(
+          'h-7 flex-1 min-w-0 text-xs border-border/50',
+          'hover:border-border transition-colors',
+          '[&>svg]:text-muted-foreground',
+        )}
+      >
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+          <User className="h-3 w-3 text-muted-foreground shrink-0" />
+          <SelectValue placeholder="— Unassigned —" />
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__" className="text-xs text-muted-foreground italic">
+          — Unassigned —
+        </SelectItem>
+        {users.map((u) => (
+          <SelectItem key={u.id} value={String(u.id)} className="text-xs">
+            {u.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+// ─── Action Row ───────────────────────────────────────────────────────────────
+
+interface ActionRowProps {
+  actionText: string
+  index: number
+  isCurrent: boolean
+  plan: ActionPlan | undefined
+  users: UserOption[]
+  onUpdate: (id: number, field: string, value: string | number | null) => void
+  saving: boolean
+}
+
+function ActionRow({ actionText, index, isCurrent, plan, users, onUpdate, saving }: ActionRowProps) {
+  return (
+    <div className={cn(
+      'rounded-lg border border-border/30 p-3 space-y-2.5 transition-opacity',
+      saving && 'opacity-60',
+    )}>
+      {/* Action text */}
+      <div className="flex items-start gap-2.5">
+        <span className={cn(
+          'w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5',
+          isCurrent
+            ? 'bg-[#378ADD]/15 text-[#185FA5] dark:text-[#85B7EB]'
+            : 'bg-[#EF9F27]/15 text-[#854F0B] dark:text-[#FAC775]',
+        )}>
+          {index + 1}
+        </span>
+        <p className="text-sm text-foreground leading-relaxed flex-1">{actionText}</p>
+      </div>
+
+      {/* Controls */}
+      {plan && (
+        <div className="flex items-center gap-2 pl-7 flex-wrap">
+
+          {/* User select — shadcn */}
+          <div className="flex-1 min-w-[140px]">
+            <UserSelect
+              value={plan.assigned_to}
+              users={users}
+              onChange={(val) => onUpdate(plan.id, 'assigned_to', val)}
+            />
+          </div>
+
+          {/* Date picker — shadcn Calendar */}
+          <DatePicker
+            value={plan.due_date}
+            onChange={(val) => onUpdate(plan.id, 'due_date', val)}
+          />
+
+          {/* Status badge (read-only display) */}
+          <span className={cn(
+            'text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0',
+            plan.status === 'open'        && 'bg-[#E6F1FB] text-[#0C447C] dark:bg-[#0C447C]/40 dark:text-[#B5D4F4]',
+            plan.status === 'in_progress' && 'bg-[#FAEEDA] text-[#854F0B] dark:bg-[#412402]/40 dark:text-[#FAC775]',
+            plan.status === 'closed'      && 'bg-[#E1F5EE] text-[#0F6E56] dark:bg-[#085041]/40 dark:text-[#9FE1CB]',
+          )}>
+            {plan.status === 'open' ? 'Open' : plan.status === 'in_progress' ? 'In Progress' : 'Closed'}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Roadmap Step Card ────────────────────────────────────────────────────────
+
+interface RoadmapStepCardProps {
+  step: RoadmapStep
+  plans: ActionPlan[]
+  users: UserOption[]
+  onUpdate: (id: number, field: string, value: string | number | null) => void
+  savingIds: Record<number, boolean>
+}
+
+function RoadmapStepCard({ step, plans, users, onUpdate, savingIds }: RoadmapStepCardProps) {
   const [open, setOpen] = useState(step.is_current || step.is_next)
 
   const isCompleted = step.status === 'completed'
@@ -501,13 +653,15 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
   const showSubtitle = step.subtitle
     && !(isCompleted && step.subtitle.toLowerCase().includes('not implemented'))
 
+  const plansForStep = plans.filter(p => p.step_level === step.level)
+
   return (
     <div className={cn(
       'rounded-xl border transition-all overflow-hidden',
       isCompleted && 'border-[#1D9E75]/25 bg-[#F0FBF6]/40 dark:bg-[#0A2218]/40 opacity-65',
       isCurrent   && 'border-[#378ADD]/40 bg-white dark:bg-[#0F1E2E] shadow-sm',
       isNext      && 'border-[#EF9F27]/40 bg-[#FFFBF0] dark:bg-[#1E1500] shadow-sm',
-      isTodo      && 'border-border/25 bg-muted/10 opacity-40',
+      isTodo      && 'border-border/25 bg-muted/10 opacity-70',
     )}>
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -535,19 +689,21 @@ function RoadmapStepCard({ step }: { step: RoadmapStep }) {
 
       {open && (isCurrent || isNext) && step.actions.length > 0 && (
         <div className="px-4 pb-4 space-y-2 border-t border-border/20 pt-3">
-          {step.actions.map((action, i) => (
-            <div key={i} className="flex items-start gap-2.5">
-              <span className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5',
-                isCurrent
-                  ? 'bg-[#378ADD]/15 text-[#185FA5] dark:text-[#85B7EB]'
-                  : 'bg-[#EF9F27]/15 text-[#854F0B] dark:text-[#FAC775]'
-              )}>
-                {i + 1}
-              </span>
-              <p className="text-sm text-foreground leading-relaxed">{action}</p>
-            </div>
-          ))}
+          {step.actions.map((action, i) => {
+            const plan = plansForStep.find(p => p.step_index === i)
+            return (
+              <ActionRow
+                key={i}
+                actionText={action}
+                index={i}
+                isCurrent={isCurrent}
+                plan={plan}
+                users={users}
+                onUpdate={onUpdate}
+                saving={plan ? (savingIds[plan.id] ?? false) : false}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -560,17 +716,44 @@ export default function AssessmentResultsPage({
   assessment,
   requirements,
   ml_result: initialMlResult,
+  users,
+  action_plans: initialActionPlans,
 }: Props) {
   const overall_score    = Math.round(assessment.overall_score ?? 0)
   const overall_maturity = assessment.overall_maturity_level ?? 1
 
-  const [mlResult, setMlResult]   = useState<MLResult | undefined>(initialMlResult)
-  const [mlLoading, setMlLoading] = useState(false)
-  const [mlError, setMlError]     = useState<string | null>(null)
+  const [mlResult, setMlResult]       = useState<MLResult | undefined>(initialMlResult)
+  const [mlLoading, setMlLoading]     = useState(false)
+  const [mlError, setMlError]         = useState<string | null>(null)
+  const [actionPlans, setActionPlans] = useState<ActionPlan[]>(initialActionPlans)
+  const [savingIds, setSavingIds]     = useState<Record<number, boolean>>({})
 
   const meta  = maturityMeta(overall_maturity)
   const gap   = 5 - overall_maturity
   const hasML = !!mlResult?.roadmap
+
+  // ── Update action plan ────────────────────────────────────────────────────
+  const updateActionPlan = async (id: number, field: string, value: string | number | null) => {
+    setSavingIds(s => ({ ...s, [id]: true }))
+    try {
+      await axios.patch(`/action-plans/${id}`, { [field]: value })
+      setActionPlans(prev => prev.map(p =>
+        p.id === id
+          ? {
+              ...p,
+              [field]: value,
+              assigned_user_name: field === 'assigned_to'
+                ? (users.find(u => u.id === value)?.name ?? null)
+                : p.assigned_user_name,
+            }
+          : p
+      ))
+    } catch {
+      // silently ignore
+    } finally {
+      setSavingIds(s => ({ ...s, [id]: false }))
+    }
+  }
 
   const generateActionPlan = async () => {
     setMlLoading(true)
@@ -597,6 +780,9 @@ export default function AssessmentResultsPage({
         })),
       })
       setMlResult({ ...prediction, ...analysis })
+
+      const { data: fresh } = await axios.get(`/gap-assessments/${assessment.id}/action-plans`)
+      setActionPlans(fresh)
     } catch {
       setMlError('Unable to generate action plan. Please try again.')
     } finally {
@@ -641,39 +827,30 @@ export default function AssessmentResultsPage({
             <p className="text-sm text-muted-foreground mt-0.5">Assessment Results</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-           
             <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
               <Download className="h-3.5 w-3.5" /> Export
             </Button>
           </div>
         </div>
 
-        {/* ── KPI Cards — compact + sparklines ───────────────────────── */}
+        {/* ── KPI Cards ──────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
-
-          {/* Overall Score */}
           <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
             <CardContent className="p-0">
               <div className="flex items-stretch">
                 <div className="w-[3px] shrink-0" style={{ backgroundColor: scoreColor(overall_score) }} />
                 <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
-                  {/* Mini ring */}
                   <div className="relative shrink-0">
                     <ScoreRing score={overall_score} size={50} />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-[9px] font-extrabold tabular-nums"
-                        style={{ color: scoreColor(overall_score) }}>
+                      <span className="text-[9px] font-extrabold tabular-nums" style={{ color: scoreColor(overall_score) }}>
                         {overall_score}%
                       </span>
                     </div>
                   </div>
-                  {/* Text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">
-                      Overall Score
-                    </p>
-                    <p className="text-[22px] font-extrabold tabular-nums leading-tight mt-0.5"
-                      style={{ color: scoreColor(overall_score) }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">Overall Score</p>
+                    <p className="text-[22px] font-extrabold tabular-nums leading-tight mt-0.5" style={{ color: scoreColor(overall_score) }}>
                       {overall_score}%
                     </p>
                     <p className="text-[10px] text-muted-foreground/70 leading-none mt-0.5">
@@ -686,7 +863,6 @@ export default function AssessmentResultsPage({
             </CardContent>
           </Card>
 
-          {/* Maturity Level */}
           <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
             <CardContent className="p-0">
               <div className="flex items-stretch">
@@ -696,25 +872,15 @@ export default function AssessmentResultsPage({
                     <Shield className={cn('h-4 w-4', meta.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">
-                      Maturity Level
-                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">Maturity Level</p>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
-                      <span className={cn('text-[22px] font-extrabold leading-tight', meta.color)}>
-                        L{overall_maturity}
-                      </span>
+                      <span className={cn('text-[22px] font-extrabold leading-tight', meta.color)}>L{overall_maturity}</span>
                       <span className={cn('text-[11px] font-bold', meta.color)}>{meta.label}</span>
                     </div>
-                    {/* Level progress bar */}
                     <div className="flex items-center gap-[3px] mt-1.5">
                       {[1, 2, 3, 4, 5].map(l => (
-                        <div key={l}
-                          className="h-[3px] flex-1 rounded-full transition-all duration-500"
-                          style={l <= overall_maturity
-                            ? { backgroundColor: LEVEL_DOT[l] }
-                            : { backgroundColor: 'currentColor', opacity: 0.12 }
-                          }
-                        />
+                        <div key={l} className="h-[3px] flex-1 rounded-full transition-all duration-500"
+                          style={l <= overall_maturity ? { backgroundColor: LEVEL_DOT[l] } : { backgroundColor: 'currentColor', opacity: 0.12 }} />
                       ))}
                     </div>
                   </div>
@@ -724,27 +890,19 @@ export default function AssessmentResultsPage({
             </CardContent>
           </Card>
 
-          {/* Gap to L5 */}
           <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
             <CardContent className="p-0">
               <div className="flex items-stretch">
-                <div className="w-[3px] shrink-0"
-                  style={{ backgroundColor: gap === 0 ? '#1D9E75' : '#E24B4A' }} />
+                <div className="w-[3px] shrink-0" style={{ backgroundColor: gap === 0 ? '#1D9E75' : '#E24B4A' }} />
                 <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
-                  <div className={cn(
-                    'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
-                    gap === 0 ? 'bg-[#E1F5EE] dark:bg-[#085041]' : 'bg-[#FCEBEB] dark:bg-[#501313]'
-                  )}>
+                  <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+                    gap === 0 ? 'bg-[#E1F5EE] dark:bg-[#085041]' : 'bg-[#FCEBEB] dark:bg-[#501313]')}>
                     <TrendingUp className={cn('h-4 w-4',
-                      gap === 0 ? 'text-[#0F6E56] dark:text-[#9FE1CB]' : 'text-[#A32D2D] dark:text-[#F09595]'
-                    )} />
+                      gap === 0 ? 'text-[#0F6E56] dark:text-[#9FE1CB]' : 'text-[#A32D2D] dark:text-[#F09595]')} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">
-                      Gap to L5 Optimized
-                    </p>
-                    <p className="text-[22px] font-extrabold leading-tight mt-0.5"
-                      style={{ color: gap === 0 ? '#1D9E75' : '#E24B4A' }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 leading-none">Gap to L5 Optimized</p>
+                    <p className="text-[22px] font-extrabold leading-tight mt-0.5" style={{ color: gap === 0 ? '#1D9E75' : '#E24B4A' }}>
                       {gap === 0 ? '✓ Achieved' : `${gap} level${gap > 1 ? 's' : ''}`}
                     </p>
                     <p className="text-[10px] text-muted-foreground/70 leading-none mt-0.5">
@@ -758,7 +916,7 @@ export default function AssessmentResultsPage({
           </Card>
         </div>
 
-        {/* ── Coverage + Breakdown — equal 50/50 ─────────────────────── */}
+        {/* ── Coverage + Breakdown ────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 items-start">
           <Card>
             <CardHeader className="pb-2 pt-4 px-5">
@@ -784,9 +942,7 @@ export default function AssessmentResultsPage({
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                   Requirement Breakdown
                 </CardTitle>
-                <span className="text-[10px] text-muted-foreground/50">
-                  scores &amp; maturity
-                </span>
+                <span className="text-[10px] text-muted-foreground/50">scores &amp; maturity</span>
               </div>
             </CardHeader>
             <CardContent className="pt-2 px-5">
@@ -807,11 +963,19 @@ export default function AssessmentResultsPage({
                   <CardTitle className="text-base font-bold">AI Action Plan</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">Generated based on your assessment answers</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={generateActionPlan}
-                  disabled={mlLoading} className="gap-1.5 h-8 text-xs">
-                  {mlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Regenerate
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm"
+                    onClick={() => router.visit('/action-plans')}
+                    className="gap-1.5 h-8 text-xs text-muted-foreground hover:text-foreground">
+                    <ArrowRight className="h-3.5 w-3.5" />
+                    View All Plans
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={generateActionPlan}
+                    disabled={mlLoading} className="gap-1.5 h-8 text-xs">
+                    {mlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Regenerate
+                  </Button>
+                </div>
               </div>
             </CardHeader>
 
@@ -824,12 +988,10 @@ export default function AssessmentResultsPage({
 
               {mlResult.current_issues && mlResult.current_issues.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                    Current Status
-                  </h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Current Status</h4>
                   <div className="space-y-2">
                     {mlResult.current_issues.map((issue, i) => {
-                      const l      = issue.toLowerCase()
+                      const l = issue.toLowerCase()
                       const isCrit = l.startsWith('critical')
                       const isGood = l.startsWith('confirmed')
                       return (
@@ -849,12 +1011,17 @@ export default function AssessmentResultsPage({
               )}
 
               <div className="space-y-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Improvement Roadmap
-                </h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Improvement Roadmap</h4>
                 <div className="space-y-2">
                   {mlResult.roadmap!.map(step => (
-                    <RoadmapStepCard key={step.level} step={step} />
+                    <RoadmapStepCard
+                      key={step.level}
+                      step={step}
+                      plans={actionPlans}
+                      users={users}
+                      onUpdate={updateActionPlan}
+                      savingIds={savingIds}
+                    />
                   ))}
                 </div>
               </div>

@@ -283,10 +283,12 @@ Route::get('/requirements/{id}/assessments', [GapAssessmentController::class, 'b
 
 Route::post('/ai/gap-analysis', [GapAssessmentController::class, 'generateAiAnalysis']);
 
-// Action Plans (inchangé)
-Route::resource('action-plans', ActionPlanController::class)
-    ->only(['index', 'store', 'update', 'destroy']);
 
+    /// Action Plans
+Route::get('/action-plans', [App\Http\Controllers\ActionPlanController::class, 'index'])
+    ->name('action-plans.index');
+Route::patch('/action-plans/{actionPlan}', [App\Http\Controllers\ActionPlanController::class, 'update'])
+    ->name('action-plans.update');
 
     // ================= REQUIREMENT TESTS =================
 

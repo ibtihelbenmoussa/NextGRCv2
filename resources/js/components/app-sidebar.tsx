@@ -81,7 +81,9 @@ const data = {
                 //{ title: 'Predefined Tests', url: '/predefined-tests/requirement' },
                  { title: 'Requirement tests', url: '/req-testing' },
                 { title: 'Validation', url: '/requirement-tests/validation' },
-             { title: 'Gap Assessment', url: '/gap-assessment' },],
+             { title: 'Gap Assessment', url: '/gap-assessment' },
+             { title: 'Action Plans', url: '/action-plans' },
+            ],
         },
     ],
 };
