@@ -12,3 +12,7 @@ Schedule::command('holidays:seed --year=' . (now()->year + 2))
     ->yearlyOn(1, 1, '00:30')
     ->withoutOverlapping()
     ->runInBackground();
+
+Schedule::command('actionplans:check-deadlines')
+    ->dailyAt('08:00')
+    ->timezone('Africa/Tunis'); 

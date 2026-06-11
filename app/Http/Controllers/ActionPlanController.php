@@ -6,8 +6,8 @@ use App\Models\ActionPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\ActionPlansExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ActionPlanController extends Controller
 {
@@ -24,7 +24,6 @@ class ActionPlanController extends Controller
             'assignedUser:id,name',
         ]);
 
-        // ── Search (title, description, assessment name/code) ──────────────
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -39,8 +38,6 @@ class ActionPlanController extends Controller
             });
         }
 
-        // ── Status filter ──────────────────────────────────────────────────
-        // ServerDataTable envoie ?status=open,in_progress (virgule) ou ?status[]=open (array)
         $rawStatus = $request->input('status');
         if ($rawStatus) {
             $statuses = is_array($rawStatus)
@@ -51,8 +48,6 @@ class ActionPlanController extends Controller
             }
         }
 
-        // ── Sort ───────────────────────────────────────────────────────────
-        // ServerDataTable envoie ?sort=-col (desc) ou ?sort=col (asc)
         $rawSort = $request->input('sort', '');
         $sortDir = str_starts_with($rawSort, '-') ? 'desc' : 'asc';
         $sortCol = ltrim($rawSort, '-');
@@ -64,7 +59,6 @@ class ActionPlanController extends Controller
             $query->orderBy('step_level')->orderBy('step_index');
         }
 
-        // ── Paginate + transform ───────────────────────────────────────────
         $plans = $query
             ->paginate($request->input('per_page', 15))
             ->withQueryString()
@@ -91,6 +85,42 @@ class ActionPlanController extends Controller
             'plans' => $plans,
             'users' => $users,
         ]);
+    }
+
+    public function getByAssessment($gapAssessment)
+    {
+        return response()->json(
+            ActionPlan::where('gap_id', $gapAssessment)->get()
+        );
+    }
+
+    // ── History log ────────────────────────────────────────────────────────
+    public function logs(ActionPlan $actionPlan)
+    {
+        $user  = Auth::user();
+        $orgId = $user->current_organization_id;
+
+        abort_if(
+            $actionPlan->assessment?->organization_id !== $orgId,
+            403
+        );
+
+        $logs = $actionPlan->logs()
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'field'       => $log->field,
+                'field_label' => $log->field_label,
+                'old_value'   => $log->old_value,
+                'new_value'   => $log->new_value,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at->format('Y-m-d H:i'),
+            ]);
+
+        return response()->json($logs);
     }
 
     public function export(Request $request)
@@ -151,7 +181,7 @@ class ActionPlanController extends Controller
         $validated = $request->validate([
             'assigned_to' => 'nullable|exists:users,id',
             'due_date'    => 'nullable|date',
-            'status'      => 'nullable|in:open,in_progress',
+            'status'      => 'nullable|in:open,in_progress,done',
         ]);
 
         $actionPlan->update($validated);
@@ -167,4 +197,5 @@ class ActionPlanController extends Controller
             ],
         ]);
     }
+    
 }

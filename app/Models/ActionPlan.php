@@ -37,4 +37,8 @@ class ActionPlan extends Model
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
+    public function logs(): \Illuminate\Database\Eloquent\Relations\HasMany
+{
+    return $this->hasMany(ActionPlanLog::class);
+}
 }

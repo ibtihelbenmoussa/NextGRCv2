@@ -5,6 +5,8 @@ import { ThemeToggle } from './theme-toggle';
 import LanguageSelect from "@/components/language-select"
 import { Fullscreen } from 'lucide-react';
 import ThemeSwitcher from '@/components/theme-switcher';
+import NotificationBell from '@/components/notification-bell';
+
 export function AppSidebarHeader({
     breadcrumbs = [],
 }: {
@@ -17,30 +19,11 @@ export function AppSidebarHeader({
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
+            <div className="flex items-center gap-2" />
             <div className="flex items-center gap-2">
-                {/* <Button
-                    variant="outline"
-                    size="sm"
-                    className="relative h-8 w-full justify-start text-sm font-normal text-muted-foreground sm:pr-12 md:w-40 lg:w-64"
-                    onClick={onSearchClick}
-                >
-                    <SearchIcon className="mr-2 size-4" />
-                    <span className="hidden lg:inline-flex">Search...</span>
-                    <span className="inline-flex lg:hidden">Search</span>
-                    <KbdGroup className="pointer-events-none absolute top-1.5 right-1.5 hidden sm:flex">
-                        <Kbd>⌘</Kbd>
-                        <Kbd>K</Kbd>
-                    </KbdGroup>
-                </Button> */}
-
-                {/*
- */}            </div>
-            <div className="flex items-center gap-2">
+                <NotificationBell />
                 <LanguageSelect />
-                {/* <ThemeSwitch /> */}
-                {/* <ThemeSwitcher /> */}
-                 <ThemeToggle />
-                {/* FullScreen */}
+                <ThemeToggle />
                 <div className="hidden md:flex">
                     <button
                         className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:ring-sidebar-accent flex h-8 w-8 items-center justify-center rounded-md bg-transparent focus:ring-2 focus:ring-offset-2 focus:outline-none"

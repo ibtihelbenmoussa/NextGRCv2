@@ -5,6 +5,9 @@ namespace App\Providers;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
 use App\Services\WorkingDayService;
+use App\Models\ActionPlan;
+use App\Observers\ActionPlanObserver;
+
 
 
 class AppServiceProvider extends ServiceProvider
@@ -28,5 +31,7 @@ class AppServiceProvider extends ServiceProvider
             'process' => \App\Models\Process::class,
             'macro_process' => \App\Models\MacroProcess::class,
         ]);
+            ActionPlan::observe(ActionPlanObserver::class);
+
     }
 }

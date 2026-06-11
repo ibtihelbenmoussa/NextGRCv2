@@ -6,23 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
-   public function up(): void
-{
-    Schema::table('gap_assessments', function (Blueprint $table) {
-        $table->unsignedBigInteger('requirement_id')->nullable()->change();
-    });
-}
+    public function up(): void
+    {
+        if (Schema::hasColumn('gap_assessments', 'requirement_id')) {
+            Schema::table('gap_assessments', function (Blueprint $table) {
+                $table->unsignedBigInteger('requirement_id')->nullable()->change();
+            });
+        }
+        // sinon : colonne absente, rien à faire
+    }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::table('gap_assessments', function (Blueprint $table) {
-            //
-        });
+        if (Schema::hasColumn('gap_assessments', 'requirement_id')) {
+            Schema::table('gap_assessments', function (Blueprint $table) {
+                $table->unsignedBigInteger('requirement_id')->nullable(false)->change();
+            });
+        }
     }
 };

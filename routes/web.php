@@ -17,6 +17,8 @@ use App\Http\Controllers\GapAssessmentController;
 use App\Http\Controllers\ActionPlanController;
 use App\Http\Controllers\DocumentAnalysisController;
 use App\Http\Controllers\DomainController;
+use App\Http\Controllers\NotificationController;
+
 
 
 
@@ -284,11 +286,30 @@ Route::get('/requirements/{id}/assessments', [GapAssessmentController::class, 'b
 Route::post('/ai/gap-analysis', [GapAssessmentController::class, 'generateAiAnalysis']);
 
 
+
     /// Action Plans
 Route::get('/action-plans', [App\Http\Controllers\ActionPlanController::class, 'index'])
     ->name('action-plans.index');
 Route::patch('/action-plans/{actionPlan}', [App\Http\Controllers\ActionPlanController::class, 'update'])
     ->name('action-plans.update');
+    Route::get(
+    '/gap-assessments/{gapAssessment}/action-plans',
+    [ActionPlanController::class, 'getByAssessment']
+)->name('action-plans.by-assessment');
+Route::get('/action-plans/{actionPlan}/logs', [ActionPlanController::class, 'logs']);
+
+Route::post('/ml/chat', [App\Http\Controllers\MLChatController::class, 'chat'])
+    ->middleware('auth');
+    Route::get('/notifications', [NotificationController::class, 'index'])
+    ->name('notifications.index');
+
+// ✅ static EN PREMIER
+Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead'])
+    ->name('notifications.read-all');
+
+// ✅ paramètre EN DERNIER
+Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead'])
+    ->name('notifications.read');
 
     // ================= REQUIREMENT TESTS =================
 
@@ -331,6 +352,8 @@ Route::patch('/action-plans/{actionPlan}', [App\Http\Controllers\ActionPlanContr
 
     Route::delete('/requirement-test-reservations', [RequirementTestReservationController::class, 'destroy'])
         ->name('requirement-test-reservations.destroy');
+
+
 
 });
 

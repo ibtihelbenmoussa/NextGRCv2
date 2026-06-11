@@ -4,6 +4,7 @@ from flask_cors import CORS
 import joblib
 import numpy as np
 import os
+from chat_endpoint import classify_intent, generate_response
 
 app = Flask(__name__)
 CORS(app)
@@ -426,6 +427,9 @@ def analyze():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+        
 # ─── Retrain ──────────────────────────────────────────────────────────────────
 
 @app.route('/retrain', methods=['POST'])
@@ -473,7 +477,28 @@ def retrain():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data     = request.get_json(force=True) or {}
+        question = data.get('question', '').strip()
+        plans    = data.get('plans', [])
 
+        if not question:
+            return jsonify({'error': 'question is required'}), 400
+
+        intent, confidence = classify_intent(question)
+        response = generate_response(intent, confidence, plans, question)
+
+        return jsonify({
+            'answer':     response.get('text', ''),
+            'intent':     response.get('intent', 'unknown'),
+            'confidence': round(confidence, 3),
+            'meta':       {k: v for k, v in response.items() if k not in ('text', 'intent')},
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
