@@ -10,11 +10,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-COPY composer*.json ./
-RUN composer install --no-dev --optimize-autoloader
-
-
+# ← COPY kol shi AWWEL
 COPY . .
+
+# ← BAAD composer install
+RUN composer install --no-dev --optimize-autoloader
 
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
