@@ -23,11 +23,10 @@ jobs:
         env:
           COMPOSE_HTTP_TIMEOUT: 600
           DOCKER_CLIENT_TIMEOUT: 600
-          DOCKER_BUILDKIT: 1
         run: |
           cd $GITHUB_WORKSPACE
           docker-compose down
-          docker-compose build --no-cache
+          docker-compose build
           docker-compose up -d --no-build
           sleep 30
           docker-compose ps
