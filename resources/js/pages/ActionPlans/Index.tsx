@@ -80,7 +80,11 @@ interface LaravelPaginator<T> {
 interface Props {
     plans: LaravelPaginator<Plan> | Plan[]
     users: UserOption[]
-    filters?: { status?: string }
+    filters?: {
+        status?: string
+        
+    }
+    allPlans: Plan[]
 }
 
 interface LogEntry {
@@ -417,17 +421,17 @@ function EmptyState({ activeFilter }: { activeFilter: string | null }) {
 
 // ─── History Drawer ───────────────────────────────────────────────────────────
 const EVENT_ICONS: Record<string, string> = {
-    created:             '✦',
-    status_changed:      '◈',
+    created: '✦',
+    status_changed: '◈',
     assigned_to_changed: '◎',
-    due_date_changed:    '◷',
+    due_date_changed: '◷',
 }
 
 const STATUS_BADGE: Record<string, string> = {
-    open:        'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+    open: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
     in_progress: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-    closed:      'bg-green-500/15 text-green-400 border border-green-500/30',
-    done:        'bg-green-500/15 text-green-400 border border-green-500/30',
+    closed: 'bg-green-500/15 text-green-400 border border-green-500/30',
+    done: 'bg-green-500/15 text-green-400 border border-green-500/30',
 }
 
 function HistoryStatusBadge({ value }: { value: string | null }) {
@@ -447,7 +451,7 @@ function HistoryDrawer({
     open: boolean
     onClose: () => void
 }) {
-    const [logs, setLogs]       = useState<LogEntry[]>([])
+    const [logs, setLogs] = useState<LogEntry[]>([])
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
@@ -540,11 +544,11 @@ function HistoryDrawer({
 
 // ─── Chatbot ──────────────────────────────────────────────────────────────────
 const CHAT_SUGGESTIONS = [
-    { label: '🔴 Overdue',    query: 'show overdue plans' },
-    { label: '⏰ Due soon',   query: 'due this week' },
-    { label: '🎯 Priority',   query: 'top priority plans' },
-    { label: '👥 Workload',   query: 'assignee workload' },
-    { label: '📊 Summary',    query: 'status summary' },
+    { label: '🔴 Overdue', query: 'show overdue plans' },
+    { label: '⏰ Due soon', query: 'due this week' },
+    { label: '🎯 Priority', query: 'top priority plans' },
+    { label: '👥 Workload', query: 'assignee workload' },
+    { label: '📊 Summary', query: 'status summary' },
     { label: '👤 Unassigned', query: 'unassigned plans' },
 ]
 
@@ -584,9 +588,9 @@ function TypingDots() {
 }
 
 function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
-    const [open, setOpen]           = useState(false)
+    const [open, setOpen] = useState(false)
     const [minimized, setMinimized] = useState(false)
-    const [messages, setMessages]   = useState<ChatMessage[]>([
+    const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: 'welcome',
             role: 'bot',
@@ -594,12 +598,12 @@ function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
             timestamp: new Date(),
         },
     ])
-    const [input, setInput]     = useState('')
+    const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
-    const [unread, setUnread]   = useState(0)
+    const [unread, setUnread] = useState(0)
 
     const bottomRef = useRef<HTMLDivElement>(null)
-    const inputRef  = useRef<HTMLInputElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (open) {
@@ -660,7 +664,7 @@ function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
         }
     }
 
-    const activeCount  = plans.filter(p => p.status !== 'closed').length
+    const activeCount = plans.filter(p => p.status !== 'closed').length
     const overdueCount = plans.filter(p => {
         if (!p.due_date || p.status === 'closed') return false
         return new Date(p.due_date) < new Date()
@@ -825,7 +829,7 @@ function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function ActionPlansIndex({ plans: rawPlans, users, filters: serverFilters }: Props) {
+export default function ActionPlansIndex({ plans: rawPlans, users, filters: serverFilters, allPlans }: Props) {
     const [planStatuses, setPlanStatuses] = useState<Record<number, string>>({})
     const [exportLoading, setExportLoading] = useState(false)
     const [historyPlan, setHistoryPlan] = useState<{ id: number; title: string } | null>(null)
@@ -833,17 +837,17 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
 
     const plans: LaravelPaginator<Plan> = Array.isArray(rawPlans)
         ? {
-              data: rawPlans, current_page: 1, last_page: 1,
-              per_page: rawPlans.length, total: rawPlans.length,
-              from: 1, to: rawPlans.length,
-              first_page_url: '', last_page_url: '',
-              prev_page_url: null, next_page_url: null, links: [], path: '',
-          }
+            data: rawPlans, current_page: 1, last_page: 1,
+            per_page: rawPlans.length, total: rawPlans.length,
+            from: 1, to: rawPlans.length,
+            first_page_url: '', last_page_url: '',
+            prev_page_url: null, next_page_url: null, links: [], path: '',
+        }
         : (rawPlans ?? {
-              data: [], current_page: 1, last_page: 1, per_page: 0, total: 0,
-              from: 0, to: 0, first_page_url: '', last_page_url: '',
-              prev_page_url: null, next_page_url: null, links: [], path: '',
-          })
+            data: [], current_page: 1, last_page: 1, per_page: 0, total: 0,
+            from: 0, to: 0, first_page_url: '', last_page_url: '',
+            prev_page_url: null, next_page_url: null, links: [], path: '',
+        })
 
     const mergedData = useMemo(() =>
         (plans.data ?? []).map(p => ({ ...p, status: planStatuses[p.id] ?? p.status })),
@@ -851,18 +855,18 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
     )
 
     const stats = useMemo(() => {
-        const total       = plans.total
-        const pageSize    = mergedData.length || 1
-        const open        = mergedData.filter(p => p.status === 'open').length
+        const total = plans.total
+        const pageSize = mergedData.length || 1
+        const open = mergedData.filter(p => p.status === 'open').length
         const in_progress = mergedData.filter(p => p.status === 'in_progress').length
-        const closed      = mergedData.filter(p => p.status === 'closed').length
-        const overdue     = mergedData.filter(p => isOverdue(p.due_date, p.status)).length
+        const closed = mergedData.filter(p => p.status === 'closed').length
+        const overdue = mergedData.filter(p => isOverdue(p.due_date, p.status)).length
         return {
             total, open, in_progress, closed, overdue,
-            openRate:       Math.round((open        / pageSize) * 100),
+            openRate: Math.round((open / pageSize) * 100),
             inProgressRate: Math.round((in_progress / pageSize) * 100),
-            closedRate:     Math.round((closed      / pageSize) * 100),
-            overdueRate:    Math.round((overdue     / pageSize) * 100),
+            closedRate: Math.round((closed / pageSize) * 100),
+            overdueRate: Math.round((overdue / pageSize) * 100),
         }
     }, [mergedData, plans.total])
 
@@ -876,11 +880,11 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
     }
 
     const kpiCards = [
-        { label: 'Total',       value: stats.total,       sub: `${plans.data.length} on page`, fillPercent: 100,                  fillColor: '#378add', icon: <CircleDot className="h-4 w-4" />,     valueColor: 'text-foreground',                         delay: 0,   filterKey: null as string | null },
-        { label: 'Open',        value: stats.open,        sub: `${stats.openRate}%`,            fillPercent: stats.openRate,        fillColor: '#0C447C', icon: <Clock className="h-4 w-4" />,         valueColor: 'text-[#0C447C] dark:text-[#B5D4F4]',      delay: 80,  filterKey: 'open' },
-        { label: 'In Progress', value: stats.in_progress, sub: `${stats.inProgressRate}%`,      fillPercent: stats.inProgressRate,  fillColor: '#ba7517', icon: <ClipboardList className="h-4 w-4" />, valueColor: 'text-[#854F0B] dark:text-[#EF9F27]',      delay: 160, filterKey: 'in_progress' },
-        { label: 'Closed',      value: stats.closed,      sub: `${stats.closedRate}%`,           fillPercent: stats.closedRate,      fillColor: '#166534', icon: <CheckCircle2 className="h-4 w-4" />,  valueColor: 'text-[#166534] dark:text-[#4ADE80]',      delay: 240, filterKey: 'closed' },
-        { label: 'Overdue',     value: stats.overdue,     sub: `${stats.overdueRate}%`,          fillPercent: stats.overdueRate,     fillColor: '#a32d2d', icon: <Flame className="h-4 w-4" />,         valueColor: 'text-[#A32D2D] dark:text-[#F09595]',      delay: 320, filterKey: null },
+        { label: 'Total', value: stats.total, sub: `${plans.data.length} on page`, fillPercent: 100, fillColor: '#378add', icon: <CircleDot className="h-4 w-4" />, valueColor: 'text-foreground', delay: 0, filterKey: null as string | null },
+        { label: 'Open', value: stats.open, sub: `${stats.openRate}%`, fillPercent: stats.openRate, fillColor: '#0C447C', icon: <Clock className="h-4 w-4" />, valueColor: 'text-[#0C447C] dark:text-[#B5D4F4]', delay: 80, filterKey: 'open' },
+        { label: 'In Progress', value: stats.in_progress, sub: `${stats.inProgressRate}%`, fillPercent: stats.inProgressRate, fillColor: '#ba7517', icon: <ClipboardList className="h-4 w-4" />, valueColor: 'text-[#854F0B] dark:text-[#EF9F27]', delay: 160, filterKey: 'in_progress' },
+        { label: 'Closed', value: stats.closed, sub: `${stats.closedRate}%`, fillPercent: stats.closedRate, fillColor: '#166534', icon: <CheckCircle2 className="h-4 w-4" />, valueColor: 'text-[#166534] dark:text-[#4ADE80]', delay: 240, filterKey: 'closed' },
+        { label: 'Overdue', value: stats.overdue, sub: `${stats.overdueRate}%`, fillPercent: stats.overdueRate, fillColor: '#a32d2d', icon: <Flame className="h-4 w-4" />, valueColor: 'text-[#A32D2D] dark:text-[#F09595]', delay: 320, filterKey: null },
     ]
 
     const updateStatus = async (id: number, status: string) => {
@@ -901,7 +905,7 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
             })
             if (!response.ok) throw new Error('Export failed')
             const blob = await response.blob()
-            const url  = window.URL.createObjectURL(blob)
+            const url = window.URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
             link.download = `action-plans-${new Date().toISOString().split('T')[0]}.xlsx`
@@ -1081,9 +1085,9 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
                                     filterKey="status"
                                     title="Status"
                                     options={[
-                                        { label: 'Open',        value: 'open',        icon: Clock },
+                                        { label: 'Open', value: 'open', icon: Clock },
                                         { label: 'In Progress', value: 'in_progress', icon: ClipboardList },
-                                        { label: 'Closed',      value: 'closed',      icon: CheckCircle2 },
+                                        { label: 'Closed', value: 'closed', icon: CheckCircle2 },
                                     ]}
                                 />
                             }
@@ -1107,26 +1111,7 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
                                     <span className="font-medium">{plans.to}</span> of{' '}
                                     <span className="font-medium">{plans.total}</span> results
                                 </p>
-                                <div className="flex items-center gap-1">
-                                    <Button variant="outline" size="sm" disabled={!plans.prev_page_url} onClick={() => goToPage(plans.prev_page_url)}>
-                                        Previous
-                                    </Button>
-                                    {plans.links
-                                        .filter(l => !['&laquo; Previous', 'Next &raquo;'].includes(l.label))
-                                        .map((link, idx) => (
-                                            <Button
-                                                key={idx}
-                                                variant={link.active ? 'default' : 'outline'}
-                                                size="sm"
-                                                disabled={!link.url || link.active}
-                                                onClick={() => goToPage(link.url)}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                            />
-                                        ))}
-                                    <Button variant="outline" size="sm" disabled={!plans.next_page_url} onClick={() => goToPage(plans.next_page_url)}>
-                                        Next
-                                    </Button>
-                                </div>
+                               
                             </div>
                         )}
                     </>
@@ -1142,7 +1127,8 @@ export default function ActionPlansIndex({ plans: rawPlans, users, filters: serv
             />
 
             {/* ── AI Chatbot ── */}
-            <ActionPlanChatbot plans={mergedData} />
+            <ActionPlanChatbot plans={allPlans} />
+
 
         </AppLayout>
     )

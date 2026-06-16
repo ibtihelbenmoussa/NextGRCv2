@@ -20,7 +20,7 @@ import { useState } from 'react';
 
 export function OrganizationSwitcher() {
     const { auth, currentOrganization } = usePage<SharedData>().props;
-    const user = auth.user;
+    const user = auth?.user;
     const [search, setSearch] = useState('');
 
     if (!user || !user.organizations || user.organizations.length === 0) {
@@ -35,7 +35,7 @@ export function OrganizationSwitcher() {
 
         router.post(
             `/organizations/${organization.id}/select`,
-            { hasCurrentOrg: true},
+            { hasCurrentOrg: true },
             {
                 preserveScroll: true,
             },

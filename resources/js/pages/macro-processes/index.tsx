@@ -30,6 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import AppLayout from '@/layouts/app-layout';
 import { BusinessUnit, MacroProcess, PaginatedData, User } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -64,33 +65,23 @@ export default function MacroProcessesIndex({
     managers,
     businessUnits,
 }: MacroProcessesIndexProps) {
+    const { can } = useCan();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [macroProcessToDelete, setMacroProcessToDelete] =
-        useState<MacroProcess | null>(null);
+    const [macroProcessToDelete, setMacroProcessToDelete] = useState<MacroProcess | null>(null);
     const [exportLoading, setExportLoading] = useState(false);
 
-    // Handle export functionality
     const handleExport = async () => {
         setExportLoading(true);
-
         try {
-            // Get current URL parameters to maintain filters/search in export
             const params = new URLSearchParams(window.location.search);
-
-            // Make request to export endpoint
-            const response = await fetch(
-                `/macro-processes/export?${params.toString()}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
+            const response = await fetch(`/macro-processes/export?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
-            );
-
+            });
             if (response.ok) {
-                // Create blob and download file
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
@@ -110,33 +101,21 @@ export default function MacroProcessesIndex({
         }
     };
 
-    // Status filter options
     const statusOptions: FacetedFilterOption[] = [
-        {
-            label: 'Active',
-            value: 'Active',
-            icon: CheckCircle2,
-        },
-        {
-            label: 'Inactive',
-            value: 'Inactive',
-            icon: XCircle,
-        },
+        { label: 'Active', value: 'Active', icon: CheckCircle2 },
+        { label: 'Inactive', value: 'Inactive', icon: XCircle },
     ];
 
-    // Manager filter options
     const managerOptions: SelectOption[] = managers.map((manager) => ({
         value: String(manager.id),
         label: manager.name,
     }));
 
-    // Business Unit filter options
     const businessUnitOptions: SelectOption[] = businessUnits.map((bu) => ({
         value: String(bu.id),
         label: bu.name,
     }));
 
-    // Define table columns
     const columns: ColumnDef<MacroProcess>[] = [
         {
             accessorKey: 'code',
@@ -154,10 +133,7 @@ export default function MacroProcessesIndex({
             ),
             cell: ({ row }) => (
                 <div className="w-92 truncate hover:underline">
-                    <Link
-                        href={`/macro-processes/${row.original.id}`}
-                        className="font-medium"
-                    >
+                    <Link href={`/macro-processes/${row.original.id}`} className="font-medium">
                         {row.getValue('name')}
                     </Link>
                 </div>
@@ -169,11 +145,7 @@ export default function MacroProcessesIndex({
             cell: ({ row }) => {
                 const businessUnit = row.original.business_unit;
                 if (!businessUnit) {
-                    return (
-                        <span className="text-muted-foreground">
-                            No business unit
-                        </span>
-                    );
+                    return <span className="text-muted-foreground">No business unit</span>;
                 }
                 return <Badge variant="outline">{businessUnit.name}</Badge>;
             },
@@ -183,17 +155,13 @@ export default function MacroProcessesIndex({
             accessorKey: 'managers',
             header: 'Managers',
             cell: ({ row }) => {
-                const managers = row.original.managers || [];
-                if (managers.length === 0) {
-                    return (
-                        <span className="text-muted-foreground">
-                            No managers
-                        </span>
-                    );
+                const mgrs = row.original.managers || [];
+                if (mgrs.length === 0) {
+                    return <span className="text-muted-foreground">No managers</span>;
                 }
                 return (
                     <div className="flex flex-wrap gap-1">
-                        {managers.map((manager) => (
+                        {mgrs.map((manager) => (
                             <Badge key={manager.id} variant="secondary">
                                 {manager.name}
                             </Badge>
@@ -205,16 +173,12 @@ export default function MacroProcessesIndex({
         },
         {
             accessorKey: 'processes_count',
-            meta: {
-                title: 'Processes',
-            },
+            meta: { title: 'Processes' },
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Processes" />
             ),
             cell: ({ row }) => (
-                <div className="text-center">
-                    {row.getValue('processes_count') || 0}
-                </div>
+                <div className="text-center">{row.getValue('processes_count') || 0}</div>
             ),
         },
         {
@@ -223,24 +187,17 @@ export default function MacroProcessesIndex({
             cell: ({ row }) => {
                 const isActive = row.getValue('is_active');
                 return (
-                    <Badge
-                        variant={isActive ? 'default' : 'secondary'}
-                        className="capitalize"
-                    >
+                    <Badge variant={isActive ? 'default' : 'secondary'} className="capitalize">
                         {isActive ? 'Active' : 'Inactive'}
                     </Badge>
                 );
             },
             enableSorting: false,
-            meta: {
-                title: 'Status',
-            },
+            meta: { title: 'Status' },
         },
         {
             accessorKey: 'updated_at',
-            meta: {
-                title: 'Last Updated',
-            },
+            meta: { title: 'Last Updated' },
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Last Updated" />
             ),
@@ -264,43 +221,39 @@ export default function MacroProcessesIndex({
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem
-                                onClick={() =>
-                                    router.visit(
-                                        `/macro-processes/${macroProcess.id}`,
-                                    )
-                                }
+                                onClick={() => router.visit(`/macro-processes/${macroProcess.id}`)}
                             >
                                 <Eye className="mr-2 h-4 w-4" />
                                 View
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() =>
-                                    router.visit(
-                                        `/macro-processes/${macroProcess.id}/edit`,
-                                    )
-                                }
-                            >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    setMacroProcessToDelete(macroProcess);
-                                    setDeleteDialogOpen(true);
-                                }}
-                                className="text-destructive"
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                            </DropdownMenuItem>
+                            {can('macro-processes.edit') && (
+                                <DropdownMenuItem
+                                    onClick={() => router.visit(`/macro-processes/${macroProcess.id}/edit`)}
+                                >
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    Edit
+                                </DropdownMenuItem>
+                            )}
+                            {can('macro-processes.delete') && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={() => {
+                                            setMacroProcessToDelete(macroProcess);
+                                            setDeleteDialogOpen(true);
+                                        }}
+                                        className="text-destructive"
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
                 );
             },
-            meta: {
-                pinned: 'right',
-            },
+            meta: { pinned: 'right' },
         },
     ];
 
@@ -316,67 +269,46 @@ export default function MacroProcessesIndex({
     };
 
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: 'Macro Processes', href: '/macro-processes' },
-            ]}
-        >
+        <AppLayout breadcrumbs={[{ title: 'Macro Processes', href: '/macro-processes' }]}>
             <Head title="Macro Processes" />
 
             <div className="space-y-6 p-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">
-                            Macro Processes
-                        </h1>
+                        <h1 className="text-3xl font-bold tracking-tight">Macro Processes</h1>
                         <p className="text-muted-foreground">
                             Manage macro processes across business units
                         </p>
                     </div>
-                    <Button
-                        onClick={() => router.visit('/macro-processes/create')}
-                    >
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Macro Process
-                    </Button>
+                    {can('macro-processes.create') && (
+                        <Button onClick={() => router.visit('/macro-processes/create')}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Macro Process
+                        </Button>
+                    )}
                 </div>
 
                 {/* Stats */}
                 <div className="grid gap-3 md:grid-cols-3">
-                    {/* Total Macro Processes */}
                     <div className="rounded-lg border bg-card p-4">
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                    Total Macro Processes
-                                </p>
-                                <p className="text-2xl font-bold">
-                                    {stats.total}
-                                </p>
+                                <p className="text-xs font-medium text-muted-foreground">Total Macro Processes</p>
+                                <p className="text-2xl font-bold">{stats.total}</p>
                             </div>
                             <Folder className="h-5 w-5 text-muted-foreground" />
                         </div>
                     </div>
-
-                    {/* Active */}
                     <div className="rounded-lg border bg-card p-4">
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                    Active
-                                </p>
+                                <p className="text-xs font-medium text-muted-foreground">Active</p>
                                 <div className="flex items-baseline gap-2">
-                                    <p className="text-2xl font-bold">
-                                        {stats.active}
-                                    </p>
+                                    <p className="text-2xl font-bold">{stats.active}</p>
                                     {stats.total > 0 && (
                                         <span className="text-xs text-muted-foreground">
-                                            {Math.round(
-                                                (stats.active / stats.total) *
-                                                    100,
-                                            )}
-                                            %
+                                            {Math.round((stats.active / stats.total) * 100)}%
                                         </span>
                                     )}
                                 </div>
@@ -384,24 +316,15 @@ export default function MacroProcessesIndex({
                             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
                         </div>
                     </div>
-
-                    {/* Processes */}
                     <div className="rounded-lg border bg-card p-4">
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                    Processes
-                                </p>
+                                <p className="text-xs font-medium text-muted-foreground">Processes</p>
                                 <div className="flex items-baseline gap-2">
-                                    <p className="text-2xl font-bold">
-                                        {stats.processes}
-                                    </p>
+                                    <p className="text-2xl font-bold">{stats.processes}</p>
                                     {stats.total > 0 && (
                                         <span className="text-xs text-muted-foreground">
-                                            {(
-                                                stats.processes / stats.total
-                                            ).toFixed(1)}{' '}
-                                            avg
+                                            {(stats.processes / stats.total).toFixed(1)} avg
                                         </span>
                                     )}
                                 </div>
@@ -451,29 +374,18 @@ export default function MacroProcessesIndex({
                             />
                         </>
                     }
-                    initialState={{
-                        columnPinning: {
-                            right: ['actions'],
-                        },
-                    }}
+                    initialState={{ columnPinning: { right: ['actions'] } }}
                 />
             </div>
 
             {/* Delete Confirmation Dialog */}
-            <AlertDialog
-                open={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-            >
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Delete Macro Process
-                        </AlertDialogTitle>
+                        <AlertDialogTitle>Delete Macro Process</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete "
-                            {macroProcessToDelete?.name}"? This action cannot be
-                            undone and will also remove all associated
-                            processes.
+                            Are you sure you want to delete "{macroProcessToDelete?.name}"?
+                            This action cannot be undone and will also remove all associated processes.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

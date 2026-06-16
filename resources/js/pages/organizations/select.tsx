@@ -79,17 +79,17 @@ export default function SelectOrganization({
                             >
                                 <Avatar className="h-8 w-8 cursor-pointer">
                                     <AvatarImage
-                                        src={auth.user.avatar}
-                                        alt={auth.user.name}
+                                        src={auth?.user?.avatar}
+                                        alt={auth?.user?.name ?? ''}
                                     />
                                     <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">
-                                        {getInitials(auth.user.name)}
+                                        {getInitials(auth?.user?.name ?? '')}
                                     </AvatarFallback>
                                 </Avatar>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-56" align="end">
-                            <UserMenuContent user={auth.user} />
+                            <UserMenuContent user={auth?.user} />
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>

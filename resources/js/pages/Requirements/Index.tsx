@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-
+import { useCan } from '@/hooks/use-can'
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { ServerDataTable } from '@/components/server-data-table'
@@ -453,12 +453,14 @@ function KanbanColumn({
   items,
   styles: s,
   frameworkColorMap,
+  canEdit = false,
 }: {
   columnKey: string
   title: string
   items: Requirement[]
   styles: { kanbanBg: string; kanbanBorder: string; kanbanText: string }
   frameworkColorMap: Record<string, number>
+  canEdit?: boolean
 }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -618,11 +620,13 @@ function KanbanColumn({
                                 <Eye className="mr-1.5 h-3.5 w-3.5" /> View
                               </Link>
                             </Button>
-                            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                              <Link href={`/requirements/${req.id}/edit`}>
-                                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                              </Link>
-                            </Button>
+                            {canEdit && (
+                              <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
+                                <Link href={`/requirements/${req.id}/edit`}>
+                                  <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                                </Link>
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -696,6 +700,7 @@ function KanbanColumn({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RequirementsIndex({ requirements, frameworks, frameworksForImport }: RequirementsIndexProps) {
+  const { can } = useCan()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [requirementToDelete, setRequirementToDelete] = useState<Requirement | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -796,6 +801,7 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
     const { source, destination, draggableId } = result
     if (!destination) return
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
+    if (!can('requirements.update')) return
     const field = groupBy === 'status' ? 'status' : 'priority'
     router.put(`/requirements/${Number(draggableId)}`, { [field]: destination.droppableId }, {
       preserveState: true, preserveScroll: true,
@@ -961,16 +967,22 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
               <DropdownMenuItem onClick={() => router.visit(`/requirements/${requirement.id}`)}>
                 <Eye className="mr-2 h-4 w-4" /> View
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.visit(`/requirements/${requirement.id}/edit`)}>
-                <Pencil className="mr-2 h-4 w-4" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:bg-destructive/10"
-                onClick={() => { setRequirementToDelete(requirement); setDeleteDialogOpen(true) }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
-              </DropdownMenuItem>
+              {can('requirements.update') && (
+                <DropdownMenuItem onClick={() => router.visit(`/requirements/${requirement.id}/edit`)}>
+                  <Pencil className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              )}
+              {can('requirements.delete') && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:bg-destructive/10"
+                    onClick={() => { setRequirementToDelete(requirement); setDeleteDialogOpen(true) }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -999,11 +1011,13 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
             <p className="text-muted-foreground mt-1.5">Track and manage your compliance requirements</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button asChild>
-              <Link href="/requirements/create">
-                <Plus className="mr-2 h-4 w-4" /> New Requirement
-              </Link>
-            </Button>
+            {can('requirements.create') && (
+              <Button asChild>
+                <Link href="/requirements/create">
+                  <Plus className="mr-2 h-4 w-4" /> New Requirement
+                </Link>
+              </Button>
+            )}
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="hidden sm:block">
               <TabsList className="grid w-44 grid-cols-2">
                 <TabsTrigger value="table"><TableIcon className="mr-2 h-4 w-4" />Table</TabsTrigger>
@@ -1074,6 +1088,7 @@ export default function RequirementsIndex({ requirements, frameworks, frameworks
                         items={groupedData[key] || []}
                         styles={s}
                         frameworkColorMap={frameworkColorMap}
+                        canEdit={can('requirements.update')}
                       />
                     )
                   })}

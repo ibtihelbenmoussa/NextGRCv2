@@ -15,106 +15,96 @@ import {
     SidebarRail,
     useSidebar,
 } from '@/components/ui/sidebar';
+import { useCan } from '@/hooks/use-can';
 import { Link } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    Briefcase,
-    LayoutDashboard,
-    Network,
-    Search,
-    PackageCheck,
-} from 'lucide-react';
+import { LayoutDashboard, Network, PackageCheck, Search } from 'lucide-react';
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 
-const data = {
-    navMain: [
+interface NavItem {
+    title: string;
+    url: string;
+}
+
+interface NavGroup {
+    title: string;
+    url: string;
+    icon: LucideIcon;
+    isActive?: boolean;
+    items?: NavItem[];
+}
+
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const [searchOpen, setSearchOpen] = useState(false);
+    const { state } = useSidebar();
+    const [isRTL, setIsRTL] = useState(false);
+    const { can } = useCan();
+
+    useEffect(() => {
+        const checkDir = () => setIsRTL(document.documentElement.dir === 'rtl');
+        checkDir();
+        const observer = new MutationObserver(checkDir);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
+        return () => observer.disconnect();
+    }, []);
+
+    const masterDataItems = [
+        can('overview.view')        && { title: 'Overview',        url: '/overview' },
+        can('business-units.view')  && { title: 'Business Units',  url: '/business-units' },
+        can('macro-processes.view') && { title: 'Macro Processes', url: '/macro-processes' },
+        can('processes.view')       && { title: 'Processes',       url: '/processes' },
+        can('bpmn.view')            && { title: 'BPMN Diagrams',   url: '/bpmn' },
+    ].filter(Boolean) as NavItem[];
+
+    const complianceItems = [
+        can('frameworks.view')      && { title: 'Frameworks',        url: '/frameworks' },
+        can('requirements.view')    && { title: 'Requirements',      url: '/requirements' },
+        can('tests.view')           && { title: 'Requirement Tests', url: '/req-testing' },
+        can('tests.review')         && { title: 'Validation',        url: '/requirement-tests/validation' },
+        can('gap-assessments.view') && { title: 'Gap Assessment',    url: '/gap-assessment' },
+        can('action-plans.view')    && { title: 'Action Plans',      url: '/action-plans' },
+    ].filter(Boolean) as NavItem[];
+
+    const adminItems = [
+        can('users.view')         && { title: 'Users',               url: '/users' },
+        can('roles.view')         && { title: 'Roles & Permissions',  url: '/roles' },
+        can('organizations.view') && { title: 'Organizations',        url: '/organizations' },
+    ].filter(Boolean) as NavItem[];
+
+    const navMain: NavGroup[] = [
         {
             title: 'Dashboard',
             url: '/dashboard',
             icon: LayoutDashboard,
             isActive: true,
         },
-        {
+        ...(masterDataItems.length > 0 ? [{
             title: 'Master Data',
             url: '/audit-universe',
             icon: Network,
-            items: [
-                { title: 'Overview', url: '/overview' },
-                { title: 'Business Units', url: '/business-units' },
-                { title: 'Macro Processes', url: '/macro-processes' },
-                { title: 'Processes', url: '/processes' },
-                { title: 'BPMN Diagrams', url: '/bpmn' },
-            ],
-        },
-   /*
-{
-    title: 'Risk Management',
-    url: '/risks',
-    icon: AlertTriangle,
-    items: [
-        { title: 'Risks', url: '/risks' },
-        { title: 'Controls', url: '/controls' },
-    ],
-},
-*/
- /*        {
-            title: 'Audit Management',
-            url: '/audit-missions',
-            icon: Briefcase,
-            items: [
-                { title: 'Planning', url: '/plannings' },
-                { title: 'In Progress', url: '/audit-missions?status=in_progress' },
-                { title: 'Follow-up', url: '/audit-missions?status=follow_up' },
-                { title: 'Closed', url: '/audit-missions?status=closed' },
-                { title: 'Documents', url: '/requested-documents' },
-            ],
-        }, */
-        {
+            items: masterDataItems,
+        }] : []),
+        ...(complianceItems.length > 0 ? [{
             title: 'Compliance Management',
             url: '/compliance-management',
             icon: PackageCheck,
-            items: [
-                { title: 'Frameworks', url: '/frameworks' },
-                { title: 'Requirements', url: '/requirements' },
-               
-                //{ title: 'Predefined Tests', url: '/predefined-tests/requirement' },
-                 { title: 'Requirement tests', url: '/req-testing' },
-                { title: 'Validation', url: '/requirement-tests/validation' },
-             { title: 'Gap Assessment', url: '/gap-assessment' },
-             { title: 'Action Plans', url: '/action-plans' },
-            ],
-        },
-    ],
-};
-
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-
-    const [searchOpen, setSearchOpen] = useState(false);
-    const { state } = useSidebar();
-
-    const [isRTL, setIsRTL] = useState(false);
-
-    useEffect(() => {
-        const checkDir = () => {
-            setIsRTL(document.documentElement.dir === "rtl");
-        };
-
-        checkDir();
-
-        const observer = new MutationObserver(checkDir);
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["dir"] });
-
-        return () => observer.disconnect();
-    }, []);
+            items: complianceItems,
+        }] : []),
+        ...(adminItems.length > 0 ? [{
+            title: 'Administration',
+            url: '/admin',
+            icon: PackageCheck,
+            items: adminItems,
+        }] : []),
+    ];
 
     return (
         <>
             <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
-
             <Sidebar
                 collapsible="icon"
-                className={`fixed top-0 h-screen ${isRTL ? "right-0 border-l" : "left-0 border-r"}`}
+                className={`fixed top-0 h-screen ${isRTL ? 'right-0 border-l' : 'left-0 border-r'}`}
                 {...props}
             >
                 <SidebarHeader>
@@ -127,9 +117,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>
-
                     <OrganizationSwitcher />
-
                     {state === 'expanded' && (
                         <SidebarMenu>
                             <SidebarMenuItem>
@@ -147,19 +135,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenu>
                     )}
                 </SidebarHeader>
-
                 <SidebarContent className="overflow-hidden">
                     <ScrollArea className="h-full">
                         <div className="flex flex-col gap-2 p-2">
-                            <NavMain items={data.navMain} />
+                            <NavMain items={navMain} />
                         </div>
                     </ScrollArea>
                 </SidebarContent>
-
                 <SidebarFooter>
                     <NavUser />
                 </SidebarFooter>
-
                 <SidebarRail />
             </Sidebar>
         </>

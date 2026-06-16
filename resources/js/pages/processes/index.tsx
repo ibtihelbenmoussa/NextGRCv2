@@ -53,6 +53,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useCan } from '@/hooks/use-can';
 
 interface ProcessesIndexProps {
     processes: PaginatedData<Process>;
@@ -73,6 +74,8 @@ export default function ProcessesIndex({
     macroProcesses,
     businessUnits,
 }: ProcessesIndexProps) {
+    const { can } = useCan();
+
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [processToDelete, setProcessToDelete] = useState<Process | null>(
         null,
@@ -309,27 +312,34 @@ export default function ProcessesIndex({
                                 <Eye className="mr-2 h-4 w-4" />
                                 View
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() =>
-                                    router.visit(
-                                        `/processes/${process.id}/edit`,
-                                    )
-                                }
-                            >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    setProcessToDelete(process);
-                                    setDeleteDialogOpen(true);
-                                }}
-                                className="text-destructive"
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                            </DropdownMenuItem>
+
+
+
+                                {can('macro-processes.edit') && (
+                                    <DropdownMenuItem
+                                        onClick={() => router.visit(`/macro-processes/${process.id}}/edit`)}
+                                    >
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                )}
+
+                                {can('macro-processes.delete') && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={() => {
+                                                setProcessToDelete(process);
+                                                setDeleteDialogOpen(true);
+                                            }}
+                                            className="text-destructive"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                           
                         </DropdownMenuContent>
                     </DropdownMenu>
                 );
@@ -363,10 +373,13 @@ export default function ProcessesIndex({
                             Manage processes across macro processes
                         </p>
                     </div>
-                    <Button onClick={() => router.visit('/processes/create')}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Process
-                    </Button>
+                    {can('business-units.create') && (
+                        <Button onClick={() => router.visit('/processes/create')}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Process
+                        </Button>
+                    )}
+
                 </div>
 
                 {/* Stats */}
@@ -401,7 +414,7 @@ export default function ProcessesIndex({
                                         <span className="text-xs text-muted-foreground">
                                             {Math.round(
                                                 (stats.active / stats.total) *
-                                                    100,
+                                                100,
                                             )}
                                             %
                                         </span>

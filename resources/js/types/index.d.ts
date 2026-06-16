@@ -16,6 +16,8 @@ import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
     user: User;
+    roles: string[];
+    permissions: string[];
 }
 
 export interface PaginationLink {
@@ -62,6 +64,11 @@ export interface SharedData {
     auth: Auth;
     currentOrganization: Organization | null;
     sidebarOpen: boolean;
+    settings: AppSetting[];
+    flash: {
+        success?: string;
+        error?: string;
+    };
     [key: string]: unknown;
 }
 
@@ -91,8 +98,8 @@ export interface User {
     organizations?: Organization[];
     current_organization?: Organization;
     default_organization?: Organization;
-    organization_roles?: Role[]; // Roles in a specific organization context
-    roles?: Role[]; // General roles relationship
+    organization_roles?: Role[]; 
+    roles?: Role[]; 
     pivot?: {
         organization_id: number;
         [key: string]: unknown;

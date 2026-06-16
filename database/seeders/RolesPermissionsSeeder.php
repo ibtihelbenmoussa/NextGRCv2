@@ -5,271 +5,229 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Models\Organization;
 
 class RolesPermissionsSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // Only create global roles (not per organization)
-        $roles = [
-            'Admin',
-            'Audit Chief',
-            'Auditor',
-            'Manager',
-            'Viewer',
-        ];
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Default GRC permissions categorized by module
         $defaultPermissions = [
             // Users Management
-            'users.view',
-            'users.create',
-            'users.edit',
-            'users.delete',
-            'users.assign-roles',
+            'users.view', 'users.create', 'users.edit',
+            'users.delete', 'users.assign-roles',
 
             // Organizations Management
-            'organizations.view',
-            'organizations.edit',
+            'organizations.view', 'organizations.edit',
             'organizations.manage-users',
 
-            // Audit Universe - Business Units
-            'business-units.view',
-            'business-units.create',
-            'business-units.edit',
-            'business-units.delete',
+            // Audit Universe
+            'business-units.view', 'business-units.create',
+            'business-units.edit', 'business-units.delete',
 
-            // Audit Universe - Macro Processes
-            'macro-processes.view',
-            'macro-processes.create',
-            'macro-processes.edit',
-            'macro-processes.delete',
+            'macro-processes.view', 'macro-processes.create',
+            'macro-processes.edit', 'macro-processes.delete',
 
-            // Audit Universe - Processes
-            'processes.view',
-            'processes.create',
-            'processes.edit',
-            'processes.delete',
+            'processes.view', 'processes.create',
+            'processes.edit', 'processes.delete',
 
-            // Risks Management
-            'risks.view',
-            'risks.create',
-            'risks.edit',
-            'risks.delete',
+            // Risks
+            'risks.view', 'risks.create', 'risks.edit', 'risks.delete',
+            'view_risk_matrix', 'manage_risk_matrix',
+            'view risk configurations', 'manage risk configurations',
 
-            // Risk Matrix Configuration (Legacy)
-            'view_risk_matrix',
-            'manage_risk_matrix',
-            
-            // Risk Configuration (ORM)
-            'view risk configurations',
-            'manage risk configurations',
-
-            // Controls Management
-            'controls.view',
-            'controls.create',
-            'controls.edit',
-            'controls.delete',
+            // Controls
+            'controls.view', 'controls.create',
+            'controls.edit', 'controls.delete',
 
             // Planning & Audit Missions
-            'plannings.view',
-            'plannings.create',
-            'plannings.edit',
-            'plannings.delete',
+            'plannings.view', 'plannings.create',
+            'plannings.edit', 'plannings.delete',
 
-            'audit-missions.view',
-            'audit-missions.create',
-            'audit-missions.edit',
-            'audit-missions.delete',
-            'audit-missions.manage-team',
-            'audit-missions.change-status',
-
-            // Audit Mission - Planification Phase
-            'audit-missions.manage-risks',
-            'audit-missions.manage-documents',
+            'audit-missions.view', 'audit-missions.create',
+            'audit-missions.edit', 'audit-missions.delete',
+            'audit-missions.manage-team', 'audit-missions.change-status',
+            'audit-missions.manage-risks', 'audit-missions.manage-documents',
             'audit-missions.manage-interviews',
 
-            // Audit Mission - Testing Phase
-            'tests.view',
-            'tests.create',
-            'tests.edit',
-            'tests.delete',
-            'tests.review', // For Audit Chief to review tests
+            // Tests
+            'tests.view', 'tests.create', 'tests.edit',
+            'tests.delete', 'tests.review',
 
-            // Audit Mission - Management Comments
-            'management-comments.view',
-            'management-comments.create',
+            // Management Comments
+            'management-comments.view', 'management-comments.create',
             'management-comments.edit',
 
             // Reports
-            'reports.view',
-            'reports.create',
-            'reports.edit',
-            'reports.delete',
-            'reports.export',
+            'reports.view', 'reports.create', 'reports.edit',
+            'reports.delete', 'reports.export',
 
             // Roles & Permissions
-            'roles.view',
-            'roles.create',
-            'roles.edit',
-            'roles.delete',
-            'roles.assign',
+            'roles.view', 'roles.create', 'roles.edit',
+            'roles.delete', 'roles.assign',
+            'permissions.view', 'permissions.create', 'permissions.delete',
 
-            'permissions.view',
-            'permissions.create',
-            'permissions.delete',
+            // ── NextGRCv2 modules ──────────────────────────
+
+            // Frameworks
+            'frameworks.view', 'frameworks.create',
+            'frameworks.update', 'frameworks.delete',
+
+            // Requirements
+            'requirements.view', 'requirements.create',
+            'requirements.update', 'requirements.delete',
+
+            // Gap Assessments
+            'gap-assessments.view', 'gap-assessments.create',
+            'gap-assessments.update', 'gap-assessments.delete',
+
+            // Gap Results
+            'gap-results.view',
+
+            // Action Plans
+            'action-plans.view', 'action-plans.create',
+            'action-plans.update', 'action-plans.delete',
+            'action-plans.view-all', 'action-plans.assign',
+
+            // Documents
+            'documents.view', 'documents.create',
+            'documents.update', 'documents.delete',
+
+            // BPMN
+            'bpmn.view', 'bpmn.create',
+            'bpmn.update', 'bpmn.delete',
+
+            // Overview
+            'overview.view',
         ];
 
-        // Default roles with their permission sets
-        $defaultRoles = [
-            'Admin' => [
-                'description' => 'Full system access with all permissions',
-                'permissions' => $defaultPermissions,
-            ],
-            'Audit Chief' => [
-                'description' => 'Lead auditor with team management and review capabilities',
-                'permissions' => [
-                    'users.view',
-                    'organizations.view',
-                    'business-units.view',
-                    'macro-processes.view',
-                    'processes.view',
-                    'risks.view',
-                    'risks.create',
-                    'risks.edit',
-                    'view_risk_matrix',
-                    'view risk configurations',
-                    'manage risk configurations',
-                    'controls.view',
-                    'controls.create',
-                    'controls.edit',
-                    'plannings.view',
-                    'plannings.create',
-                    'plannings.edit',
-                    'audit-missions.view',
-                    'audit-missions.create',
-                    'audit-missions.edit',
-                    'audit-missions.manage-team',
-                    'audit-missions.change-status',
-                    'audit-missions.manage-risks',
-                    'audit-missions.manage-documents',
-                    'audit-missions.manage-interviews',
-                    'tests.view',
-                    'tests.create',
-                    'tests.edit',
-                    'tests.delete',
-                    'tests.review',
-                    'management-comments.view',
-                    'management-comments.create',
-                    'reports.view',
-                    'reports.create',
-                    'reports.edit',
-                    'reports.export',
-                ],
-            ],
-            'Auditor' => [
-                'description' => 'Audit team member with testing and documentation capabilities',
-                'permissions' => [
-                    'users.view',
-                    'organizations.view',
-                    'business-units.view',
-                    'macro-processes.view',
-                    'processes.view',
-                    'risks.view',
-                    'view risk configurations',
-                    'controls.view',
-                    'plannings.view',
-                    'audit-missions.view',
-                    'audit-missions.manage-documents',
-                    'audit-missions.manage-interviews',
-                    'tests.view',
-                    'tests.create',
-                    'tests.edit',
-                    'management-comments.view',
-                    'reports.view',
-                ],
-            ],
-            'Manager' => [
-                'description' => 'Management with comment and review capabilities',
-                'permissions' => [
-                    'users.view',
-                    'organizations.view',
-                    'business-units.view',
-                    'macro-processes.view',
-                    'processes.view',
-                    'risks.view',
-                    'view risk configurations',
-                    'controls.view',
-                    'audit-missions.view',
-                    'tests.view',
-                    'management-comments.view',
-                    'management-comments.create',
-                    'management-comments.edit',
-                    'reports.view',
-                ],
-            ],
-            'Viewer' => [
-                'description' => 'Read-only access to audit information',
-                'permissions' => [
-                    'users.view',
-                    'organizations.view',
-                    'business-units.view',
-                    'macro-processes.view',
-                    'processes.view',
-                    'risks.view',
-                    'view risk configurations',
-                    'controls.view',
-                    'plannings.view',
-                    'audit-missions.view',
-                    'tests.view',
-                    'management-comments.view',
-                    'reports.view',
-                ],
-            ],
-        ];
-
-        // Reset cached roles and permissions
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-
-        // Create permissions
-        $this->command->info("Creating permissions...");
+        // ── Create all permissions ─────────────────────────
+        $this->command->info('Creating permissions...');
         $createdPermissions = [];
-        foreach ($defaultPermissions as $permissionName) {
-            $permission = Permission::firstOrCreate([
-                'name' => $permissionName,
+        foreach ($defaultPermissions as $permName) {
+            $createdPermissions[$permName] = Permission::firstOrCreate([
+                'name'       => $permName,
                 'guard_name' => 'web',
             ]);
-            $createdPermissions[$permissionName] = $permission;
         }
+        $this->command->info('  ✓ ' . count($createdPermissions) . " permissions\n");
 
-        $this->command->info("  ✓ Created/found " . count($createdPermissions) . " permissions\n");
+        // ── Roles + permissions ────────────────────────────
+        $defaultRoles = [
 
-        // Create global roles and assign permissions
-        $this->command->info("Creating global roles...");
-        foreach ($defaultRoles as $roleName => $roleData) {
+            'Viewer' => [
+                'users.view',
+                'organizations.view',
+                'business-units.view', 'macro-processes.view', 'processes.view',
+                'risks.view', 'view_risk_matrix', 'view risk configurations',
+                'controls.view', 'plannings.view',
+                'audit-missions.view', 'tests.view',
+                'management-comments.view', 'reports.view',
+                // GRC
+                'frameworks.view', 'requirements.view',
+                'gap-assessments.view', 'gap-results.view',
+                'action-plans.view', 'documents.view',
+                'bpmn.view', 'overview.view',
+            ],
+
+            'Auditor' => [
+                'users.view', 'organizations.view',
+                'business-units.view', 'macro-processes.view', 'processes.view',
+                'risks.view', 'view risk configurations',
+                'controls.view', 'plannings.view',
+                'audit-missions.view',
+                'audit-missions.manage-documents', 'audit-missions.manage-interviews',
+                'tests.view', 'tests.create', 'tests.edit',
+                'management-comments.view', 'reports.view',
+                // GRC
+                'frameworks.view', 'requirements.view',
+                'gap-assessments.view', 'gap-assessments.create',
+                'gap-assessments.update', 'gap-assessments.delete',
+                'gap-results.view',
+                'action-plans.view', 'action-plans.update',
+                'documents.view', 'documents.create', 'documents.update',
+                'bpmn.view', 'overview.view',
+            ],
+
+            'Audit Chief' => [
+                'users.view', 'organizations.view',
+                'business-units.view', 'macro-processes.view', 'processes.view',
+                'risks.view', 'risks.create', 'risks.edit',
+                'view_risk_matrix', 'view risk configurations', 'manage risk configurations',
+                'controls.view', 'controls.create', 'controls.edit',
+                'plannings.view', 'plannings.create', 'plannings.edit',
+                'audit-missions.view', 'audit-missions.create', 'audit-missions.edit',
+                'audit-missions.manage-team', 'audit-missions.change-status',
+                'audit-missions.manage-risks', 'audit-missions.manage-documents',
+                'audit-missions.manage-interviews',
+                'tests.view', 'tests.create', 'tests.edit',
+                'tests.delete', 'tests.review',
+                'management-comments.view', 'management-comments.create',
+                'reports.view', 'reports.create', 'reports.edit', 'reports.export',
+                // GRC
+                'frameworks.view', 'requirements.view',
+                'gap-assessments.view', 'gap-assessments.create',
+                'gap-assessments.update', 'gap-assessments.delete',
+                'gap-results.view',
+                'action-plans.view', 'action-plans.create',
+                'action-plans.update', 'action-plans.delete',
+                'action-plans.view-all', 'action-plans.assign',
+                'documents.view', 'documents.create',
+                'documents.update', 'documents.delete',
+                'bpmn.view', 'overview.view',
+            ],
+
+            'Manager' => [
+                'users.view', 'organizations.view',
+                'business-units.view', 'macro-processes.view', 'processes.view',
+                'risks.view', 'view risk configurations',
+                'controls.view',
+                'audit-missions.view', 'tests.view',
+                'management-comments.view', 'management-comments.create',
+                'management-comments.edit', 'reports.view',
+                // GRC
+                'frameworks.view', 'frameworks.create',
+                'frameworks.update', 'frameworks.delete',
+                'requirements.view', 'requirements.create',
+                'requirements.update', 'requirements.delete',
+                'gap-assessments.view', 'gap-assessments.create',
+                'gap-assessments.update', 'gap-assessments.delete',
+                'gap-results.view',
+                'action-plans.view', 'action-plans.create',
+                'action-plans.update', 'action-plans.delete',
+                'action-plans.view-all', 'action-plans.assign',
+                'documents.view', 'documents.create',
+                'documents.update', 'documents.delete',
+                'business-units.create', 'business-units.edit', 'business-units.delete',
+                'macro-processes.create', 'macro-processes.edit', 'macro-processes.delete',
+                'processes.create', 'processes.edit', 'processes.delete',
+                'bpmn.view', 'bpmn.create', 'bpmn.update', 'bpmn.delete',
+                'overview.view',
+            ],
+
+            'Admin' => $defaultPermissions,
+        ];
+
+        // ── Sync roles ─────────────────────────────────────
+        $this->command->info('Creating roles...');
+        foreach ($defaultRoles as $roleName => $permissions) {
             $role = Role::firstOrCreate([
-                'name' => $roleName,
+                'name'       => $roleName,
                 'guard_name' => 'web',
             ]);
 
-            // Assign permissions
-            $rolePermissions = [];
-            foreach ($roleData['permissions'] as $permissionName) {
-                if (isset($createdPermissions[$permissionName])) {
-                    $rolePermissions[] = $createdPermissions[$permissionName];
-                }
-            }
+            $permsToSync = array_filter(
+                array_map(
+                    fn($p) => $createdPermissions[$p] ?? null,
+                    $permissions
+                )
+            );
 
-            $role->syncPermissions($rolePermissions);
-
+            $role->syncPermissions($permsToSync);
             $this->command->info("  ✓ {$roleName} ({$role->permissions->count()} permissions)");
         }
 
         $this->command->newLine();
-        $this->command->info('✅ Roles and permissions seeded successfully!');
+        $this->command->info('✅ Done!');
     }
 }

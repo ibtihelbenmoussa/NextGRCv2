@@ -155,16 +155,15 @@ export default function BPMNCreate({
         setData('diagramable_id', '');
     };
 
-    const handleEntityChange = (value: string) => {
-        setSelectedEntityId(value);
-        setData('diagramable_id', value);
+const handleEntityChange = (value: string) => {
+    setSelectedEntityId(value);
+    setData('diagramable_id', value);
 
-        // Load the BPMN template when an entity is selected
-        const selectedEntity = availableEntities.find(
-            (entity) => entity.id.toString() === value,
-        );
-        if (selectedEntity) {
-            const templateXml = `<?xml version="1.0" encoding="UTF-8"?>
+    const selectedEntity = availableEntities.find(
+        (entity) => entity.id.toString() === value,
+    );
+    if (selectedEntity) {
+        const templateXml = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="sid-38422fae-e03e-43a3-bef4-bd33b32041b2" targetNamespace="http://bpmn.io/bpmn" exporter="bpmn-js (https://demo.bpmn.io)" exporterVersion="18.6.1">
   <collaboration id="Collaboration_1yyxkdf">
     <participant id="Participant_1hdy48n" name="${selectedEntity.name}" processRef="Process_1" />
@@ -179,9 +178,11 @@ export default function BPMNCreate({
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </definitions>`;
-            loadXml(templateXml);
-        }
-    };
+        // ✅ Les deux lignes doivent être présentes
+        setData('bpmn_xml', templateXml);  // ← c'était manquant !
+        loadXml(templateXml);
+    }
+};
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
