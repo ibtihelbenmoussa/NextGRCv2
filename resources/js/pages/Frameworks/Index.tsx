@@ -474,7 +474,7 @@ function KanbanColumn({
                             </Button>
                             {canEdit && (
                               <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" asChild>
-                                <Link href={`/frameworks/${fw.id}/edit`}><Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit</Link>
+                                <Link href={`/frameworks/${fw.id}/edit`}><Pencil className="mr-1.5 h-3.5 w-3.5" /> Editt</Link>
                               </Button>
                             )}
                             {canDelete && onDeleteRequest && (
