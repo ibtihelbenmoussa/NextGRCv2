@@ -10,16 +10,34 @@ class MLChatController extends Controller
     public function chat(Request $request)
     {
         $request->validate([
-            'question' => 'required|string|max:500',
-            'plans'    => 'nullable|array',
+            'question'               => 'required|string|max:500',
+            'plans'                  => 'nullable|array',
+            'kpis'                   => 'nullable|array',
+            'executiveSummary'       => 'nullable|array',
+            'topCriticalGaps'        => 'nullable|array',
+            'overdueActionPlans'     => 'nullable|array',
+            'recommendations'        => 'nullable|array',
+            'frameworkComparison'    => 'nullable|array',
+            'businessUnitCompliance' => 'nullable|array',
+            'complianceEvolution'    => 'nullable|array',
+            'processCompliance'      => 'nullable|array',
         ]);
 
         try {
             $mlUrl = config('services.ml.url', 'http://localhost:5000');
 
             $response = Http::timeout(15)->post("{$mlUrl}/chat", [
-                'question' => $request->input('question'),
-                'plans'    => $request->input('plans', []),
+                'question'               => $request->input('question'),
+                'plans'                  => $request->input('plans', []),
+                'kpis'                   => $request->input('kpis', []),
+                'executiveSummary'       => $request->input('executiveSummary', []),
+                'topCriticalGaps'        => $request->input('topCriticalGaps', []),
+                'overdueActionPlans'     => $request->input('overdueActionPlans', []),
+                'recommendations'        => $request->input('recommendations', []),
+                'frameworkComparison'    => $request->input('frameworkComparison', []),
+                'businessUnitCompliance' => $request->input('businessUnitCompliance', []),
+                'complianceEvolution'    => $request->input('complianceEvolution', []),
+                'processCompliance'      => $request->input('processCompliance', []),
             ]);
 
             if ($response->successful()) {

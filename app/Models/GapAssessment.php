@@ -24,7 +24,6 @@ class GapAssessment extends Model
         return $this->hasMany(GapAssessmentRequirement::class);
     }
 
-    // ✅ belongsToMany — permet sync(), attach(), detach()
     public function requirements()
     {
         return $this->belongsToMany(

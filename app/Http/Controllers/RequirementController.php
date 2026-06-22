@@ -379,7 +379,7 @@ class RequirementController extends Controller
     ->select('id', 'name')
     ->orderBy('name')
     ->get()
-    ->values(),  // ← force un tableau indexé propre
+    ->values(), 
         'selectedTagIds' => $requirement->tags->pluck('id')
             ->map(fn($id) => (string) $id)->toArray(),
         'selectedProcessIds' => $requirement->processes->pluck('id')

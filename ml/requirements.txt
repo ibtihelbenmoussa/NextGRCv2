@@ -3,3 +3,5 @@ flask-cors==4.0.1
 joblib==1.4.2
 numpy==1.26.4
 scikit-learn==1.5.1
+python-dotenv
+requests

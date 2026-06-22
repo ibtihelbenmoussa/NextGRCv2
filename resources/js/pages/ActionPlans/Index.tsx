@@ -43,8 +43,8 @@ import {
 } from '@/components/ui/sheet'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Plan {
-    id: number
+export interface Plan {
+        id: number
     title: string
     description: string
     assigned_to: number | null
@@ -587,7 +587,7 @@ function TypingDots() {
     )
 }
 
-function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
+export function ActionPlanChatbot({ plans }: { plans: Plan[] }) {
     const [open, setOpen] = useState(false)
     const [minimized, setMinimized] = useState(false)
     const [messages, setMessages] = useState<ChatMessage[]>([

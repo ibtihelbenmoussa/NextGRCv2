@@ -5,6 +5,8 @@ import joblib
 import numpy as np
 import os
 from chat_endpoint import classify_intent, generate_response
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -484,11 +486,35 @@ def chat():
         question = data.get('question', '').strip()
         plans    = data.get('plans', [])
 
+        # ── Nouvelles données dashboard ──
+        dashboard = {
+            'kpis':                   data.get('kpis', {}),
+            'executiveSummary':       data.get('executiveSummary', {}),
+            'topCriticalGaps':        data.get('topCriticalGaps', []),
+            'overdueActionPlans':     data.get('overdueActionPlans', []),
+            'recommendations':        data.get('recommendations', []),
+            'frameworkComparison':    data.get('frameworkComparison', []),
+            'businessUnitCompliance': data.get('businessUnitCompliance', []),
+            'complianceEvolution':    data.get('complianceEvolution', []),
+            'processCompliance':      data.get('processCompliance', []),
+        }
+
         if not question:
             return jsonify({'error': 'question is required'}), 400
 
         intent, confidence = classify_intent(question)
-        response = generate_response(intent, confidence, plans, question)
+
+        if confidence < 0.75 and os.getenv('GROQ_API_KEY'):
+            from chat_endpoint import ask_groq_fallback
+            groq_answer = ask_groq_fallback(question, plans, dashboard)
+            return jsonify({
+                'answer':     groq_answer,
+                'intent':     'ai_assisted',
+                'confidence': round(confidence, 3),
+                'meta':       {},
+            })
+
+        response = generate_response(intent, confidence, plans, question, dashboard)
 
         return jsonify({
             'answer':     response.get('text', ''),

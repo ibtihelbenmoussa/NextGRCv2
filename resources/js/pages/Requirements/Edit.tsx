@@ -27,9 +27,9 @@ import { MultiSelect } from '@/components/ui/multi-select'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Framework { id: number; code: string; name: string }
-interface Process   { id: number; name: string; code?: string }
-interface Tag       { id: number; name: string }
-interface Domain    { id: number; name: string }
+interface Process { id: number; name: string; code?: string }
+interface Tag { id: number; name: string }
+interface Domain { id: number; name: string }
 interface GapQuestion { id?: number; text: string }
 
 interface ExistingDocument {
@@ -64,19 +64,19 @@ interface PageProps {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const COMPLIANCE_LEVELS = [
-  { value: 'Mandatory',   label: 'Mandatory',   icon: ShieldCheck, color: 'red'   as const, description: 'Required by law, regulation, or binding standard.', badge: 'Required' },
-  { value: 'Recommended', label: 'Recommended', icon: Lightbulb,   color: 'amber' as const, description: 'Strongly advised by industry best practices.',        badge: 'Best practice' },
-  { value: 'Optional',    label: 'Optional',    icon: BookOpen,    color: 'teal'  as const, description: 'Voluntary measure that enhances compliance posture.',  badge: 'Voluntary' },
+  { value: 'Mandatory', label: 'Mandatory', icon: ShieldCheck, color: 'red' as const, description: 'Required by law, regulation, or binding standard.', badge: 'Required' },
+  { value: 'Recommended', label: 'Recommended', icon: Lightbulb, color: 'amber' as const, description: 'Strongly advised by industry best practices.', badge: 'Best practice' },
+  { value: 'Optional', label: 'Optional', icon: BookOpen, color: 'teal' as const, description: 'Voluntary measure that enhances compliance posture.', badge: 'Voluntary' },
 ]
 
 const LEVEL_COLORS = {
-  red:   { border: 'border-red-200 dark:border-red-800',    borderActive: 'border-red-500 dark:border-red-400',    bg: 'bg-red-50 dark:bg-red-950',    icon: 'text-red-600 dark:text-red-400',    iconBg: 'bg-red-100 dark:bg-red-900',    badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
+  red: { border: 'border-red-200 dark:border-red-800', borderActive: 'border-red-500 dark:border-red-400', bg: 'bg-red-50 dark:bg-red-950', icon: 'text-red-600 dark:text-red-400', iconBg: 'bg-red-100 dark:bg-red-900', badge: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
   amber: { border: 'border-amber-200 dark:border-amber-800', borderActive: 'border-amber-500 dark:border-amber-400', bg: 'bg-amber-50 dark:bg-amber-950', icon: 'text-amber-600 dark:text-amber-400', iconBg: 'bg-amber-100 dark:bg-amber-900', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
-  teal:  { border: 'border-teal-200 dark:border-teal-800',   borderActive: 'border-teal-500 dark:border-teal-400',   bg: 'bg-teal-50 dark:bg-teal-950',   icon: 'text-teal-600 dark:text-teal-400',   iconBg: 'bg-teal-100 dark:bg-teal-900',   badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
+  teal: { border: 'border-teal-200 dark:border-teal-800', borderActive: 'border-teal-500 dark:border-teal-400', bg: 'bg-teal-50 dark:bg-teal-950', icon: 'text-teal-600 dark:text-teal-400', iconBg: 'bg-teal-100 dark:bg-teal-900', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' },
 }
 
 const MAX_SIZE_MB = 10
-const MAX_FILES   = 10
+const MAX_FILES = 10
 
 // ─── CSRF helper ─────────────────────────────────────────────────────────────
 
@@ -93,15 +93,15 @@ const jsonHeaders = () => ({
 interface DocEntry { file: File; category: string; description: string; error?: string }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024)        return `${bytes} B`
+  if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function fileIcon(mimeType: string) {
-  if (mimeType.startsWith('image/'))                             return '🖼️'
-  if (mimeType === 'application/pdf')                            return '📄'
-  if (mimeType.includes('word'))                                 return '📝'
+  if (mimeType.startsWith('image/')) return '🖼️'
+  if (mimeType === 'application/pdf') return '📄'
+  if (mimeType.includes('word')) return '📝'
   if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊'
   return '📎'
 }
@@ -126,10 +126,10 @@ function DomainDialog({
   onEdit: (item: Domain, newName: string) => void
   onDelete: (item: Domain) => void
 }) {
-  const [search,        setSearch]        = useState('')
-  const [newName,       setNewName]       = useState('')
-  const [editingItem,   setEditingItem]   = useState<Domain | null>(null)
-  const [editingName,   setEditingName]   = useState('')
+  const [search, setSearch] = useState('')
+  const [newName, setNewName] = useState('')
+  const [editingItem, setEditingItem] = useState<Domain | null>(null)
+  const [editingName, setEditingName] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<Domain | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -266,7 +266,7 @@ function DomainDialog({
               <div className="space-y-1">
                 {filtered.map(item => {
                   const isSelected = item.id.toString() === selectedId
-                  const isEditing  = editingItem?.id === item.id
+                  const isEditing = editingItem?.id === item.id
                   return (
                     <div key={item.id} className={cn(
                       'group flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all',
@@ -353,16 +353,16 @@ export default function EditRequirement() {
   const { props } = usePage<PageProps>()
   const { requirement, frameworks = [] } = props
 
-const [tagOptions, setTagOptions] = useState<Tag[]>(() =>
-  Array.isArray(props.tags) ? props.tags : Object.values(props.tags ?? {}) as Tag[]
-)
+  const [tagOptions, setTagOptions] = useState<Tag[]>(() =>
+    Array.isArray(props.tags) ? props.tags : Object.values(props.tags ?? {}) as Tag[]
+  )
   // Sync si les props changent (navigation)
-useEffect(() => {
-  const incoming: Tag[] = Array.isArray(props.tags)
-    ? props.tags
-    : Object.values(props.tags ?? {}) as Tag[]
-  if (incoming.length > 0) setTagOptions(incoming)
-}, [props.tags])
+  useEffect(() => {
+    const incoming: Tag[] = Array.isArray(props.tags)
+      ? props.tags
+      : Object.values(props.tags ?? {}) as Tag[]
+    if (incoming.length > 0) setTagOptions(incoming)
+  }, [props.tags])
 
   const selectedTagIds: string[] = toArray(props.selectedTagIds)
   const existingDocs: ExistingDocument[] = toArray(requirement?.documents)
@@ -370,22 +370,22 @@ useEffect(() => {
   const formatDateString = (date: string | null) => (date ? date.split('T')[0] : '')
 
   const { data, setData, processing, errors, setError, clearErrors } = useForm({
-    code:             requirement?.code             || '',
-    title:            requirement?.title            || '',
-    description:      requirement?.description      || '',
-    type:             requirement?.type             || '',
-    status:           requirement?.status           || '',
-    priority:         requirement?.priority         || '',
-    frequency:        requirement?.frequency        || '',
-    framework_id:     requirement?.framework_id?.toString() || '',
-    process_id:       requirement?.process_id?.toString()   || '',
-    domain_id:        requirement?.domain_id?.toString()    || '',
-    tags:             selectedTagIds,
-    effective_date:   formatDateString(requirement?.effective_date),
-    completion_date:  formatDateString(requirement?.completion_date),
+    code: requirement?.code || '',
+    title: requirement?.title || '',
+    description: requirement?.description || '',
+    type: requirement?.type || '',
+    status: requirement?.status || '',
+    priority: requirement?.priority || '',
+    frequency: requirement?.frequency || '',
+    framework_id: requirement?.framework_id?.toString() || '',
+    process_ids: requirement?.process_id ? [requirement.process_id.toString()] : [] as string[],
+    domain_id: requirement?.domain_id?.toString() || '',
+    tags: selectedTagIds,
+    effective_date: formatDateString(requirement?.effective_date),
+    completion_date: formatDateString(requirement?.completion_date),
     compliance_level: requirement?.compliance_level || '',
-    attachments:      requirement?.attachments      || '',
-    auto_validate:    requirement?.auto_validate    ?? false,
+    attachments: requirement?.attachments || '',
+    auto_validate: requirement?.auto_validate ?? false,
   })
 
   // ── FIX : sync les tags sélectionnés si useForm s'initialise avant les props
@@ -396,7 +396,7 @@ useEffect(() => {
   }, [props.selectedTagIds])
 
   // ── Domain state ──────────────────────────────────────────────────────────
-  const [domainsList,      setDomainsList]      = useState<Domain[]>(toArray(props.domains))
+  const [domainsList, setDomainsList] = useState<Domain[]>(toArray(props.domains))
   const [domainDialogOpen, setDomainDialogOpen] = useState(false)
 
   const selectedDomain = domainsList.find(d => d.id.toString() === data.domain_id) ?? null
@@ -404,7 +404,7 @@ useEffect(() => {
   const refreshDomains = async () => {
     try {
       const params = data.framework_id ? `?framework_id=${data.framework_id}` : ''
-      const res  = await fetch(`/domains${params}`, { headers: jsonHeaders() })
+      const res = await fetch(`/domains${params}`, { headers: jsonHeaders() })
       const json = await res.json()
       setDomainsList(json.domains ?? [])
     } catch (e) { console.error('Failed to refresh domains', e) }
@@ -412,7 +412,7 @@ useEffect(() => {
 
   const handleAddDomain = async (name: string) => {
     try {
-      const res  = await fetch('/domains', {
+      const res = await fetch('/domains', {
         method: 'POST',
         headers: jsonHeaders(),
         body: JSON.stringify({ name, framework_id: data.framework_id || null }),
@@ -454,28 +454,27 @@ useEffect(() => {
     toArray(props.gapQuestions).map(q => ({ text: q.text }))
   )
 
-  const addGapQuestion    = () => setGapQuestions(prev => [...prev, { text: '' }])
+  const addGapQuestion = () => setGapQuestions(prev => [...prev, { text: '' }])
   const removeGapQuestion = (i: number) => setGapQuestions(prev => prev.filter((_, idx) => idx !== i))
   const updateGapQuestion = (i: number, value: string) =>
     setGapQuestions(prev => prev.map((q, idx) => idx === i ? { text: value } : q))
 
   // ── Processes ─────────────────────────────────────────────────────────────
-  const [processes,        setProcesses]        = useState<Process[]>(toArray(props.processes))
+  const [processes, setProcesses] = useState<Process[]>(toArray(props.processes))
   const [loadingProcesses, setLoadingProcesses] = useState(false)
-  const [initialFrameworkId]                    = useState(requirement?.framework_id?.toString() || '')
+  const [initialFrameworkId] = useState(requirement?.framework_id?.toString() || '')
 
-  useEffect(() => {
-    if (!data.framework_id) {
-      setProcesses([])
-      setDomainsList([])
-      setData(prev => ({ ...prev, process_id: '', domain_id: '' }))
-      return
-    }
-    if (data.framework_id === initialFrameworkId) return
+useEffect(() => {
+  if (!data.framework_id) {
+    setProcesses([])
+    setDomainsList([])
+    setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
+    return
+  }
+  if (data.framework_id === initialFrameworkId) return
 
     setLoadingProcesses(true)
-    setData(prev => ({ ...prev, process_id: '', domain_id: '' }))
-
+  setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
     router.get(route('requirements.processes-by-framework', data.framework_id), {}, {
       preserveState: true, preserveScroll: true,
       only: ['processes', 'domains'], // ← NE PAS inclure 'tags' ici
@@ -486,15 +485,15 @@ useEffect(() => {
       },
       onFinish: () => setLoadingProcesses(false),
     })
-  }, [data.framework_id])
+}, [data.framework_id])
 
   // ── New documents ─────────────────────────────────────────────────────────
-  const [docs,     setDocs]     = useState<DocEntry[]>([])
+  const [docs, setDocs] = useState<DocEntry[]>([])
   const [dragOver, setDragOver] = useState(false)
-  const fileInputRef            = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addFiles = (files: FileList | File[]) => {
-    const arr       = Array.from(files)
+    const arr = Array.from(files)
     const remaining = MAX_FILES - docs.length
     if (remaining <= 0) return
     const next: DocEntry[] = arr.slice(0, remaining).map(file => ({
@@ -504,17 +503,17 @@ useEffect(() => {
     setDocs(prev => [...prev, ...next])
   }
 
-  const removeDoc  = (idx: number) => setDocs(prev => prev.filter((_, i) => i !== idx))
+  const removeDoc = (idx: number) => setDocs(prev => prev.filter((_, i) => i !== idx))
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
   }
 
   // ── Delete existing doc ───────────────────────────────────────────────────
-  const [deletingDocId,   setDeletingDocId]   = useState<number | null>(null)
+  const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
-  const [flash,           setFlash]           = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [flashOpen,       setFlashOpen]       = useState(false)
+  const [flash, setFlash] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [flashOpen, setFlashOpen] = useState(false)
 
   const handleDeleteExisting = (docId: number) => {
     setDeletingDocId(docId)
@@ -523,8 +522,8 @@ useEffect(() => {
       {
         preserveScroll: true,
         onSuccess: () => setConfirmDeleteId(null),
-        onError:   () => { setFlash({ type: 'error', message: 'Failed to delete document.' }); setFlashOpen(true) },
-        onFinish:  () => setDeletingDocId(null),
+        onError: () => { setFlash({ type: 'error', message: 'Failed to delete document.' }); setFlashOpen(true) },
+        onFinish: () => setDeletingDocId(null),
       }
     )
   }
@@ -535,41 +534,41 @@ useEffect(() => {
     clearErrors()
 
     const ve: Record<string, string> = {}
-    if (!data.code.trim())      ve.code             = 'Code is required'
-    if (!data.title.trim())     ve.title            = 'Title is required'
-    if (!data.type)             ve.type             = 'Type is required'
-    if (!data.status)           ve.status           = 'Status is required'
-    if (!data.priority)         ve.priority         = 'Priority is required'
-    if (!data.frequency)        ve.frequency        = 'Frequency is required'
-    if (!data.framework_id)     ve.framework_id     = 'Framework is required'
+    if (!data.code.trim()) ve.code = 'Code is required'
+    if (!data.title.trim()) ve.title = 'Title is required'
+    if (!data.type) ve.type = 'Type is required'
+    if (!data.status) ve.status = 'Status is required'
+    if (!data.priority) ve.priority = 'Priority is required'
+    if (!data.frequency) ve.frequency = 'Frequency is required'
+    if (!data.framework_id) ve.framework_id = 'Framework is required'
     if (!data.compliance_level) ve.compliance_level = 'Compliance level is required'
     if (Object.keys(ve).length) { Object.entries(ve).forEach(([k, m]) => setError(k as any, m)); return }
 
     const formData = new FormData()
-    formData.append('_method',          'PUT')
-    formData.append('code',             data.code)
-    formData.append('title',            data.title)
-    formData.append('description',      data.description)
-    formData.append('type',             data.type)
-    formData.append('status',           data.status)
-    formData.append('priority',         data.priority)
-    formData.append('frequency',        data.frequency)
-    formData.append('framework_id',     data.framework_id)
-    formData.append('process_id',       data.process_id === 'none' ? '' : (data.process_id || ''))
-    formData.append('domain_id',        data.domain_id ?? '')
-    formData.append('effective_date',   data.effective_date)
-    formData.append('completion_date',  data.completion_date)
+    formData.append('_method', 'PUT')
+    formData.append('code', data.code)
+    formData.append('title', data.title)
+    formData.append('description', data.description)
+    formData.append('type', data.type)
+    formData.append('status', data.status)
+    formData.append('priority', data.priority)
+    formData.append('frequency', data.frequency)
+    formData.append('framework_id', data.framework_id)
+    data.process_ids.forEach(p => formData.append('process_ids[]', p))
+    formData.append('domain_id', data.domain_id ?? '')
+    formData.append('effective_date', data.effective_date)
+    formData.append('completion_date', data.completion_date)
     formData.append('compliance_level', data.compliance_level)
-    formData.append('attachments',      data.attachments)
-    formData.append('auto_validate',    data.auto_validate ? '1' : '0')
+    formData.append('attachments', data.attachments)
+    formData.append('auto_validate', data.auto_validate ? '1' : '0')
     data.tags.forEach(t => formData.append('tags[]', t))
     formData.append('gap_questions', JSON.stringify(gapQuestions))
 
     let uploadIndex = 0
     docs.forEach(d => {
       if (d.error) return
-      formData.append(`documents[${uploadIndex}]`,             d.file)
-      formData.append(`document_categories[${uploadIndex}]`,   d.category)
+      formData.append(`documents[${uploadIndex}]`, d.file)
+      formData.append(`document_categories[${uploadIndex}]`, d.category)
       formData.append(`document_descriptions[${uploadIndex}]`, d.description)
       uploadIndex++
     })
@@ -577,18 +576,18 @@ useEffect(() => {
     router.post(route('requirements.update', requirement.id), formData, {
       preserveScroll: true,
       onSuccess: () => router.visit(route('requirements.index'), { method: 'get', preserveState: false }),
-      onError:   () => { setFlash({ type: 'error', message: 'Error updating requirement.' }); setFlashOpen(true) },
+      onError: () => { setFlash({ type: 'error', message: 'Error updating requirement.' }); setFlashOpen(true) },
     })
   }
 
-  const validDocs   = docs.filter(d => !d.error)
-  const hasInvalid  = docs.some(d => !!d.error)
+  const validDocs = docs.filter(d => !d.error)
+  const hasInvalid = docs.some(d => !!d.error)
   const docToDelete = existingDocs.find(d => d.id === confirmDeleteId)
 
   const steps = [
-    { label: 'Basic info',    icon: ListTodo },
-    { label: 'Details',       icon: FileText },
-    { label: 'Documents',     icon: FileUp },
+    { label: 'Basic info', icon: ListTodo },
+    { label: 'Details', icon: FileText },
+    { label: 'Documents', icon: FileUp },
     { label: 'Gap Questions', icon: ListTodo },
   ]
 
@@ -710,8 +709,11 @@ useEffect(() => {
 
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Process (optional)</Label>
-                <Select value={data.process_id || 'none'} onValueChange={v => setData('process_id', v === 'none' ? '' : v)}
-                  disabled={!data.framework_id || loadingProcesses}>
+                <Select
+                  value={data.process_ids[0] || 'none'}
+                  onValueChange={v => setData('process_ids', v === 'none' ? [] : [v])}
+                  disabled={!data.framework_id || loadingProcesses}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={!data.framework_id ? 'Select a framework first' : loadingProcesses ? 'Loading…' : 'No specific process'} />
                   </SelectTrigger>
@@ -725,6 +727,7 @@ useEffect(() => {
                   </SelectContent>
                 </Select>
               </div>
+              
 
               <div className="border-t" />
 
@@ -858,8 +861,8 @@ useEffect(() => {
                 {errors.effective_date
                   ? <p className="text-xs text-destructive">{errors.effective_date}</p>
                   : <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Info className="h-3 w-3 shrink-0" />You can adjust the effective date manually in edit mode.
-                    </p>}
+                    <Info className="h-3 w-3 shrink-0" />You can adjust the effective date manually in edit mode.
+                  </p>}
               </div>
 
               {/* ── Tags — utilise tagOptions (state local) au lieu de props.tags ── */}
