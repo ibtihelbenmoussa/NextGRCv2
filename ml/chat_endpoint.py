@@ -253,12 +253,11 @@ def classify_intent(text: str) -> tuple[str, float]:
 
 # ─── Groq Fallback ────────────────────────────────────────────────────────────
 
-
-
-   def ask_groq_fallback(question: str, plans: list, dashboard: dict = {}) -> str:
-    kpis = dashboard.get('kpis', {})
+def ask_groq_fallback(question: str, plans: list, dashboard: dict = {}) -> str:
+    kpis     = dashboard.get('kpis', {})
     exec_sum = dashboard.get('executiveSummary', {})
-    fws  = dashboard.get('frameworkComparison', [])
+    fws      = dashboard.get('frameworkComparison', [])
+    bus      = dashboard.get('businessUnitCompliance', [])
 
     context = f"""
 Dashboard GRC:
@@ -267,6 +266,7 @@ Dashboard GRC:
 - Gaps critiques: {exec_sum.get('critical_gaps', 'N/A')}
 - Plans overdue: {exec_sum.get('overdue_plans', 'N/A')}
 - Frameworks: {', '.join([f"{f['framework']} ({f['compliance']}%)" for f in fws[:5]])}
+- Business Units: {', '.join([f"{b['name']} ({b['score']}%)" for b in bus[:5]])}
 
 Action Plans (total: {len(plans)}):
 """
@@ -287,10 +287,11 @@ Action Plans (total: {len(plans)}):
                         "role": "system",
                         "content": (
                             "You are a GRC assistant for NextGRC platform. "
-                            "Answer questions about action plans concisely and clearly. "
+                            "Answer questions about compliance, business units, frameworks, "
+                            "gaps and action plans concisely and clearly. "
                             "Respond in the same language as the user "
                             "(English, French, or Tunisian Arabic).\n\n"
-                            f"Current action plans data:\n{plans_context}"
+                            f"Current dashboard data:\n{context}"
                         ),
                     },
                     {"role": "user", "content": question},
@@ -378,7 +379,7 @@ def fmt_plan(p: dict, show_risk: bool = False) -> str:
 # ─── Response Generator ───────────────────────────────────────────────────────
 
 def generate_response(intent: str, confidence: float, plans: list, question: str, dashboard: dict = {}) -> dict:
-    
+
     kpis     = dashboard.get('kpis', {})
     exec_sum = dashboard.get('executiveSummary', {})
     gaps     = dashboard.get('topCriticalGaps', [])
@@ -396,7 +397,7 @@ def generate_response(intent: str, confidence: float, plans: list, question: str
     if intent == 'compliance_score':
         score    = kpis.get('compliance_score', 'N/A')
         maturity = kpis.get('avg_maturity', 'N/A')
-        label    = '🟢 Bon niveau' if isinstance(score, (int,float)) and score >= 60 else '🔴 À améliorer'
+        label    = '🟢 Bon niveau' if isinstance(score, (int, float)) and score >= 60 else '🔴 À améliorer'
         return {'text': (
             f"📊 **Score de conformité global : {score}%** {label}\n"
             f"🧠 Maturité moyenne : **{maturity}/5**\n"
@@ -554,7 +555,7 @@ def generate_response(intent: str, confidence: float, plans: list, question: str
 
     # ── search_plan ───────────────────────────────────────────────────────────
     if intent == 'search_plan':
-        stop     = {'plan','find','search','about','show','cherche','qui','parle','de','un','le','la','les'}
+        stop     = {'plan', 'find', 'search', 'about', 'show', 'cherche', 'qui', 'parle', 'de', 'un', 'le', 'la', 'les'}
         keywords = [w for w in re.findall(r'\w+', question.lower()) if w not in stop and len(w) > 2]
         if not keywords:
             return {'text': "Please specify what you're looking for. Example: *'find plan about KPI'*", 'intent': intent}
@@ -604,21 +605,26 @@ def generate_response(intent: str, confidence: float, plans: list, question: str
                 "• `in progress` — Active plans\n"
                 "• `unassigned` — Plans without owner\n"
                 "• `find [keyword]` — Search by title/description\n"
-                "• `analytics` — Advanced ML metrics\n\n"
+                "• `analytics` — Advanced ML metrics\n"
+                "• `compliance score` — Score global & maturité\n"
+                "• `frameworks` — Comparaison des frameworks\n"
+                "• `business units` — Compliance par BU\n"
+                "• `critical gaps` — Gaps critiques\n"
+                "• `evolution` — Tendance sur 6 mois\n"
+                "• `recommendations` — Recommandations IA\n"
+                "• `executive summary` — Vue exécutive\n\n"
                 "*I understand English, French, and Tunisian dialect 🇹🇳*"
             ),
             'intent': 'help',
         }
 
-    # ── fallback : confidence faible → Groq ───────────────────────────────────
     if confidence < 0.75 and GROQ_API_KEY:
-        groq_answer = ask_groq_fallback(question, plans)
+        groq_answer = ask_groq_fallback(question, plans, dashboard)
         return {
             'text':   groq_answer,
             'intent': 'ai_assisted',
         }
 
-    # ── fallback ultime (pas de clé Groq) ────────────────────────────────────
     return {
         'text': (
             f"🤔 I understood: **{intent}** (confidence: {confidence:.0%})\n\n"

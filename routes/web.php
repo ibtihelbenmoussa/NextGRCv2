@@ -287,8 +287,9 @@ Route::delete('/domains/{domain}', [DomainController::class, 'destroy'])
     Route::middleware('permission:tests.view')->group(function () {
         Route::get('requirement-tests/export', [RequirementTestController::class, 'export'])->name('requirement-tests.export');
         Route::get('requirement-tests/validation', [RequirementTestController::class, 'validation'])->name('requirement-tests.validation');
-        Route::resource('requirement-tests', RequirementTestController::class)->only(['index', 'show']);
         Route::get('requirement-tests/{requirementTest}', [RequirementTestController::class, 'show'])->name('requirement-tests.show');
+        Route::resource('requirement-tests', RequirementTestController::class)->only(['index', 'show']);
+        
     });
 
     Route::middleware('permission:tests.create')->group(function () {

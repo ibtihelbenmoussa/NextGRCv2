@@ -149,50 +149,50 @@ class RequirementController extends Controller
         ]);
     }
 
-  public function create()
-{
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
+    public function create()
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
 
-    return Inertia::render('Requirements/Create', [
-        'frameworks' => Framework::where('organization_id', $currentOrgId)
-            ->select('id', 'code', 'name', 'effective_date')
-            ->orderBy('name')
-            ->get(),
-        'tags' => Tag::where('organization_id', $currentOrgId)
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get(),
-        'domains' => [],   
-    ]);
-}
-
-   public function getProcessesByFramework(Framework $framework)
-{
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
-
-    if ($framework->organization_id !== $currentOrgId) {
-        abort(403, 'Unauthorized access to this framework.');
+        return Inertia::render('Requirements/Create', [
+            'frameworks' => Framework::where('organization_id', $currentOrgId)
+                ->select('id', 'code', 'name', 'effective_date')
+                ->orderBy('name')
+                ->get(),
+            'tags' => Tag::where('organization_id', $currentOrgId)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get(),
+            'domains' => [],
+        ]);
     }
 
-    $processes = $framework->processes()
-        ->where('is_active', true)
-        ->whereNull('deleted_at')
-        ->select('processes.id', 'processes.name', 'processes.code')
-        ->orderBy('processes.name')
-        ->get();
+    public function getProcessesByFramework(Framework $framework)
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
 
-  $domains = $framework->domains()
-    ->select('domains.id', 'domains.name')
-    ->orderBy('domains.name')
-    ->get();
+        if ($framework->organization_id !== $currentOrgId) {
+            abort(403, 'Unauthorized access to this framework.');
+        }
 
-    return Inertia::render('Requirements/Create', [
-        'processes' => $processes,
-        'domains'   => $domains,
-    ])->with('only', ['processes', 'domains']);
-}
+        $processes = $framework->processes()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->select('processes.id', 'processes.name', 'processes.code')
+            ->orderBy('processes.name')
+            ->get();
+
+        $domains = $framework->domains()
+            ->select('domains.id', 'domains.name')
+            ->orderBy('domains.name')
+            ->get();
+
+        return Inertia::render('Requirements/Create', [
+            'processes' => $processes,
+            'domains' => $domains,
+        ])->with('only', ['processes', 'domains']);
+    }
 
     public function store(Request $request)
     {
@@ -252,7 +252,7 @@ class RequirementController extends Controller
             'attachments' => $validated['attachments'] ?? null,
             'organization_id' => $currentOrgId,
             'auto_validate' => $validated['auto_validate'] ?? false,
-            'domain_id'        => $validated['domain_id'] ?? null,
+            'domain_id' => $validated['domain_id'] ?? null,
         ]);
 
         $requirement->tags()->sync($validated['tags'] ?? []);
@@ -344,50 +344,53 @@ class RequirementController extends Controller
     }
 
     public function edit(Requirement $requirement)
-{
-    $user = Auth::user();
-    $currentOrgId = $user->current_organization_id;
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
 
-    if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
-        abort(403, 'Unauthorized');
+        if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
+            abort(403, 'Unauthorized');
+        }
+
+        $requirement->load('tags', 'processes', 'documents', 'gapQuestions');
+
+        $domains = $requirement->framework_id
+            ? Framework::find($requirement->framework_id)
+                    ?->domains()
+                ->select('domains.id', 'domains.name')
+                ->orderBy('domains.name')
+                ->get() ?? collect()
+            : collect();
+
+        $tags = Tag::where('organization_id', $currentOrgId)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get()
+            ->values();
+
+
+
+        return Inertia::render('Requirements/Edit', [
+            'requirement' => $requirement,
+            'frameworks' => Framework::where('organization_id', $currentOrgId)
+                ->select('id', 'code', 'name')->get(),
+            'processes' => $requirement->framework
+                ? $requirement->framework->processes()
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')
+                    ->select('processes.id', 'processes.name', 'processes.code')
+                    ->orderBy('processes.name')
+                    ->get()
+                : [],
+            'tags' => $tags,
+            'selectedTagIds' => $requirement->tags->pluck('id')
+                ->map(fn($id) => (string) $id)->toArray(),
+            'selectedProcessIds' => $requirement->processes->pluck('id')
+                ->map(fn($id) => (string) $id)->toArray(),
+            'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
+            'domains' => $domains,
+        ]);
     }
-
-    $requirement->load('tags', 'processes', 'documents', 'gapQuestions');
-
-    // ← AJOUT : charger les domains du framework actuel
-    $domains = $requirement->framework_id
-        ? Framework::find($requirement->framework_id)
-            ?->domains()
-            ->select('domains.id', 'domains.name')
-            ->orderBy('domains.name')
-            ->get() ?? collect()
-        : collect();
-
-    return Inertia::render('Requirements/Edit', [
-        'requirement' => $requirement,
-        'frameworks' => Framework::where('organization_id', $currentOrgId)
-            ->select('id', 'code', 'name')->get(),
-        'processes' => $requirement->framework
-            ? $requirement->framework->processes()
-                ->where('is_active', true)
-                ->whereNull('deleted_at')
-                ->select('processes.id', 'processes.name', 'processes.code')
-                ->orderBy('processes.name')
-                ->get()
-            : [],
-        'tags' => Tag::where('organization_id', $currentOrgId)
-    ->select('id', 'name')
-    ->orderBy('name')
-    ->get()
-    ->values(), 
-        'selectedTagIds' => $requirement->tags->pluck('id')
-            ->map(fn($id) => (string) $id)->toArray(),
-        'selectedProcessIds' => $requirement->processes->pluck('id')
-            ->map(fn($id) => (string) $id)->toArray(),
-        'gapQuestions' => $requirement->gapQuestions()->orderBy('id')->get(['id', 'text']),
-        'domains' => $domains, 
-    ]);
-}
 
     public function destroyDocument(Requirement $requirement, Document $document)
     {
@@ -632,198 +635,239 @@ class RequirementController extends Controller
         ];
     }
 
-    public function getRequirementsForTesting(Request $request)
-    {
-        $user = Auth::user();
-        $currentOrgId = $user->current_organization_id;
+public function getRequirementsForTesting(Request $request)
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-        if (!$currentOrgId) {
-            abort(403, 'No organization selected.');
-        }
+    if (!$currentOrgId) {
+        abort(403, 'No organization selected.');
+    }
 
-        $dateStr = $request->query('date', today()->format('Y-m-d'));
-        try {
-            $targetDate = Carbon::parse($dateStr)->startOfDay();
-        } catch (\Exception $e) {
-            $targetDate = Carbon::today()->startOfDay();
-        }
+    $dateStr = $request->query('date', today()->format('Y-m-d'));
+    try {
+        $targetDate = Carbon::parse($dateStr)->startOfDay();
+    } catch (\Exception $e) {
+        $targetDate = Carbon::today()->startOfDay();
+    }
 
-        $workingDayService = app(\App\Services\WorkingDayService::class);
-        $isWorkingDay = $workingDayService->isWorkingDay($targetDate, $currentOrgId);
+    $workingDayService = app(\App\Services\WorkingDayService::class);
+    $isWorkingDay = $workingDayService->isWorkingDay($targetDate, $currentOrgId);
 
-        $perPage = (int) $request->input('per_page', 15);
-        $perPage = in_array($perPage, [10, 15, 20, 30, 50]) ? $perPage : 15;
-        $search = trim($request->query('search', ''));
+    // 🔍 LOG : Vérifier les requirements actifs par fréquence
+    $stats = Requirement::where('organization_id', $currentOrgId)
+        ->where('is_deleted', 0)
+        ->where('status', 'active')
+        ->select('frequency', \DB::raw('count(*) as total'))
+        ->groupBy('frequency')
+        ->get();
+    
+    \Log::info('Active requirements stats:', $stats->toArray());
 
-        $query = Requirement::query()
-            ->where('organization_id', $currentOrgId)
-            ->where('is_deleted', 0)
-            ->with([
-                'framework:id,code,name',
-                'processes:id,name,code',
-                'tags:id,name',
-                'tests' => function ($q) use ($targetDate) {
-                    $q->whereDate('test_date', $targetDate)
-                        ->latest('created_at')
-                        ->limit(1)
-                        ->select([
-                            'id',
-                            'requirement_id',
-                            'validation_status',
-                            'validation_comment',
-                            'test_date',
-                            'created_at',
-                        ]);
-                },
-            ])
-            ->where(function ($q) use ($targetDate, $isWorkingDay) {
-                $q->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $targetDate))
-                    ->orWhere(fn($q2) => $q2
-                        ->where('frequency', 'one_time')
-                        ->whereNotNull('effective_date')
-                        ->whereDate('effective_date', $targetDate))
-                    ->when($isWorkingDay, function ($q2) use ($targetDate) {
-                        $q2->orWhere(fn($q3) => $q3
-                            ->where('frequency', 'daily')
-                            ->where(
-                                fn($q4) => $q4
-                                    ->whereNull('effective_date')
-                                    ->orWhereDate('effective_date', '<=', $targetDate)
-                            ))
-                            ->orWhere(fn($q3) => $q3
-                                ->where('frequency', 'weekly')
-                                ->where(
-                                    fn($q4) => $q4
-                                        ->whereNull('effective_date')
-                                        ->orWhere(
-                                            fn($q5) => $q5
-                                                ->whereRaw('DAYOFWEEK(effective_date) = ?', [$targetDate->dayOfWeek + 1])
-                                                ->whereDate('effective_date', '<=', $targetDate)
-                                        )
-                                ))
-                            ->orWhere(fn($q3) => $q3
-                                ->where('frequency', 'monthly')
-                                ->where(
-                                    fn($q4) => $q4
-                                        ->whereNull('effective_date')
-                                        ->orWhere(
-                                            fn($q5) => $q5
-                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                                ->whereDate('effective_date', '<=', $targetDate)
-                                        )
-                                ))
-                            ->orWhere(fn($q3) => $q3
-                                ->where('frequency', 'quarterly')
-                                ->where(
-                                    fn($q4) => $q4
-                                        ->whereNull('effective_date')
-                                        ->orWhere(
-                                            fn($q5) => $q5
-                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                                ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$targetDate->month])
-                                                ->whereDate('effective_date', '<=', $targetDate)
-                                        )
-                                ))
-                            ->orWhere(fn($q3) => $q3
-                                ->where('frequency', 'yearly')
-                                ->where(
-                                    fn($q4) => $q4
-                                        ->whereNull('effective_date')
-                                        ->orWhere(
-                                            fn($q5) => $q5
-                                                ->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
-                                                ->whereRaw('MONTH(effective_date) = ?', [$targetDate->month])
-                                                ->whereDate('effective_date', '<=', $targetDate)
-                                        )
-                                ))
-                            ->orWhere('frequency', 'continuous');
-                    });
-            });
+    $perPage = (int) $request->input('per_page', 15);
+    $perPage = in_array($perPage, [10, 15, 20, 30, 50]) ? $perPage : 15;
+    $search = trim($request->query('search', ''));
 
-        if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('title', 'like', "%{$search}%");
-            });
-        }
+    $query = Requirement::query()
+        ->where('organization_id', $currentOrgId)
+        ->where('is_deleted', 0)
+        ->where('status', 'active')
+        ->with([
+            'framework:id,code,name',
+            'processes:id,name,code',
+            'tags:id,name',
+            'tests' => function ($q) use ($targetDate) {
+                $q->whereDate('test_date', $targetDate)
+                    ->latest('created_at')
+                    ->limit(1)
+                    ->select([
+                        'id',
+                        'requirement_id',
+                        'validation_status',
+                        'validation_comment',
+                        'test_date',
+                        'created_at',
+                    ]);
+            },
+        ]);
 
-        if ($request->filled('sort')) {
-            $sort = $request->sort;
-            $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-            $column = ltrim($sort, '-');
-            $allowed = ['code', 'title', 'frequency', 'effective_date'];
-            $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
-        } else {
-            $query->orderBy('code');
-        }
+    // ✅ Logique de filtrage
+    $query->where(function ($q) use ($targetDate) {
+        // 1. Requirements avec tests existants
+        $q->whereHas('tests', fn($sub) => $sub->whereDate('test_date', $targetDate));
 
-        $requirements = $query->paginate($perPage)->withQueryString();
-
-        $reservations = RequirementTestReservation::where('date', $targetDate->toDateString())
-            ->with('user:id,name')
-            ->get()
-            ->keyBy('requirement_id');
-
-        $requirements->through(function (Requirement $req) use ($reservations) {
-            $latestTest = $req->tests->first();
-            $res = $reservations->get($req->id);
-
-            return [
-                'id' => $req->id,
-                'code' => $req->code,
-                'title' => $req->title,
-                'description' => $req->description,
-                'type' => $req->type,
-                'status' => $req->status,
-                'priority' => $req->priority,
-                'frequency' => $req->frequency,
-                'effective_date' => $req->effective_date,
-                'completion_date' => $req->completion_date,
-                'compliance_level' => $req->compliance_level,
-                'auto_validate' => $req->auto_validate,
-                'owner_id' => $req->owner_id,
-                'framework' => $req->framework ? [
-                    'id' => $req->framework->id,
-                    'code' => $req->framework->code,
-                    'name' => $req->framework->name,
-                ] : null,
-                'processes' => $req->processes->map(fn($p) => [
-                    'id' => $p->id,
-                    'name' => $p->name,
-                    'code' => $p->code,
-                ]),
-                'tags' => $req->tags->map(fn($tag) => [
-                    'id' => $tag->id,
-                    'name' => $tag->name,
-                ]),
-                'latest_test_status' => $latestTest?->validation_status ?? null,
-                'latest_test_comment' => $latestTest?->validation_comment ?? null,
-                'latest_test_id' => $latestTest?->id ?? null,
-                'reservation_user_id' => $res?->user_id ?? null,
-                'reservation_user_name' => $res?->user?->name ?? null,
-            ];
+        // 2. One-time
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'one_time')
+                ->whereNotNull('effective_date')
+                ->whereDate('effective_date', $targetDate);
         });
 
-        $kpis = $this->computeKpisForDate($currentOrgId, $targetDate);
+        // 3. Daily - TOUJOURS inclus
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'daily')
+                ->where(function ($q3) use ($targetDate) {
+                    $q3->whereNull('effective_date')
+                        ->orWhereDate('effective_date', '<=', $targetDate);
+                });
+        });
 
-        return Inertia::render('RequirementTests/Index', [
-            'requirements' => $requirements,
-            'date' => $targetDate->format('Y-m-d'),
-            'isToday' => $targetDate->isToday(),
-            'isWorkingDay' => $isWorkingDay,
-            'filters' => $request->only(['search', 'date']),
-            'missedToday' => $kpis['missed'],
-            'dueToday' => $kpis['due'],
-            'currentUserId' => Auth::id(),
-            'kpi' => [
-                'total' => $kpis['total'],
-                'completed' => $kpis['completed'],
-                'pending' => $kpis['pending'],
-                'overdue' => $kpis['missed'],
-                'completionRate' => $kpis['completionRate'],
-            ],
+        // 4. Weekly
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'weekly')
+                ->where(function ($q3) use ($targetDate) {
+                    $q3->whereNull('effective_date')
+                        ->orWhere(function ($q4) use ($targetDate) {
+                            $q4->whereRaw('DAYOFWEEK(effective_date) = ?', [$targetDate->dayOfWeek + 1])
+                                ->whereDate('effective_date', '<=', $targetDate);
+                        });
+                });
+        });
+
+        // 5. Monthly
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'monthly')
+                ->where(function ($q3) use ($targetDate) {
+                    $q3->whereNull('effective_date')
+                        ->orWhere(function ($q4) use ($targetDate) {
+                            $q4->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                ->whereDate('effective_date', '<=', $targetDate);
+                        });
+                });
+        });
+
+        // 6. Quarterly
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'quarterly')
+                ->where(function ($q3) use ($targetDate) {
+                    $q3->whereNull('effective_date')
+                        ->orWhere(function ($q4) use ($targetDate) {
+                            $q4->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                ->whereRaw('MOD(MONTH(effective_date), 3) = MOD(?, 3)', [$targetDate->month])
+                                ->whereDate('effective_date', '<=', $targetDate);
+                        });
+                });
+        });
+
+        // 7. Yearly
+        $q->orWhere(function ($q2) use ($targetDate) {
+            $q2->where('frequency', 'yearly')
+                ->where(function ($q3) use ($targetDate) {
+                    $q3->whereNull('effective_date')
+                        ->orWhere(function ($q4) use ($targetDate) {
+                            $q4->whereRaw('DAY(effective_date) = ?', [$targetDate->day])
+                                ->whereRaw('MONTH(effective_date) = ?', [$targetDate->month])
+                                ->whereDate('effective_date', '<=', $targetDate);
+                        });
+                });
+        });
+
+        // 8. Continuous
+        $q->orWhere('frequency', 'continuous');
+    });
+
+    // 🔍 LOG : Vérifier le nombre de résultats avant pagination
+    $countBeforePagination = (clone $query)->count();
+    \Log::info('Requirements found before pagination:', [
+        'date' => $targetDate->format('Y-m-d'),
+        'is_working_day' => $isWorkingDay,
+        'count' => $countBeforePagination
+    ]);
+
+    // Si aucun résultat, logguer la requête SQL
+    if ($countBeforePagination === 0) {
+        $sql = $query->toSql();
+        $bindings = $query->getBindings();
+        \Log::info('SQL Query with no results:', [
+            'sql' => $sql,
+            'bindings' => $bindings
         ]);
     }
+
+    if ($search !== '') {
+        $query->where(function ($q) use ($search) {
+            $q->where('code', 'like', "%{$search}%")
+                ->orWhere('title', 'like', "%{$search}%");
+        });
+    }
+
+    if ($request->filled('sort')) {
+        $sort = $request->sort;
+        $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
+        $column = ltrim($sort, '-');
+        $allowed = ['code', 'title', 'frequency', 'effective_date'];
+        $query->orderBy(in_array($column, $allowed) ? $column : 'code', $direction);
+    } else {
+        $query->orderBy('code');
+    }
+
+    $requirements = $query->paginate($perPage)->withQueryString();
+
+    $reservations = RequirementTestReservation::where('date', $targetDate->toDateString())
+        ->with('user:id,name')
+        ->get()
+        ->keyBy('requirement_id');
+
+    $requirements->through(function (Requirement $req) use ($reservations) {
+        $latestTest = $req->tests->first();
+        $res = $reservations->get($req->id);
+
+        return [
+            'id' => $req->id,
+            'code' => $req->code,
+            'title' => $req->title,
+            'description' => $req->description,
+            'type' => $req->type,
+            'status' => $req->status,
+            'priority' => $req->priority,
+            'frequency' => $req->frequency,
+            'effective_date' => $req->effective_date,
+            'completion_date' => $req->completion_date,
+            'compliance_level' => $req->compliance_level,
+            'auto_validate' => $req->auto_validate,
+            'owner_id' => $req->owner_id,
+            'framework' => $req->framework ? [
+                'id' => $req->framework->id,
+                'code' => $req->framework->code,
+                'name' => $req->framework->name,
+            ] : null,
+            'processes' => $req->processes->map(fn($p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'code' => $p->code,
+            ]),
+            'tags' => $req->tags->map(fn($tag) => [
+                'id' => $tag->id,
+                'name' => $tag->name,
+            ]),
+            'latest_test_status' => $latestTest?->validation_status ?? null,
+            'latest_test_comment' => $latestTest?->validation_comment ?? null,
+            'latest_test_id' => $latestTest?->id ?? null,
+            'reservation_user_id' => $res?->user_id ?? null,
+            'reservation_user_name' => $res?->user?->name ?? null,
+        ];
+    });
+
+    $kpis = $this->computeKpisForDate($currentOrgId, $targetDate);
+
+    return Inertia::render('RequirementTests/Index', [
+        'requirements' => $requirements,
+        'date' => $targetDate->format('Y-m-d'),
+        'isToday' => $targetDate->isToday(),
+        'isWorkingDay' => $isWorkingDay,
+        'filters' => $request->only(['search', 'date']),
+        'missedToday' => $kpis['missed'],
+        'dueToday' => $kpis['due'],
+        'currentUserId' => Auth::id(),
+        'kpi' => [
+            'total' => $kpis['total'],
+            'completed' => $kpis['completed'],
+            'pending' => $kpis['pending'],
+            'overdue' => $kpis['missed'],
+            'completionRate' => $kpis['completionRate'],
+        ],
+    ]);
+}
 
     /**
      * Analyser un document et extraire les requirements via IA
@@ -1012,18 +1056,18 @@ class RequirementController extends Controller
         ]);
     }
     public function getGapQuestions(Requirement $requirement)
-{
-    $user         = Auth::user();
-    $currentOrgId = $user->current_organization_id;
- 
-    if ($requirement->organization_id !== $currentOrgId || $requirement->is_deleted) {
-        abort(403, 'Unauthorized');
+    {
+        $user = Auth::user();
+        $currentOrgId = $user->current_organization_id;
+
+        if ($requirement->organization_id !== $currentOrgId || $requirement->is_deleted) {
+            abort(403, 'Unauthorized');
+        }
+
+        $questions = $requirement->gapQuestions()
+            ->orderBy('id')
+            ->get(['id', 'text']);
+
+        return response()->json($questions);
     }
- 
-    $questions = $requirement->gapQuestions()
-        ->orderBy('id')
-        ->get(['id', 'text']);
- 
-    return response()->json($questions);
-}
 }

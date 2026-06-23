@@ -1,5 +1,5 @@
 // resources/js/pages/Requirements/Edit.tsx
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef,useMemo  } from 'react'
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import AppLayout from '@/layouts/app-layout'
@@ -56,6 +56,7 @@ interface PageProps {
   tags: Tag[]
   domains: Domain[]
   selectedTagIds: string[]
+  selectedProcessIds: string[]
   gapQuestions: GapQuestion[]
   flash?: { success?: string; error?: string }
   [key: string]: any
@@ -348,25 +349,25 @@ function DomainDialog({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function EditRequirement() {
   const { props } = usePage<PageProps>()
   const { requirement, frameworks = [] } = props
 
-  const [tagOptions, setTagOptions] = useState<Tag[]>(() =>
-    Array.isArray(props.tags) ? props.tags : Object.values(props.tags ?? {}) as Tag[]
+  // ── Calcul stable des IDs sélectionnés ───────────────────────────────────
+  const selectedTagIds = useMemo(
+    () => toArray(props.selectedTagIds).map(String),
+    [] // volontairement vide : on veut la valeur initiale uniquement
   )
-  // Sync si les props changent (navigation)
-  useEffect(() => {
-    const incoming: Tag[] = Array.isArray(props.tags)
-      ? props.tags
-      : Object.values(props.tags ?? {}) as Tag[]
-    if (incoming.length > 0) setTagOptions(incoming)
-  }, [props.tags])
+  const selectedProcessIds = useMemo(
+    () => toArray(props.selectedProcessIds).map(String),
+    []
+  )
 
-  const selectedTagIds: string[] = toArray(props.selectedTagIds)
+  const [tagOptions, setTagOptions] = useState<Tag[]>(() =>
+    toArray(props.tags) as Tag[]
+  )
+
   const existingDocs: ExistingDocument[] = toArray(requirement?.documents)
-
   const formatDateString = (date: string | null) => (date ? date.split('T')[0] : '')
 
   const { data, setData, processing, errors, setError, clearErrors } = useForm({
@@ -378,9 +379,9 @@ export default function EditRequirement() {
     priority: requirement?.priority || '',
     frequency: requirement?.frequency || '',
     framework_id: requirement?.framework_id?.toString() || '',
-    process_ids: requirement?.process_id ? [requirement.process_id.toString()] : [] as string[],
+    process_ids: selectedProcessIds,
     domain_id: requirement?.domain_id?.toString() || '',
-    tags: selectedTagIds,
+    tags: selectedTagIds,          // ← valeur stable dès le premier render
     effective_date: formatDateString(requirement?.effective_date),
     completion_date: formatDateString(requirement?.completion_date),
     compliance_level: requirement?.compliance_level || '',
@@ -388,12 +389,22 @@ export default function EditRequirement() {
     auto_validate: requirement?.auto_validate ?? false,
   })
 
+  // Supprime les deux useEffect de sync tags/process_ids — plus nécessaires
+
   // ── FIX : sync les tags sélectionnés si useForm s'initialise avant les props
   useEffect(() => {
     if (selectedTagIds.length > 0 && data.tags.length === 0) {
       setData('tags', selectedTagIds)
     }
   }, [props.selectedTagIds])
+
+  // ✅ FIX (nouveau) : même garde-fou pour les processus, au cas où
+  // selectedProcessIds arrive après le premier rendu (navigation Inertia partielle, etc.)
+  useEffect(() => {
+    if (selectedProcessIds.length > 0 && data.process_ids.length === 0) {
+      setData('process_ids', selectedProcessIds)
+    }
+  }, [props.selectedProcessIds])
 
   // ── Domain state ──────────────────────────────────────────────────────────
   const [domainsList, setDomainsList] = useState<Domain[]>(toArray(props.domains))
@@ -464,17 +475,17 @@ export default function EditRequirement() {
   const [loadingProcesses, setLoadingProcesses] = useState(false)
   const [initialFrameworkId] = useState(requirement?.framework_id?.toString() || '')
 
-useEffect(() => {
-  if (!data.framework_id) {
-    setProcesses([])
-    setDomainsList([])
-    setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
-    return
-  }
-  if (data.framework_id === initialFrameworkId) return
+  useEffect(() => {
+    if (!data.framework_id) {
+      setProcesses([])
+      setDomainsList([])
+      setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
+      return
+    }
+    if (data.framework_id === initialFrameworkId) return
 
     setLoadingProcesses(true)
-  setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
+    setData(prev => ({ ...prev, process_ids: [], domain_id: '' }))
     router.get(route('requirements.processes-by-framework', data.framework_id), {}, {
       preserveState: true, preserveScroll: true,
       only: ['processes', 'domains'], // ← NE PAS inclure 'tags' ici
@@ -485,7 +496,7 @@ useEffect(() => {
       },
       onFinish: () => setLoadingProcesses(false),
     })
-}, [data.framework_id])
+  }, [data.framework_id])
 
   // ── New documents ─────────────────────────────────────────────────────────
   const [docs, setDocs] = useState<DocEntry[]>([])
@@ -727,7 +738,7 @@ useEffect(() => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
 
               <div className="border-t" />
 
@@ -869,8 +880,9 @@ useEffect(() => {
               <div className="space-y-1.5">
                 <Label className="text-sm flex items-center gap-1.5"><TagIcon className="h-3.5 w-3.5" />Tags</Label>
                 <MultiSelect
+                  key={`tags-${requirement.id}`}
                   options={tagOptions.map(tag => ({ value: tag.id.toString(), label: tag.name }))}
-                  value={data.tags}
+                  defaultValue={data.tags}
                   onValueChange={selected => setData('tags', selected)}
                   placeholder="Select relevant tags…"
                 />

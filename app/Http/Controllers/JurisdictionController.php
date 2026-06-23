@@ -69,10 +69,9 @@ class JurisdictionController extends Controller
             abort(403);
         }
 
-        $used = Framework::where('is_deleted', 0)
-            ->where('jurisdiction_id', $jurisdiction->id)
+        $used = $jurisdiction->frameworks()
+            ->where('is_deleted', 0)
             ->exists();
-
         if ($used) {
             return redirect()->back()->with(
                 'error',

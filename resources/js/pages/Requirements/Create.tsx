@@ -472,8 +472,8 @@ export default function CreateRequirement() {
     const fw = frameworks.find(fw => fw.id.toString() === data.framework_id)
     const rawDate = fw?.effective_date?.trim() || null
     const inheritedDate = rawDate ? rawDate.substring(0, 10) : null
-    setData(prev => ({ ...prev, effective_date: inheritedDate ?? today, domain_id: '' }))
-
+    const defaultDate = inheritedDate && inheritedDate > today ? inheritedDate : today
+    setData(prev => ({ ...prev, effective_date: defaultDate, domain_id: '' }))
     setLoadingProcesses(true)
     router.get(
       route('requirements.processes-by-framework', data.framework_id), {},
@@ -883,8 +883,10 @@ export default function CreateRequirement() {
                         clearErrors('effective_date')
                         setEffectiveDateOpen(false)
                       }}
-                      disabled={(date) => fwEffectiveDate ? date < new Date(fwEffectiveDate) : date < new Date(today)}
-                      initialFocus
+                      disabled={(date) => {
+                        const minDate = fwEffectiveDate && fwEffectiveDate > today ? new Date(fwEffectiveDate) : new Date(today)
+                        return date < minDate
+                      }} initialFocus
                     />
                   </PopoverContent>
                 </Popover>
@@ -922,7 +924,7 @@ export default function CreateRequirement() {
                     variant="outline"
                     className="flex-1 justify-start text-left font-normal h-10"
                     onClick={() => setDomainDialogOpen(true)}
-                    disabled={!data.framework_id}                
+                    disabled={!data.framework_id}
                   >
                     <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
                     {!data.framework_id

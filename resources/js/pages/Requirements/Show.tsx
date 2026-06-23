@@ -13,9 +13,12 @@ import {
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Framework { code: string; name: string }
 interface Process { id: number; name: string; code?: string }
 interface TagItem { id: number; name: string }
+interface GapQuestion { id: number; text: string }
 
 interface DocumentItem {
   id: number
@@ -44,9 +47,12 @@ interface Requirement {
   compliance_level: string
   attachments?: string | null
   documents?: DocumentItem[]
+  gap_questions?: GapQuestion[] | null
   created_at: string
   updated_at: string
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatDate = (date?: string | null): string => {
   if (!date) return '—'
@@ -90,6 +96,8 @@ const getFileIcon = (mimeType?: string): React.ReactNode => {
   return <FileText className="h-4 w-4 text-primary" />
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function ShowRequirement() {
   const { requirement } = usePage<{ requirement: Requirement }>().props
 
@@ -98,9 +106,10 @@ export default function ShowRequirement() {
     .map(l => l.trim())
     .filter(l => l.startsWith('http'))
 
-  const tags      = requirement.tags      ?? []
-  const documents = requirement.documents ?? []
-  const processes = requirement.processes ?? []
+  const tags         = requirement.tags          ?? []
+  const documents    = requirement.documents     ?? []
+  const processes    = requirement.processes     ?? []
+  const gapQuestions = requirement.gap_questions ?? []
 
   return (
     <AppLayout>
@@ -108,7 +117,7 @@ export default function ShowRequirement() {
 
       <div className="p-6 lg:p-10 space-y-10 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 pb-4 border-b border-border/60">
           <div className="flex items-center gap-5">
             <Button
@@ -144,7 +153,7 @@ export default function ShowRequirement() {
           </Button>
         </div>
 
-        {/* Quick badges */}
+        {/* ── Quick badges ── */}
         <div className="flex flex-wrap gap-3">
           <Badge className={`px-5 py-1.5 text-base font-medium rounded-full border ${getPriorityColor(requirement.priority)}`}>
             Priority: {requirement.priority.charAt(0).toUpperCase() + requirement.priority.slice(1)}
@@ -161,10 +170,10 @@ export default function ShowRequirement() {
           </Badge>
         </div>
 
-        {/* Main grid */}
+        {/* ── Main grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          {/* Left column */}
+          {/* ── Left column ── */}
           <div className="lg:col-span-2 space-y-8">
 
             {/* Description */}
@@ -199,12 +208,10 @@ export default function ShowRequirement() {
                 </div>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Type</p>
                   <p className="font-medium capitalize">{requirement.type || '—'}</p>
                 </div>
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Framework</p>
                   <p className="font-medium">
@@ -213,7 +220,6 @@ export default function ShowRequirement() {
                       : '—'}
                   </p>
                 </div>
-
                 <div className="space-y-1 sm:col-span-2">
                   <p className="text-sm font-medium text-muted-foreground">Processes</p>
                   {processes.length > 0 ? (
@@ -228,108 +234,60 @@ export default function ShowRequirement() {
                     <p className="font-medium">—</p>
                   )}
                 </div>
-
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Frequency</p>
                   <p className="font-medium capitalize">
                     {requirement.frequency.replace('_', ' ') || '—'}
                   </p>
                 </div>
-
               </CardContent>
             </Card>
 
-            {/* Documents */}
+            {/* Gap Assessment Questions */}
             <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10">
-                    <FileText className="h-5 w-5 text-primary" />
+                    <ListTodo className="h-5 w-5 text-primary" />
                   </div>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                    Documents
-                    {documents.length > 0 && (
+                    Gap Assessment Questions
+                    {gapQuestions.length > 0 && (
                       <Badge variant="secondary" className="text-sm">
-                        {documents.length}
+                        {gapQuestions.length}
                       </Badge>
                     )}
                   </CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                {documents.length > 0 ? (
-                  <div className="space-y-2">
-                    {documents.map((doc) => (
-                      <a
-                        key={doc.id}
-                        href={`/requirements/${requirement.id}/documents/${doc.id}/download`}
-                        download
-                        className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/60 hover:bg-muted/40 hover:border-primary/30 transition-all group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2 rounded-md bg-muted/60 group-hover:bg-primary/10 transition-colors shrink-0">
-                            {getFileIcon(doc.mime_type)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{doc.file_name}</p>
-                            {doc.file_size && (
-                              <p className="text-xs text-muted-foreground">{formatBytes(doc.file_size)}</p>
-                            )}
-                          </div>
-                        </div>
-                        <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-                      </a>
+                {gapQuestions.length > 0 ? (
+                  <ol className="space-y-3">
+                    {gapQuestions.map((q, idx) => (
+                      <li key={q.id} className="flex gap-3 p-3 rounded-lg border border-border/50 bg-muted/20">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <p className="text-sm leading-relaxed text-foreground/90">{q.text}</p>
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 ) : (
                   <div className="flex items-center gap-3 text-muted-foreground py-4">
                     <AlertCircle className="h-5 w-5" />
-                    <span>No documents uploaded</span>
+                    <span>No gap assessment questions defined</span>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Attachments URLs */}
-            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Link2 className="h-5 w-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl font-semibold">Attachments (links)</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {attachmentUrls.length > 0 ? (
-                  <div className="space-y-4">
-                    {attachmentUrls.map((url, idx) => (
-                      <a
-                        key={idx}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 text-primary hover:text-primary/80 hover:underline transition-all group text-base break-all"
-                      >
-                        <div className="p-2 rounded-md bg-primary/5 group-hover:bg-primary/10 transition-colors shrink-0">
-                          <Link2 className="h-4 w-4" />
-                        </div>
-                        <span>{url}</span>
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 text-muted-foreground py-4">
-                    <AlertCircle className="h-5 w-5" />
-                    <span>No attachments added</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+       
+
+           
 
           </div>
 
-          {/* Sidebar */}
+          {/* ── Sidebar ── */}
           <div className="space-y-8">
 
             {/* Key Dates */}
@@ -387,6 +345,92 @@ export default function ShowRequirement() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">No tags assigned</p>
+                )}
+              </CardContent>
+            </Card>
+                 {/* Documents */}
+            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                    Documents
+                    {documents.length > 0 && (
+                      <Badge variant="secondary" className="text-sm">
+                        {documents.length}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <a
+                        key={doc.id}
+                        href={`/requirements/${requirement.id}/documents/${doc.id}/download`}
+                        download
+                        className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/60 hover:bg-muted/40 hover:border-primary/30 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 rounded-md bg-muted/60 group-hover:bg-primary/10 transition-colors shrink-0">
+                            {getFileIcon(doc.mime_type)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{doc.file_name}</p>
+                            {doc.file_size && (
+                              <p className="text-xs text-muted-foreground">{formatBytes(doc.file_size)}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 text-muted-foreground py-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>No documents uploaded</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+             {/* Attachments URLs */}
+            <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Link2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl font-semibold">Attachments (links)</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {attachmentUrls.length > 0 ? (
+                  <div className="space-y-4">
+                    {attachmentUrls.map((url, idx) => (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 text-primary hover:text-primary/80 hover:underline transition-all group text-base break-all"
+                      >
+                        <div className="p-2 rounded-md bg-primary/5 group-hover:bg-primary/10 transition-colors shrink-0">
+                          <Link2 className="h-4 w-4" />
+                        </div>
+                        <span>{url}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 text-muted-foreground py-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>No attachments added</span>
+                  </div>
                 )}
               </CardContent>
             </Card>

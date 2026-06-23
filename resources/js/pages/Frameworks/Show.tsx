@@ -264,24 +264,57 @@ export default function ShowFramework() {
               </Card>
             )}
 
-            {/* Description */}
-            {framework.description && (
-              <Card className="border border-border/60 shadow-sm">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <CardTitle className="text-xl">Description</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-base leading-relaxed whitespace-pre-wrap">{framework.description}</p>
-                </CardContent>
-              </Card>
-            )}
+        
 
-            {/* Official Reference */}
+         
+
+            
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-8">
+            {/* Key Dates */}
+            <Card className="border border-border/60 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl">Key Dates</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Field label="Release Date" value={formatDate(framework.release_date)} />
+                <Field label="Effective Date" value={formatDate(framework.effective_date)} />
+                <Field label="Retired Date" value={formatDate(framework.retired_date)} />
+              </CardContent>
+            </Card>
+
+            {/* Tags */}
+            <Card className="border border-border/60 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Tag className="h-5 w-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl">Tags</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2.5">
+                    {tags.map((tag, i) => (
+                      <Badge key={i} variant="secondary" className="text-sm px-4 py-1.5 rounded-full">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No tags assigned</p>
+                )}
+              </CardContent>
+            </Card>
+               {/* Official Reference */}
             <Card className="border border-border/60 shadow-sm">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
@@ -312,7 +345,23 @@ export default function ShowFramework() {
                 )}
               </CardContent>
             </Card>
-
+                {/* Description */}
+            {framework.description && (
+              <Card className="border border-border/60 shadow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                    <CardTitle className="text-xl">Description</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-base leading-relaxed whitespace-pre-wrap">{framework.description}</p>
+                </CardContent>
+              </Card>
+              
+            )}
             {/* ==================== DOCUMENTS SECTION (NOUVEAU) ==================== */}
             <Card className="border border-border/60 shadow-sm">
               <CardHeader className="pb-4">
@@ -359,51 +408,6 @@ export default function ShowFramework() {
                     <AlertCircle className="h-5 w-5" />
                     <span>No documents uploaded yet</span>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-8">
-            {/* Key Dates */}
-            <Card className="border border-border/60 shadow-sm">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Calendar className="h-5 w-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl">Key Dates</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <Field label="Release Date" value={formatDate(framework.release_date)} />
-                <Field label="Effective Date" value={formatDate(framework.effective_date)} />
-                <Field label="Retired Date" value={formatDate(framework.retired_date)} />
-              </CardContent>
-            </Card>
-
-            {/* Tags */}
-            <Card className="border border-border/60 shadow-sm">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Tag className="h-5 w-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl">Tags</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-2.5">
-                    {tags.map((tag, i) => (
-                      <Badge key={i} variant="secondary" className="text-sm px-4 py-1.5 rounded-full">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No tags assigned</p>
                 )}
               </CardContent>
             </Card>

@@ -1,4 +1,3 @@
-// resources/js/pages/RequirementTests/Index.tsx
 import { Head, Link, router } from '@inertiajs/react';
 import { route } from 'ziggy-js';
 import { useEffect, useMemo, useRef, useCallback, useState } from 'react';
@@ -414,6 +413,11 @@ export default function RequirementTestsIndex({
     [selectedDateMidnight, todayMidnight]
   );
 
+  const isFutureDate = useMemo(
+    () => selectedDateMidnight > todayMidnight,
+    [selectedDateMidnight, todayMidnight]
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (!params.get('date')) {
@@ -445,6 +449,12 @@ export default function RequirementTestsIndex({
     setSelectedDate(newDate);
     navigate(newDate);
   };
+
+  const handleGoToToday = useCallback(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    setSelectedDate(t);
+    navigate(t);
+  }, [navigate]);
 
   const navigateToCreate = useCallback((reqId: number) => {
     router.visit(route('requirements.test.create', reqId) + `?date=${format(selectedDate, 'yyyy-MM-dd')}`);
@@ -929,6 +939,42 @@ export default function RequirementTestsIndex({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Requirement Tests</h1>
+
+            {/* ── Date bien visible sous le titre ── */}
+            <div className="flex flex-wrap items-center gap-2.5 mt-2">
+              <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-lg font-semibold text-foreground tracking-tight">
+                {formattedDate}
+              </span>
+
+              {isToday && (
+                <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+                  Today
+                </span>
+              )}
+              {isPastDate && (
+                <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-500">
+                  Past date
+                </span>
+              )}
+              {isFutureDate && (
+                <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  Upcoming
+                </span>
+              )}
+
+              {!isToday && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                  onClick={handleGoToToday}
+                >
+                  Back to today
+                </Button>
+              )}
+            </div>
+
             <p className="text-muted-foreground mt-1.5">Track and manage scheduled compliance activities</p>
           </div>
 
@@ -982,18 +1028,7 @@ export default function RequirementTestsIndex({
                 </Button>
               </div>
             )}
-            {dueToday > 0 && (
-              <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-                <Clock className="h-5 w-5 shrink-0 text-amber-400" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-amber-400">{dueToday} test{dueToday > 1 ? 's' : ''} due today</p>
-                  <p className="font-mono text-xs text-amber-400/70 mt-0.5">Effective Date: {format(selectedDate, 'EEEE, MMMM d', { locale: enUS })} · 11:59 PM</p>
-                </div>
-                <Button size="sm" variant="outline" className="shrink-0 border-amber-500/50 text-amber-400 hover:bg-amber-500/20" onClick={handleCompleteNow}>
-                  Complete now
-                </Button>
-              </div>
-            )}
+            
           </div>
         )}
 
@@ -1015,15 +1050,7 @@ export default function RequirementTestsIndex({
           </div>
         )}
 
-        {/* Past Date Banner */}
-        {isPastDate && (
-          <div className="flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-2.5">
-            <CalendarIcon className="h-4 w-4 shrink-0 text-blue-400" />
-            <p className="text-sm text-blue-400">
-              Viewing <span className="font-semibold">{formattedDate}</span> — past date. Tests created here will be recorded with this date.
-            </p>
-          </div>
-        )}
+        
 
         {/* Table */}
         <div id="compliance-table">

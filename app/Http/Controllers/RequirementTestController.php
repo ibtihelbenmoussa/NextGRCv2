@@ -260,29 +260,32 @@ private function isDueOnDate(Requirement $requirement, Carbon $date): bool
     //  show
     // ─────────────────────────────────────────────────────────────
 
-    public function show(RequirementTest $requirementTest)
-    {
-        $requirement  = $requirementTest->requirement;
-        if (!$requirement) abort(404, 'Requirement not found for this test.');
+public function show(RequirementTest $requirementTest)
+{
+    $user = Auth::user();
+    $currentOrgId = $user->current_organization_id;
 
-        $user         = Auth::user();
-        $currentOrgId = $user->current_organization_id;
-
-        if ($requirement->organization_id != $currentOrgId || $requirement->is_deleted) {
-            abort(403, 'Unauthorized');
-        }
-
-        $requirement->framework_name = $requirement->framework?->name;
-        $requirement->process_name   = $requirement->process?->name;
-        $requirement->load('tags');
-
-        return Inertia::render('RequirementTests/Show', [
-            'requirementTest' => $requirementTest->load([
-                'requirement.framework', 'requirement.tags', 'user:id,name', 'framework:id,code,name',
-            ]),
-            'requirement' => $requirement,
-        ]);
+    // Vérifier que le test appartient à l'organisation
+    if ($requirementTest->requirement->organization_id !== $currentOrgId) {
+        abort(403, 'Unauthorized');
     }
+
+    // Charger les relations
+    $requirementTest->load([
+        'requirement',
+        'requirement.framework',
+        'requirement.processes',
+        'requirement.tags',
+        'testResults',
+        'testResults.user',
+    ]);
+
+    return Inertia::render('RequirementTests/Show', [
+        'test' => $requirementTest,
+        'requirement' => $requirementTest->requirement,
+        'results' => $requirementTest->testResults,
+    ]);
+}
 
     // ─────────────────────────────────────────────────────────────
     //  edit / update
